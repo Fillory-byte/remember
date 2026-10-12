@@ -13,6 +13,15 @@ if ( ! defined( 'WPINC' ) ) {
 // Variables: $remember_register_success, $remember_register_error_message (optional).
 $remember_register_success       = isset( $remember_register_success ) ? (bool) $remember_register_success : false;
 $remember_register_error_message = isset( $remember_register_error_message ) ? $remember_register_error_message : '';
+$remember_invalid_fields         = isset( $remember_invalid_fields ) && is_array( $remember_invalid_fields ) ? $remember_invalid_fields : array();
+$remember_invalid_pq_ids         = isset( $remember_invalid_pq_ids ) && is_array( $remember_invalid_pq_ids ) ? $remember_invalid_pq_ids : array();
+$remember_field_messages         = isset( $remember_field_messages ) && is_array( $remember_field_messages ) ? $remember_field_messages : array();
+$remember_ifc                    = static function ( $key, $base = 'remember-register-input' ) use ( $remember_invalid_fields ) {
+	return Remember_Profile_Fields::control_class( $key, $remember_invalid_fields, $base );
+};
+$remember_ifa                    = static function ( $key ) use ( $remember_invalid_fields ) {
+	return Remember_Profile_Fields::control_invalid_attr( $key, $remember_invalid_fields );
+};
 
 $remember_pw_min = (int) apply_filters( 'remember_registration_password_min_length', 8 );
 if ( $remember_pw_min < 1 ) {
@@ -97,30 +106,35 @@ if ( '' === $remember_reg_im_type ) {
 
 			<div class="remember-register-row">
 				<label for="remember_reg_username"><?php esc_html_e( 'Username', 'remember' ); ?> <span class="required">*</span></label>
-				<input type="text" name="remember_reg_username" id="remember_reg_username" required autocomplete="username" class="remember-register-input" value="<?php echo esc_attr( $remember_reg_val( 'username' ) ); ?>" />
+				<input type="text" name="remember_reg_username" id="remember_reg_username" required autocomplete="username" class="<?php echo esc_attr( $remember_ifc( 'username' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'username' ) ); ?>"<?php echo $remember_ifa( 'username' ); ?> />
+				<?php Remember_Profile_Fields::render_field_error( 'username', $remember_invalid_fields, $remember_field_messages ); ?>
 				<p class="remember-register-help"><?php esc_html_e( 'Used to log into the website. Usernames cannot be changed later.', 'remember' ); ?></p>
 			</div>
 
 			<div class="remember-register-row">
 				<label for="remember_reg_email"><?php esc_html_e( 'Email Address', 'remember' ); ?> <span class="required">*</span></label>
-				<input type="email" name="remember_reg_email" id="remember_reg_email" required autocomplete="email" class="remember-register-input" value="<?php echo esc_attr( isset( $_POST['remember_reg_email'] ) ? sanitize_email( wp_unslash( $_POST['remember_reg_email'] ) ) : '' ); ?>" />
+				<input type="email" name="remember_reg_email" id="remember_reg_email" required autocomplete="email" class="<?php echo esc_attr( $remember_ifc( 'user_email' ) ); ?>" value="<?php echo esc_attr( isset( $_POST['remember_reg_email'] ) ? sanitize_email( wp_unslash( $_POST['remember_reg_email'] ) ) : '' ); ?>"<?php echo $remember_ifa( 'user_email' ); ?> />
+				<?php Remember_Profile_Fields::render_field_error( 'user_email', $remember_invalid_fields, $remember_field_messages ); ?>
 			</div>
 
 			<div class="remember-register-row">
 				<label for="remember_reg_password"><?php esc_html_e( 'Password', 'remember' ); ?> <span class="required">*</span></label>
-				<input type="password" name="remember_reg_password" id="remember_reg_password" required autocomplete="new-password" class="remember-register-input" minlength="<?php echo esc_attr( (string) $remember_pw_min ); ?>" />
+				<input type="password" name="remember_reg_password" id="remember_reg_password" required autocomplete="new-password" class="<?php echo esc_attr( $remember_ifc( 'password' ) ); ?>" minlength="<?php echo esc_attr( (string) $remember_pw_min ); ?>"<?php echo $remember_ifa( 'password' ); ?> />
+				<?php Remember_Profile_Fields::render_field_error( 'password', $remember_invalid_fields, $remember_field_messages ); ?>
 			</div>
 
 			<div class="remember-register-row">
 				<label for="remember_reg_password_confirm"><?php esc_html_e( 'Confirm Password', 'remember' ); ?> <span class="required">*</span></label>
-				<input type="password" name="remember_reg_password_confirm" id="remember_reg_password_confirm" required autocomplete="new-password" class="remember-register-input" minlength="<?php echo esc_attr( (string) $remember_pw_min ); ?>" />
+				<input type="password" name="remember_reg_password_confirm" id="remember_reg_password_confirm" required autocomplete="new-password" class="<?php echo esc_attr( $remember_ifc( 'password_confirm' ) ); ?>" minlength="<?php echo esc_attr( (string) $remember_pw_min ); ?>"<?php echo $remember_ifa( 'password_confirm' ); ?> />
+				<?php Remember_Profile_Fields::render_field_error( 'password_confirm', $remember_invalid_fields, $remember_field_messages ); ?>
 			</div>
 
 			<h3 class="remember-register-section-title"><?php esc_html_e( 'Public Identity', 'remember' ); ?></h3>
 
 			<div class="remember-register-row">
 				<label for="remember_reg_display_name"><?php esc_html_e( 'Nickname', 'remember' ); ?> <span class="required">*</span></label>
-				<input type="text" name="remember_reg_display_name" id="remember_reg_display_name" required autocomplete="nickname" class="remember-register-input" value="<?php echo esc_attr( $remember_reg_val( 'display_name' ) ); ?>" />
+				<input type="text" name="remember_reg_display_name" id="remember_reg_display_name" required autocomplete="nickname" class="<?php echo esc_attr( $remember_ifc( 'nickname' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'display_name' ) ); ?>"<?php echo $remember_ifa( 'nickname' ); ?> />
+				<?php Remember_Profile_Fields::render_field_error( 'nickname', $remember_invalid_fields, $remember_field_messages ); ?>
 				<p class="remember-register-help"><?php esc_html_e( 'How you appear to other members. Never taken from your legal name unless you choose that later.', 'remember' ); ?></p>
 			</div>
 
@@ -128,12 +142,14 @@ if ( '' === $remember_reg_im_type ) {
 
 			<div class="remember-register-row">
 				<label for="remember_reg_first_name"><?php esc_html_e( 'Legal First Name', 'remember' ); ?> <span class="required">*</span></label>
-				<input type="text" name="remember_reg_first_name" id="remember_reg_first_name" required autocomplete="given-name" class="remember-register-input" value="<?php echo esc_attr( $remember_reg_val( 'first_name' ) ); ?>" />
+				<input type="text" name="remember_reg_first_name" id="remember_reg_first_name" required autocomplete="given-name" class="<?php echo esc_attr( $remember_ifc( 'legal_first_name' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'first_name' ) ); ?>"<?php echo $remember_ifa( 'legal_first_name' ); ?> />
+				<?php Remember_Profile_Fields::render_field_error( 'legal_first_name', $remember_invalid_fields, $remember_field_messages ); ?>
 			</div>
 
 			<div class="remember-register-row">
 				<label for="remember_reg_last_name"><?php esc_html_e( 'Legal Last Name', 'remember' ); ?> <span class="required">*</span></label>
-				<input type="text" name="remember_reg_last_name" id="remember_reg_last_name" required autocomplete="family-name" class="remember-register-input" value="<?php echo esc_attr( $remember_reg_val( 'last_name' ) ); ?>" />
+				<input type="text" name="remember_reg_last_name" id="remember_reg_last_name" required autocomplete="family-name" class="<?php echo esc_attr( $remember_ifc( 'legal_last_name' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'last_name' ) ); ?>"<?php echo $remember_ifa( 'legal_last_name' ); ?> />
+				<?php Remember_Profile_Fields::render_field_error( 'legal_last_name', $remember_invalid_fields, $remember_field_messages ); ?>
 				<p class="remember-register-help"><?php esc_html_e( 'Used for admin and vetting only — not shown to other members.', 'remember' ); ?></p>
 			</div>
 
@@ -141,13 +157,15 @@ if ( '' === $remember_reg_im_type ) {
 
 			<div class="remember-register-row">
 				<label for="remember_reg_cell_phone"><?php esc_html_e( 'Cell Phone', 'remember' ); ?> <span class="required">*</span></label>
-				<input type="tel" name="remember_reg_cell_phone" id="remember_reg_cell_phone" required autocomplete="tel" class="remember-register-input" value="<?php echo esc_attr( $remember_reg_val( 'cell_phone' ) ); ?>" placeholder="<?php esc_attr_e( '+18055551212', 'remember' ); ?>" />
+				<input type="tel" name="remember_reg_cell_phone" id="remember_reg_cell_phone" required autocomplete="tel" class="<?php echo esc_attr( $remember_ifc( 'cell_phone' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'cell_phone' ) ); ?>" placeholder="<?php esc_attr_e( '+18055551212', 'remember' ); ?>"<?php echo $remember_ifa( 'cell_phone' ); ?> />
+				<?php Remember_Profile_Fields::render_field_error( 'cell_phone', $remember_invalid_fields, $remember_field_messages ); ?>
 				<p class="remember-register-help"><?php esc_html_e( 'Include a leading + and country code. Examples: +18055551212 (USA/Canada), +447700900123 (UK).', 'remember' ); ?></p>
 			</div>
 
 			<div class="remember-register-row">
 				<label for="remember_reg_timezone"><?php esc_html_e( 'Time Zone', 'remember' ); ?> <span class="required">*</span></label>
-				<?php echo Remember_Timezone::dropdown( $remember_reg_timezone, 'remember_reg_timezone', 'remember_reg_timezone', true, 'remember-register-input' ); ?>
+				<?php echo Remember_Timezone::dropdown( $remember_reg_timezone, 'remember_reg_timezone', 'remember_reg_timezone', true, $remember_ifc( 'timezone_string', 'remember-register-input' ) ); ?>
+				<?php Remember_Profile_Fields::render_field_error( 'timezone_string', $remember_invalid_fields, $remember_field_messages ); ?>
 				<p class="remember-register-help"><?php echo esc_html( Remember_Timezone::help_text() ); ?></p>
 			</div>
 
@@ -157,30 +175,35 @@ if ( '' === $remember_reg_im_type ) {
 					<select id="remember_reg_im_type" name="remember_reg_im_type" class="remember-register-input remember-register-input--im-type" required>
 						<?php Remember_Im_Platforms::render_options( $remember_reg_im_type ); ?>
 					</select>
-					<input type="text" name="remember_reg_im_handle" id="remember_reg_im_handle" required class="remember-register-input remember-register-input--im-handle" value="<?php echo esc_attr( $remember_reg_val( 'im_handle' ) ); ?>" placeholder="<?php esc_attr_e( 'Handle / username', 'remember' ); ?>" />
+					<input type="text" name="remember_reg_im_handle" id="remember_reg_im_handle" required class="<?php echo esc_attr( $remember_ifc( 'im_handle', 'remember-register-input remember-register-input--im-handle' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'im_handle' ) ); ?>" placeholder="<?php esc_attr_e( 'Handle / username', 'remember' ); ?>"<?php echo $remember_ifa( 'im_handle' ); ?> />
 				</div>
+				<?php Remember_Profile_Fields::render_field_error( 'im_handle', $remember_invalid_fields, $remember_field_messages ); ?>
 			</div>
 
 			<h3 class="remember-register-section-title"><?php esc_html_e( 'Address', 'remember' ); ?></h3>
 
 			<div class="remember-register-row">
 				<label for="remember_reg_address_street"><?php esc_html_e( 'Street Address', 'remember' ); ?> <span class="required">*</span></label>
-				<input type="text" name="remember_reg_address_street" id="remember_reg_address_street" required autocomplete="street-address" class="remember-register-input" value="<?php echo esc_attr( $remember_reg_val( 'address_street' ) ); ?>" />
+				<input type="text" name="remember_reg_address_street" id="remember_reg_address_street" required autocomplete="street-address" class="<?php echo esc_attr( $remember_ifc( 'address_street' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'address_street' ) ); ?>"<?php echo $remember_ifa( 'address_street' ); ?> />
+				<?php Remember_Profile_Fields::render_field_error( 'address_street', $remember_invalid_fields, $remember_field_messages ); ?>
 			</div>
 
 			<div class="remember-register-row">
 				<label for="remember_reg_address_city"><?php esc_html_e( 'City', 'remember' ); ?> <span class="required">*</span></label>
-				<input type="text" name="remember_reg_address_city" id="remember_reg_address_city" required autocomplete="address-level2" class="remember-register-input" value="<?php echo esc_attr( $remember_reg_val( 'address_city' ) ); ?>" />
+				<input type="text" name="remember_reg_address_city" id="remember_reg_address_city" required autocomplete="address-level2" class="<?php echo esc_attr( $remember_ifc( 'address_city' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'address_city' ) ); ?>"<?php echo $remember_ifa( 'address_city' ); ?> />
+				<?php Remember_Profile_Fields::render_field_error( 'address_city', $remember_invalid_fields, $remember_field_messages ); ?>
 			</div>
 
 			<div class="remember-register-row">
 				<label for="remember_reg_address_state"><?php esc_html_e( 'State/Province', 'remember' ); ?> <span class="required">*</span></label>
-				<input type="text" name="remember_reg_address_state" id="remember_reg_address_state" required autocomplete="address-level1" class="remember-register-input" value="<?php echo esc_attr( $remember_reg_val( 'address_state' ) ); ?>" />
+				<input type="text" name="remember_reg_address_state" id="remember_reg_address_state" required autocomplete="address-level1" class="<?php echo esc_attr( $remember_ifc( 'address_state' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'address_state' ) ); ?>"<?php echo $remember_ifa( 'address_state' ); ?> />
+				<?php Remember_Profile_Fields::render_field_error( 'address_state', $remember_invalid_fields, $remember_field_messages ); ?>
 			</div>
 
 			<div class="remember-register-row">
 				<label for="remember_reg_address_postal"><?php esc_html_e( 'Postal Code', 'remember' ); ?> <span class="required">*</span></label>
-				<input type="text" name="remember_reg_address_postal" id="remember_reg_address_postal" required autocomplete="postal-code" class="remember-register-input" value="<?php echo esc_attr( $remember_reg_val( 'address_postal' ) ); ?>" />
+				<input type="text" name="remember_reg_address_postal" id="remember_reg_address_postal" required autocomplete="postal-code" class="<?php echo esc_attr( $remember_ifc( 'address_postal' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'address_postal' ) ); ?>"<?php echo $remember_ifa( 'address_postal' ); ?> />
+				<?php Remember_Profile_Fields::render_field_error( 'address_postal', $remember_invalid_fields, $remember_field_messages ); ?>
 			</div>
 
 			<div class="remember-register-row">
@@ -191,10 +214,11 @@ if ( '' === $remember_reg_im_type ) {
 					$remember_reg_country,
 					array(
 						'id'       => 'remember_reg_address_country',
-						'class'    => 'remember-register-input',
+						'class'    => $remember_ifc( 'address_country' ),
 						'required' => true,
 					)
 				);
+				Remember_Profile_Fields::render_field_error( 'address_country', $remember_invalid_fields, $remember_field_messages );
 				?>
 			</div>
 
@@ -203,7 +227,8 @@ if ( '' === $remember_reg_im_type ) {
 			Remember_Profile_Questions::render_fields(
 				0,
 				'register',
-				isset( $_POST['remember_register_submit'] ) ? Remember_Profile_Questions::collect_from_request() : null // phpcs:ignore WordPress.Security.NonceVerification.Missing -- sticky display only.
+				isset( $_POST['remember_register_submit'] ) ? Remember_Profile_Questions::collect_from_request() : null, // phpcs:ignore WordPress.Security.NonceVerification.Missing -- sticky display only.
+				$remember_invalid_pq_ids
 			);
 			?>
 
@@ -211,22 +236,26 @@ if ( '' === $remember_reg_im_type ) {
 
 			<div class="remember-register-row">
 				<label for="remember_reg_emergency_contact_first"><?php esc_html_e( 'First Name', 'remember' ); ?> <span class="required">*</span></label>
-				<input type="text" name="remember_reg_emergency_contact_first" id="remember_reg_emergency_contact_first" required class="remember-register-input" value="<?php echo esc_attr( $remember_reg_val( 'emergency_contact_first' ) ); ?>" />
+				<input type="text" name="remember_reg_emergency_contact_first" id="remember_reg_emergency_contact_first" required class="<?php echo esc_attr( $remember_ifc( 'emergency_contact_first' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'emergency_contact_first' ) ); ?>"<?php echo $remember_ifa( 'emergency_contact_first' ); ?> />
+				<?php Remember_Profile_Fields::render_field_error( 'emergency_contact_first', $remember_invalid_fields, $remember_field_messages ); ?>
 			</div>
 
 			<div class="remember-register-row">
 				<label for="remember_reg_emergency_contact_last"><?php esc_html_e( 'Last Name', 'remember' ); ?> <span class="required">*</span></label>
-				<input type="text" name="remember_reg_emergency_contact_last" id="remember_reg_emergency_contact_last" required class="remember-register-input" value="<?php echo esc_attr( $remember_reg_val( 'emergency_contact_last' ) ); ?>" />
+				<input type="text" name="remember_reg_emergency_contact_last" id="remember_reg_emergency_contact_last" required class="<?php echo esc_attr( $remember_ifc( 'emergency_contact_last' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'emergency_contact_last' ) ); ?>"<?php echo $remember_ifa( 'emergency_contact_last' ); ?> />
+				<?php Remember_Profile_Fields::render_field_error( 'emergency_contact_last', $remember_invalid_fields, $remember_field_messages ); ?>
 			</div>
 
 			<div class="remember-register-row">
 				<label for="remember_reg_emergency_contact_phone"><?php esc_html_e( 'Phone', 'remember' ); ?> <span class="required">*</span></label>
-				<input type="tel" name="remember_reg_emergency_contact_phone" id="remember_reg_emergency_contact_phone" required class="remember-register-input" value="<?php echo esc_attr( $remember_reg_val( 'emergency_contact_phone' ) ); ?>" placeholder="<?php esc_attr_e( '+18055551212', 'remember' ); ?>" />
+				<input type="tel" name="remember_reg_emergency_contact_phone" id="remember_reg_emergency_contact_phone" required class="<?php echo esc_attr( $remember_ifc( 'emergency_contact_phone' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'emergency_contact_phone' ) ); ?>" placeholder="<?php esc_attr_e( '+18055551212', 'remember' ); ?>"<?php echo $remember_ifa( 'emergency_contact_phone' ); ?> />
+				<?php Remember_Profile_Fields::render_field_error( 'emergency_contact_phone', $remember_invalid_fields, $remember_field_messages ); ?>
 			</div>
 
 			<div class="remember-register-row">
 				<label for="remember_reg_emergency_contact_relationship"><?php esc_html_e( 'Relationship', 'remember' ); ?> <span class="required">*</span></label>
-				<input type="text" name="remember_reg_emergency_contact_relationship" id="remember_reg_emergency_contact_relationship" required class="remember-register-input" value="<?php echo esc_attr( $remember_reg_val( 'emergency_contact_relationship' ) ); ?>" placeholder="<?php esc_attr_e( 'e.g., Spouse, Parent, Friend', 'remember' ); ?>" />
+				<input type="text" name="remember_reg_emergency_contact_relationship" id="remember_reg_emergency_contact_relationship" required class="<?php echo esc_attr( $remember_ifc( 'emergency_contact_relationship' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'emergency_contact_relationship' ) ); ?>" placeholder="<?php esc_attr_e( 'e.g., Spouse, Parent, Friend', 'remember' ); ?>"<?php echo $remember_ifa( 'emergency_contact_relationship' ); ?> />
+				<?php Remember_Profile_Fields::render_field_error( 'emergency_contact_relationship', $remember_invalid_fields, $remember_field_messages ); ?>
 			</div>
 
 			<h3 class="remember-register-section-title"><?php esc_html_e( 'Profile Photo', 'remember' ); ?> <span class="required">*</span></h3>
@@ -249,7 +278,8 @@ if ( '' === $remember_reg_im_type ) {
 						</button>
 					</div>
 					<label for="remember_reg_photo_file" class="remember-form-label"><?php esc_html_e( 'Upload photo', 'remember' ); ?> <span class="required">*</span></label>
-					<input type="file" id="remember_reg_photo_file" name="photo_file" class="remember-form-control remember-form-control-file remember-register-input" accept="image/jpeg,image/png,image/gif" required>
+					<input type="file" id="remember_reg_photo_file" name="photo_file" class="<?php echo esc_attr( $remember_ifc( 'photo_file', 'remember-form-control remember-form-control-file remember-register-input' ) ); ?>" accept="image/jpeg,image/png,image/gif" required<?php echo $remember_ifa( 'photo_file' ); ?>>
+					<?php Remember_Profile_Fields::render_field_error( 'photo_file', $remember_invalid_fields, $remember_field_messages ); ?>
 					<p class="remember-register-help">
 						<?php
 						echo esc_html(
@@ -303,7 +333,7 @@ if ( '' === $remember_reg_im_type ) {
 			<?php if ( ! empty( $dietary_restrictions ) ) : ?>
 				<h3 class="remember-register-section-title"><?php esc_html_e( 'Dietary Restrictions', 'remember' ); ?> <span class="required">*</span></h3>
 				<p class="remember-register-section-help"><?php esc_html_e( 'Required. Select at least one — choose None if none apply. For event organizers — not shown to other participants.', 'remember' ); ?></p>
-				<div class="remember-register-checkboxes" data-remember-require-one="1">
+				<div class="<?php echo esc_attr( Remember_Profile_Fields::group_class( 'dietary_restrictions', $remember_invalid_fields, 'remember-register-checkboxes' ) ); ?>" data-remember-require-one="1"<?php echo $remember_ifa( 'dietary_restrictions' ); ?>>
 					<?php foreach ( $dietary_restrictions as $restriction ) : ?>
 						<label class="remember-checkbox-label">
 							<input type="checkbox" name="dietary_restrictions[]" value="<?php echo esc_attr( $restriction->restriction_id ); ?>" <?php checked( in_array( (int) $restriction->restriction_id, $remember_reg_dietary_ids, true ) ); ?><?php echo ( 'None' === $restriction->restriction_name ) ? ' data-remember-none="1"' : ''; ?>>
@@ -311,12 +341,13 @@ if ( '' === $remember_reg_im_type ) {
 						</label>
 					<?php endforeach; ?>
 				</div>
+				<?php Remember_Profile_Fields::render_field_error( 'dietary_restrictions', $remember_invalid_fields, $remember_field_messages ); ?>
 			<?php endif; ?>
 
 			<?php if ( ! empty( $medical_accommodations ) ) : ?>
 				<h3 class="remember-register-section-title"><?php esc_html_e( 'Medical Accommodations', 'remember' ); ?> <span class="required">*</span></h3>
 				<p class="remember-register-section-help"><?php esc_html_e( 'Required. Select at least one — choose None if none apply. For event organizers — not shown to other participants.', 'remember' ); ?></p>
-				<div class="remember-register-checkboxes" data-remember-require-one="1">
+				<div class="<?php echo esc_attr( Remember_Profile_Fields::group_class( 'medical_accommodations', $remember_invalid_fields, 'remember-register-checkboxes' ) ); ?>" data-remember-require-one="1"<?php echo $remember_ifa( 'medical_accommodations' ); ?>>
 					<?php foreach ( $medical_accommodations as $accommodation ) : ?>
 						<label class="remember-checkbox-label">
 							<input type="checkbox" name="medical_accommodations[]" value="<?php echo esc_attr( $accommodation->accommodation_id ); ?>" <?php checked( in_array( (int) $accommodation->accommodation_id, $remember_reg_medical_ids, true ) ); ?><?php echo ( 'None' === $accommodation->accommodation_name ) ? ' data-remember-none="1"' : ''; ?>>
@@ -324,6 +355,7 @@ if ( '' === $remember_reg_im_type ) {
 						</label>
 					<?php endforeach; ?>
 				</div>
+				<?php Remember_Profile_Fields::render_field_error( 'medical_accommodations', $remember_invalid_fields, $remember_field_messages ); ?>
 			<?php endif; ?>
 
 			<?php if ( ! empty( $allergies ) ) : ?>
@@ -344,7 +376,7 @@ if ( '' === $remember_reg_im_type ) {
 				<div data-remember-allergy-group="1">
 					<h3 class="remember-register-section-title"><?php esc_html_e( 'Known Allergies', 'remember' ); ?> <span class="required">*</span></h3>
 					<p class="remember-register-section-help"><?php esc_html_e( 'Required. Select at least one — choose None if none apply. For event organizers — not shown to other participants.', 'remember' ); ?></p>
-					<div class="remember-register-checkboxes" data-remember-require-one="1">
+					<div class="<?php echo esc_attr( Remember_Profile_Fields::group_class( 'allergies', $remember_invalid_fields, 'remember-register-checkboxes' ) ); ?>" data-remember-require-one="1"<?php echo $remember_ifa( 'allergies' ); ?>>
 						<?php foreach ( $allergies as $allergy ) : ?>
 							<label class="remember-checkbox-label">
 								<input type="checkbox" name="allergies[]" value="<?php echo esc_attr( $allergy->allergy_id ); ?>" <?php checked( in_array( (int) $allergy->allergy_id, $remember_reg_allergy_ids, true ) ); ?><?php echo ( 'None' === $allergy->allergy_name ) ? ' data-remember-none="1"' : ''; ?>>
@@ -352,24 +384,27 @@ if ( '' === $remember_reg_im_type ) {
 							</label>
 						<?php endforeach; ?>
 					</div>
+					<?php Remember_Profile_Fields::render_field_error( 'allergies', $remember_invalid_fields, $remember_field_messages ); ?>
 					<div class="remember-register-row remember-register-row--stack remember-allergy-reaction" data-remember-allergy-reaction="1"<?php echo $remember_reg_reaction_needed ? '' : ' hidden'; ?>>
 						<label for="remember_reg_allergy_reaction"><?php echo esc_html( Remember_Profile_Fields::allergy_reaction_prompt() ); ?> <span class="required">*</span></label>
-						<textarea name="allergy_reaction" id="remember_reg_allergy_reaction" rows="5" class="remember-register-input"<?php echo $remember_reg_reaction_needed ? ' required' : ''; ?>><?php echo esc_textarea( $remember_reg_reaction ); ?></textarea>
+						<textarea name="allergy_reaction" id="remember_reg_allergy_reaction" rows="5" class="<?php echo esc_attr( $remember_ifc( 'allergy_reaction' ) ); ?>"<?php echo $remember_reg_reaction_needed ? ' required' : ''; ?><?php echo $remember_ifa( 'allergy_reaction' ); ?>><?php echo esc_textarea( $remember_reg_reaction ); ?></textarea>
+						<?php Remember_Profile_Fields::render_field_error( 'allergy_reaction', $remember_invalid_fields, $remember_field_messages ); ?>
 					</div>
 				</div>
 			<?php endif; ?>
 
 			<h3 class="remember-register-section-title"><?php esc_html_e( 'Interests', 'remember' ); ?></h3>
 			<p class="remember-register-section-help"><?php esc_html_e( 'What are you trying to get out of this event? Optional.', 'remember' ); ?></p>
-			<div class="remember-register-editor">
+			<div class="<?php echo esc_attr( Remember_Profile_Fields::group_class( 'interests', $remember_invalid_fields, 'remember-register-editor' ) ); ?>">
 				<?php
 				$interests_value = isset( $_POST['remember_reg_interests'] ) ? Remember_Profile_Fields::sanitize_interests( wp_unslash( $_POST['remember_reg_interests'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- sticky display only.
 				Remember_Profile_Fields::render_interests_editor(
 					$interests_value,
 					'remember_reg_interests',
 					'remember_reg_interests',
-					'remember-register-input'
+					$remember_ifc( 'interests' )
 				);
+				Remember_Profile_Fields::render_field_error( 'interests', $remember_invalid_fields, $remember_field_messages );
 				?>
 			</div>
 

@@ -478,6 +478,33 @@
 	background-color: #fcf0f1;
 }
 
+.remember-form-control.remember-field-invalid,
+.remember-register-input.remember-field-invalid,
+select.remember-field-invalid,
+textarea.remember-field-invalid,
+.remember-field-invalid {
+	border-color: #dc3232;
+	box-shadow: 0 0 0 1px #dc3232;
+}
+
+.remember-field-invalid-group {
+	outline: 2px solid #dc3232;
+	outline-offset: 6px;
+	border-radius: 4px;
+}
+
+.remember-pq-field.remember-field-invalid-group {
+	outline-offset: 4px;
+	padding: 0.25em 0.15em;
+}
+
+.remember-field-error {
+	color: #b32d2e;
+	font-size: 0.9em;
+	font-weight: 600;
+	margin: 0.4em 0 0;
+}
+
 .remember-notice.remember-info {
 	border-color: #2271b1;
 	background-color: #e5f5fa;
