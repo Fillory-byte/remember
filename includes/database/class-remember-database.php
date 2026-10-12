@@ -70,6 +70,7 @@ class Remember_Database {
 			'role_capabilities'              => 'create_role_capabilities_table',
 			'locations'                      => 'create_locations_table',
 			'events'                         => 'create_events_table',
+			'event_invites'                  => 'create_event_invites_table',
 			'event_roles'                    => 'create_event_roles_table',
 			'event_merchandise'              => 'create_event_merchandise_table',
 			'event_merchandise_role_limits'  => 'create_event_merchandise_role_limits_table',
@@ -533,6 +534,31 @@ class Remember_Database {
 			KEY location_id (location_id),
 			KEY status (status),
 			KEY start_date (start_date)
+		) $charset_collate;";
+
+		dbDelta( $sql );
+	}
+
+	/**
+	 * Private-event invitees.
+	 */
+	public function create_event_invites_table() {
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		$table_name      = $this->prefix . 'event_invites';
+		$charset_collate = $this->wpdb->get_charset_collate();
+
+		$sql = "CREATE TABLE $table_name (
+			invite_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+			event_id BIGINT(20) UNSIGNED NOT NULL,
+			member_id BIGINT(20) UNSIGNED NOT NULL,
+			invited_by BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
+			invited_at DATETIME NOT NULL,
+			invited_emailed_at DATETIME DEFAULT NULL,
+			PRIMARY KEY (invite_id),
+			UNIQUE KEY event_member (event_id, member_id),
+			KEY event_id (event_id),
+			KEY member_id (member_id),
+			KEY invited_emailed_at (invited_emailed_at)
 		) $charset_collate;";
 
 		dbDelta( $sql );

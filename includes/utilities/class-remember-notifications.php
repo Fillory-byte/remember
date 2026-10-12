@@ -75,7 +75,7 @@ class Remember_Notifications {
 	 * @return string[]
 	 */
 	private static function url_placeholder_keys() {
-		return array( 'ticket_url', 'profile_url', 'review_url', 'vetting_url', 'survey_url' );
+		return array( 'ticket_url', 'profile_url', 'review_url', 'vetting_url', 'survey_url', 'apply_url' );
 	}
 
 	/**
@@ -737,6 +737,7 @@ class Remember_Notifications {
 			'survey_url'     => '',
 			'role_name'      => '',
 			'waitlist_count' => '',
+			'apply_url'      => '',
 		);
 		return wp_parse_args( $context, $defaults );
 	}

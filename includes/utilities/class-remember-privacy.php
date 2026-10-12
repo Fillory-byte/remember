@@ -66,7 +66,7 @@ class Remember_Privacy {
 		if ( ! function_exists( 'wp_add_privacy_policy_content' ) ) {
 			return;
 		}
-		$content = '<p>' . esc_html__( 'When you have a member profile, we store your legal name, address, phone, instant-message handle, clothing sizes, interests, profile photo, emergency contact, dietary restrictions, allergies, medical accommodations, custom profile answers, event applications, and survey answers.', 'remember' ) . '</p>';
+		$content = '<p>' . esc_html__( 'When you have a member profile, we store your legal name, address, phone, instant-message handle, clothing sizes, interests, profile photo, emergency contact, dietary restrictions, allergies, medical accommodations, custom profile answers, event applications, private-event invitations, and survey answers.', 'remember' ) . '</p>';
 		$content .= '<p>' . esc_html__( 'Staff notes about you are kept for membership review. A copy of your data includes how many notes exist. It does not include the note text.', 'remember' ) . '</p>';
 		$content .= '<p>' . esc_html__( 'If you ask us to erase your data, we remove those personal fields and your photo. We keep payment amounts, status, and invoice identifiers so the financial record stays complete. We also keep the fact that you accepted an event agreement, without your typed name or IP address.', 'remember' ) . '</p>';
 		wp_add_privacy_policy_content( 'reMember', wp_kses_post( $content ) );
@@ -132,7 +132,7 @@ class Remember_Privacy {
 		if ( self::blank_profile( $member_id ) ) {
 			$removed = true;
 		}
-		if ( self::delete_member_rows( $member_id, array( 'remember_member_dietary_restrictions', 'remember_member_allergies', 'remember_member_medical_accommodations', 'remember_member_social_media', 'remember_profile_question_responses', 'remember_profile_notes', 'remember_vetting_notes', 'remember_sensitive_access_log' ) ) ) {
+		if ( self::delete_member_rows( $member_id, array( 'remember_member_dietary_restrictions', 'remember_member_allergies', 'remember_member_medical_accommodations', 'remember_member_social_media', 'remember_profile_question_responses', 'remember_profile_notes', 'remember_vetting_notes', 'remember_sensitive_access_log', 'remember_event_invites' ) ) ) {
 			$removed = true;
 		}
 		if ( self::delete_survey_answers( $member_id ) ) {
@@ -307,6 +307,27 @@ class Remember_Privacy {
 		}
 		if ( ! empty( $survey_data ) ) {
 			$groups[] = self::group( 'remember-surveys', __( 'reMember survey answers', 'remember' ), 'surveys-' . $member_id, $survey_data );
+		}
+
+		$invites_table = self::table( 'remember_event_invites' );
+		$invites       = array();
+		if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $invites_table ) ) === $invites_table ) {
+			$invites = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT e.event_name, i.invited_at, i.invited_emailed_at FROM ' . $invites_table . ' i LEFT JOIN ' . self::table( 'remember_events' ) . ' e ON e.event_id = i.event_id WHERE i.member_id = %d ORDER BY i.invite_id ASC',
+					$member_id
+				)
+			);
+		}
+		$invite_data = array();
+		if ( is_array( $invites ) ) {
+			foreach ( $invites as $invite ) {
+				$when = $invite->invited_emailed_at ? $invite->invited_emailed_at : $invite->invited_at;
+				self::add_value( $invite_data, $invite->event_name ? $invite->event_name : __( 'Private event', 'remember' ), $when );
+			}
+		}
+		if ( ! empty( $invite_data ) ) {
+			$groups[] = self::group( 'remember-event-invites', __( 'reMember event invitations', 'remember' ), 'invites-' . $member_id, $invite_data );
 		}
 
 		return $groups;

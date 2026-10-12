@@ -20,6 +20,7 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remem
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-agreements.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-surveys.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-audit.php';
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-event-invites.php';
 
 // $event_id should be set by shortcode handler
 if ( ! isset( $event_id ) ) {
@@ -46,7 +47,11 @@ if ( isset( $_POST['remember_apply_action'] ) && check_admin_referer( 'remember_
 
 	if ( $event_id > 0 && $event_role_id > 0 ) {
 		$apply_event = $event_model->get( $event_id );
-		$registration_block = $apply_event ? Remember_Event::registration_block_reason( $apply_event ) : __( 'Please select an event and role.', 'remember' );
+		if ( $apply_event && ! Remember_Event_Invites::member_can_apply( $apply_event, $member_id ) ) {
+			$registration_block = __( 'This event is by invitation only.', 'remember' );
+		} else {
+			$registration_block = $apply_event ? Remember_Event::registration_block_reason( $apply_event ) : __( 'Please select an event and role.', 'remember' );
+		}
 		if ( $registration_block ) {
 			$submission_error = $registration_block;
 		} else {
@@ -153,15 +158,21 @@ if ( isset( $_POST['remember_apply_action'] ) && check_admin_referer( 'remember_
 
 // Get selected event if provided
 $selected_event = null;
+$invite_denied  = false;
 if ( $event_id > 0 ) {
 	$selected_event = $event_model->get( $event_id );
+	if ( $selected_event && ! Remember_Event_Invites::member_can_apply( $selected_event, $member_id ) ) {
+		$invite_denied  = Remember_Event_Invites::is_private( $selected_event );
+		$selected_event = null;
+		$event_id       = 0;
+	}
 }
 
 // Get open events if no event is pre-selected. Hide events outside their registration window.
 $open_events = array();
 if ( ! $selected_event ) {
 	foreach ( $event_model->get_by_status( 'open' ) as $open_event ) {
-		if ( '' === Remember_Event::registration_block_reason( $open_event ) ) {
+		if ( Remember_Event_Invites::member_can_apply( $open_event, $member_id ) && '' === Remember_Event::registration_block_reason( $open_event ) ) {
 			$open_events[] = $open_event;
 		}
 	}
@@ -180,6 +191,10 @@ $registration_block = $selected_event ? Remember_Event::registration_block_reaso
 <?php elseif ( ! empty( $submission_error ) ) : ?>
 	<div class="remember-notice remember-error">
 		<p><?php echo esc_html( $submission_error ); ?></p>
+	</div>
+<?php elseif ( ! empty( $invite_denied ) ) : ?>
+	<div class="remember-notice remember-warning">
+		<p><?php esc_html_e( 'This event is by invitation only.', 'remember' ); ?></p>
 	</div>
 <?php elseif ( ! Remember_Member::is_vetted_member( $member_row ) ) : ?>
 	<div class="remember-notice remember-warning">

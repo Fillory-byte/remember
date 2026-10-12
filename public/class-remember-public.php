@@ -564,6 +564,9 @@ class Remember_Public {
 			$events = $event_model->get_by_status( 'open' );
 		}
 
+		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-event-invites.php';
+		$events = Remember_Event_Invites::visible_events( $events, get_current_user_id() );
+
 		if ( $atts['limit'] > 0 ) {
 			$events = array_slice( $events, 0, $atts['limit'] );
 		}

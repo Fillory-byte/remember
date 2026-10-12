@@ -1820,6 +1820,21 @@ class Remember_Database_Updater {
 			}
 		}
 
+		// Update to 2.4.0 (private event invitees).
+		if ( version_compare( get_option( 'remember_db_version', '0.0.0' ), '2.4.0', '<' ) ) {
+			Remember_Logger::info( 'Updating database schema', array( 'from' => get_option( 'remember_db_version', '0.0.0' ), 'to' => '2.4.0' ) );
+			require_once plugin_dir_path( __FILE__ ) . 'class-remember-database.php';
+			$db = new Remember_Database();
+			$db->create_event_invites_table();
+			$found = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->prefix . 'remember_event_invites' ) );
+			if ( $found === $wpdb->prefix . 'remember_event_invites' ) {
+				update_option( 'remember_db_version', '2.4.0' );
+				Remember_Logger::info( 'Database schema updated successfully', array( 'version' => '2.4.0' ) );
+			} else {
+				Remember_Logger::error( 'Failed to add event invites table', array( 'error' => $wpdb->last_error ) );
+			}
+		}
+
 		// Always re-ensure health catalogs (idempotent). Catches sites that stalled mid-migration
 		// or activated before catalog seed rows were added.
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-seeder.php';
