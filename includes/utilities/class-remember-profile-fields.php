@@ -80,6 +80,15 @@ class Remember_Profile_Fields {
 			'medical_accommodations'         => __( 'Medical Accommodations', 'remember' ),
 			'allergies'                      => __( 'Known Allergies', 'remember' ),
 			'allergy_reaction'               => __( 'Allergy reaction', 'remember' ),
+			'username'                       => __( 'Username', 'remember' ),
+			'user_email'                     => __( 'Email Address', 'remember' ),
+			'password'                       => __( 'Password', 'remember' ),
+			'password_confirm'               => __( 'Confirm Password', 'remember' ),
+			'current_password'               => __( 'Current password', 'remember' ),
+			'new_password'                   => __( 'New password', 'remember' ),
+			'new_password_confirm'           => __( 'Confirm new password', 'remember' ),
+			'interests'                      => __( 'Interests', 'remember' ),
+			'photo_file'                     => __( 'Profile Photo', 'remember' ),
 		);
 	}
 
@@ -218,6 +227,100 @@ class Remember_Profile_Fields {
 	}
 
 	/**
+	 * Copy posted profile columns onto a profile row for a sticky re-render.
+	 *
+	 * @param object|null         $profile      Existing row, or null.
+	 * @param array<string,mixed> $profile_data From collect_profile_data_from_request().
+	 * @return object
+	 */
+	public static function apply_profile_data_to_row( $profile, array $profile_data ) {
+		if ( ! is_object( $profile ) ) {
+			$profile = new stdClass();
+		}
+		foreach ( $profile_data as $key => $value ) {
+			$profile->{$key} = $value;
+		}
+		return $profile;
+	}
+
+	/**
+	 * Posted checkbox catalog IDs.
+	 *
+	 * @param string $post_key POST array key.
+	 * @return int[]
+	 */
+	public static function catalog_ids_from_request( $post_key ) {
+		$post_key = (string) $post_key;
+		if ( '' === $post_key || ! isset( $_POST[ $post_key ] ) || ! is_array( $_POST[ $post_key ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- caller verifies.
+			return array();
+		}
+		$ids = array();
+		foreach ( wp_unslash( $_POST[ $post_key ] ) as $raw_id ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			$id = absint( $raw_id );
+			if ( $id > 0 ) {
+				$ids[] = $id;
+			}
+		}
+		return $ids;
+	}
+
+	/**
+	 * Posted social-media slots (up to three) for a sticky re-render.
+	 *
+	 * @return array<int,object>
+	 */
+	public static function social_slots_from_request() {
+		$slots = array();
+		$raw   = ( isset( $_POST['social_media'] ) && is_array( $_POST['social_media'] ) ) ? $_POST['social_media'] : array(); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- caller verifies.
+		$i     = 0;
+		foreach ( $raw as $row ) {
+			if ( $i >= 3 ) {
+				break;
+			}
+			$slot              = new stdClass();
+			$slot->platform_id = 0;
+			$slot->handle      = '';
+			if ( is_array( $row ) ) {
+				$slot->platform_id = isset( $row['platform_id'] ) ? absint( $row['platform_id'] ) : 0;
+				$slot->handle      = isset( $row['handle'] ) ? sanitize_text_field( wp_unslash( $row['handle'] ) ) : '';
+			}
+			$slots[ $i ] = $slot;
+			++$i;
+		}
+		while ( $i < 3 ) {
+			$slot              = new stdClass();
+			$slot->platform_id = 0;
+			$slot->handle      = '';
+			$slots[ $i ]       = $slot;
+			++$i;
+		}
+		return $slots;
+	}
+
+	/**
+	 * Missing required keys among profile + meta.
+	 *
+	 * @param array<string,mixed>  $profile_data Profile columns.
+	 * @param array<string,string> $meta_data    Meta keys from collect_meta_from_request().
+	 * @param string               $context      front|register|admin.
+	 * @return string[]
+	 */
+	public static function missing_required( array $profile_data, array $meta_data, $context = 'front' ) {
+		$missing = array();
+		foreach ( self::required_meta_keys_for_context( $context ) as $key ) {
+			if ( ! isset( $meta_data[ $key ] ) || '' === trim( (string) $meta_data[ $key ] ) ) {
+				$missing[] = $key;
+			}
+		}
+		foreach ( self::required_profile_keys_for_context( $context ) as $key ) {
+			if ( ! isset( $profile_data[ $key ] ) || '' === trim( (string) $profile_data[ $key ] ) ) {
+				$missing[] = $key;
+			}
+		}
+		return $missing;
+	}
+
+	/**
 	 * First missing required key among profile + meta, or empty string if complete.
 	 *
 	 * @param array<string,mixed>  $profile_data Profile columns.
@@ -226,17 +329,154 @@ class Remember_Profile_Fields {
 	 * @return string
 	 */
 	public static function first_missing_required( array $profile_data, array $meta_data, $context = 'front' ) {
-		foreach ( self::required_meta_keys_for_context( $context ) as $key ) {
-			if ( ! isset( $meta_data[ $key ] ) || '' === trim( (string) $meta_data[ $key ] ) ) {
-				return $key;
+		$missing = self::missing_required( $profile_data, $meta_data, $context );
+		return empty( $missing ) ? '' : (string) $missing[0];
+	}
+
+	/**
+	 * Human labels for a list of field keys.
+	 *
+	 * @param string[] $keys Field keys.
+	 * @return string[]
+	 */
+	public static function labels_for( array $keys ) {
+		$all  = self::labels();
+		$out  = array();
+		$seen = array();
+		foreach ( $keys as $key ) {
+			$key = (string) $key;
+			if ( '' === $key || isset( $seen[ $key ] ) || ! isset( $all[ $key ] ) ) {
+				continue;
+			}
+			$seen[ $key ] = true;
+			$out[]        = $all[ $key ];
+		}
+		return $out;
+	}
+
+	/**
+	 * Join labels for a banner (A, B, and C).
+	 *
+	 * @param string[] $items Labels.
+	 * @return string
+	 */
+	public static function join_list( array $items ) {
+		$items = array_values( array_filter( array_map( 'strval', $items ) ) );
+		$n     = count( $items );
+		if ( 0 === $n ) {
+			return '';
+		}
+		if ( 1 === $n ) {
+			return $items[0];
+		}
+		if ( 2 === $n ) {
+			return sprintf(
+				/* translators: 1: first field, 2: second field */
+				__( '%1$s and %2$s', 'remember' ),
+				$items[0],
+				$items[1]
+			);
+		}
+		$last = array_pop( $items );
+		return sprintf(
+			/* translators: 1: comma-separated fields, 2: last field */
+			__( '%1$s, and %2$s', 'remember' ),
+			implode( ', ', $items ),
+			$last
+		);
+	}
+
+	/**
+	 * Banner copy listing missing fields plus extra sentences.
+	 *
+	 * @param string[] $field_labels Missing field labels.
+	 * @param string[] $extras       Additional sentences (email, interests, timezone).
+	 * @return string
+	 */
+	public static function banner_message( array $field_labels, array $extras = array() ) {
+		$field_labels = array_values( array_unique( array_filter( array_map( 'strval', $field_labels ) ) ) );
+		$parts        = array();
+		$n            = count( $field_labels );
+		if ( 1 === $n ) {
+			$parts[] = sprintf(
+				/* translators: %s: field label */
+				__( '%s is required.', 'remember' ),
+				$field_labels[0]
+			);
+		} elseif ( $n > 1 ) {
+			$parts[] = sprintf(
+				/* translators: %s: comma-separated field names */
+				__( 'Please complete: %s.', 'remember' ),
+				self::join_list( $field_labels )
+			);
+		}
+		foreach ( $extras as $sentence ) {
+			$sentence = trim( (string) $sentence );
+			if ( '' !== $sentence ) {
+				$parts[] = $sentence;
 			}
 		}
-		foreach ( self::required_profile_keys_for_context( $context ) as $key ) {
-			if ( ! isset( $profile_data[ $key ] ) || '' === trim( (string) $profile_data[ $key ] ) ) {
-				return $key;
-			}
+		return implode( ' ', $parts );
+	}
+
+	/**
+	 * CSS class list with remember-field-invalid when the key failed.
+	 *
+	 * @param string   $key          Field key.
+	 * @param string[] $invalid_keys Keys that failed.
+	 * @param string   $base         Existing classes.
+	 * @return string
+	 */
+	public static function control_class( $key, array $invalid_keys, $base = '' ) {
+		$class = trim( (string) $base );
+		if ( in_array( (string) $key, $invalid_keys, true ) ) {
+			$class = trim( $class . ' remember-field-invalid' );
 		}
-		return '';
+		return $class;
+	}
+
+	/**
+	 * aria-invalid attribute when the key failed.
+	 *
+	 * @param string   $key          Field key.
+	 * @param string[] $invalid_keys Keys that failed.
+	 * @return string
+	 */
+	public static function control_invalid_attr( $key, array $invalid_keys ) {
+		return in_array( (string) $key, $invalid_keys, true ) ? ' aria-invalid="true"' : '';
+	}
+
+	/**
+	 * Group wrapper class when a checkbox catalog failed.
+	 *
+	 * @param string   $key          Field key.
+	 * @param string[] $invalid_keys Keys that failed.
+	 * @param string   $base         Existing classes.
+	 * @return string
+	 */
+	public static function group_class( $key, array $invalid_keys, $base = '' ) {
+		$class = trim( (string) $base );
+		if ( in_array( (string) $key, $invalid_keys, true ) ) {
+			$class = trim( $class . ' remember-field-invalid-group' );
+		}
+		return $class;
+	}
+
+	/**
+	 * Short note under a failing field.
+	 *
+	 * @param string               $key          Field key.
+	 * @param string[]             $invalid_keys Keys that failed.
+	 * @param array<string,string> $messages     Optional per-key copy.
+	 * @return void
+	 */
+	public static function render_field_error( $key, array $invalid_keys, array $messages = array() ) {
+		$key = (string) $key;
+		if ( ! in_array( $key, $invalid_keys, true ) ) {
+			return;
+		}
+		$text = isset( $messages[ $key ] ) ? (string) $messages[ $key ] : __( 'Required.', 'remember' );
+		echo '<p class="remember-field-error">' . esc_html( $text ) . '</p>';
 	}
 
 	/**
@@ -258,6 +498,36 @@ class Remember_Profile_Fields {
 	}
 
 	/**
+	 * Missing required health catalogs (dietary / medical / allergies).
+	 *
+	 * Skips a catalog when it has no active options (nothing to choose).
+	 *
+	 * @return string[] Field keys: dietary_restrictions, medical_accommodations, allergies.
+	 */
+	public static function missing_required_health_catalogs() {
+		global $wpdb;
+
+		$checks = array(
+			'dietary_restrictions'   => $wpdb->prefix . 'remember_dietary_restrictions',
+			'medical_accommodations' => $wpdb->prefix . 'remember_medical_accommodations',
+			'allergies'              => $wpdb->prefix . 'remember_allergies',
+		);
+
+		$missing = array();
+		foreach ( $checks as $post_key => $table ) {
+			$active = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table} WHERE is_active = 1" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from fixed map.
+			if ( $active < 1 ) {
+				continue;
+			}
+			if ( ! self::request_has_catalog_selection( $post_key ) ) {
+				$missing[] = $post_key;
+			}
+		}
+
+		return $missing;
+	}
+
+	/**
 	 * First missing required health catalog (dietary / medical / allergies), or empty string.
 	 *
 	 * Skips a catalog when it has no active options (nothing to choose).
@@ -265,25 +535,8 @@ class Remember_Profile_Fields {
 	 * @return string Field key: dietary_restrictions|medical_accommodations|allergies|''.
 	 */
 	public static function first_missing_required_health_catalog() {
-		global $wpdb;
-
-		$checks = array(
-			'dietary_restrictions'    => $wpdb->prefix . 'remember_dietary_restrictions',
-			'medical_accommodations'  => $wpdb->prefix . 'remember_medical_accommodations',
-			'allergies'               => $wpdb->prefix . 'remember_allergies',
-		);
-
-		foreach ( $checks as $post_key => $table ) {
-			$active = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table} WHERE is_active = 1" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from fixed map.
-			if ( $active < 1 ) {
-				continue;
-			}
-			if ( ! self::request_has_catalog_selection( $post_key ) ) {
-				return $post_key;
-			}
-		}
-
-		return '';
+		$missing = self::missing_required_health_catalogs();
+		return empty( $missing ) ? '' : (string) $missing[0];
 	}
 
 	/**

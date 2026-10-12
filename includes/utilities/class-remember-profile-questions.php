@@ -510,18 +510,19 @@ class Remember_Profile_Questions {
 	}
 
 	/**
-	 * First missing required custom answer, or null.
+	 * Missing required custom answers (question_id => label).
 	 *
 	 * Honors always-required and required_when conditional rules.
 	 *
 	 * @param array<int, string>|null $answers From collect_from_request().
-	 * @return string|null Question label if missing.
+	 * @return array<int, string>
 	 */
-	public static function first_missing_required( $answers = null ) {
+	public static function missing_required( $answers = null ) {
 		if ( null === $answers ) {
 			$answers = self::collect_from_request();
 		}
-		$model = self::question_model();
+		$missing = array();
+		$model   = self::question_model();
 		foreach ( $model->get_active() as $q ) {
 			if ( ! self::is_effectively_required( $q, $answers ) ) {
 				continue;
@@ -530,21 +531,39 @@ class Remember_Profile_Questions {
 			$val = isset( $answers[ $qid ] ) ? trim( (string) $answers[ $qid ] ) : '';
 			if ( 'multiselect' === $q->field_type ) {
 				if ( empty( self::decode_multi_keys( $val ) ) ) {
-					return (string) $q->label;
+					$missing[ $qid ] = (string) $q->label;
 				}
 				continue;
 			}
 			if ( '' === $val ) {
-				return (string) $q->label;
+				$missing[ $qid ] = (string) $q->label;
+				continue;
 			}
 			if ( 'select' === $q->field_type ) {
 				$keys = wp_list_pluck( self::parse_options( $q->options_json ), 'key' );
 				if ( ! in_array( $val, $keys, true ) ) {
-					return (string) $q->label;
+					$missing[ $qid ] = (string) $q->label;
 				}
 			}
 		}
-		return null;
+		return $missing;
+	}
+
+	/**
+	 * First missing required custom answer, or null.
+	 *
+	 * Honors always-required and required_when conditional rules.
+	 *
+	 * @param array<int, string>|null $answers From collect_from_request().
+	 * @return string|null Question label if missing.
+	 */
+	public static function first_missing_required( $answers = null ) {
+		$missing = self::missing_required( $answers );
+		if ( empty( $missing ) ) {
+			return null;
+		}
+		$labels = array_values( $missing );
+		return (string) $labels[0];
 	}
 
 	/**
@@ -672,17 +691,22 @@ class Remember_Profile_Questions {
 	/**
 	 * Render form fields HTML for active questions.
 	 *
-	 * @param int    $member_id Member ID (0 on register).
-	 * @param string $context   admin|front|register.
+	 * @param int                    $member_id   Member ID (0 on register).
+	 * @param string                 $context     admin|front|register.
+	 * @param array<int,string>|null $responses   Posted answers, or null to load stored ones.
+	 * @param int[]                  $invalid_ids Question IDs that failed validation.
 	 * @return void
 	 */
-	public static function render_fields( $member_id = 0, $context = 'front' ) {
+	public static function render_fields( $member_id = 0, $context = 'front', $responses = null, $invalid_ids = array() ) {
 		$model = self::question_model();
 		$qs    = $model->get_active();
 		if ( empty( $qs ) ) {
 			return;
 		}
-		$responses   = $member_id > 0 ? self::get_responses_map( $member_id ) : array();
+		if ( ! is_array( $responses ) ) {
+			$responses = $member_id > 0 ? self::get_responses_map( $member_id ) : array();
+		}
+		$invalid_ids = array_map( 'intval', (array) $invalid_ids );
 		$is_admin    = ( 'admin' === $context );
 		$is_register = ( 'register' === $context );
 		$input_class = $is_admin ? 'regular-text' : ( $is_register ? 'remember-register-input' : 'remember-form-control' );
@@ -710,8 +734,12 @@ class Remember_Profile_Questions {
 
 			$is_multi = ( 'multiselect' === $q->field_type );
 			$multi_selected = $is_multi ? self::decode_multi_keys( $value ) : array();
+			$is_invalid = in_array( $qid, $invalid_ids, true );
+			$field_class = $input_class . ( $is_invalid ? ' remember-field-invalid' : '' );
+			$invalid_attr = $is_invalid ? ' aria-invalid="true"' : '';
 
-			$wrap_attrs  = ' class="remember-pq-field"';
+			$wrap_class = 'remember-pq-field' . ( $is_invalid ? ' remember-field-invalid-group' : '' );
+			$wrap_attrs  = ' class="' . esc_attr( $wrap_class ) . '"';
 			$wrap_attrs .= ' data-remember-pq-id="' . esc_attr( (string) $qid ) . '"';
 			$wrap_attrs .= ' data-remember-pq-key="' . esc_attr( (string) $q->field_key ) . '"';
 			$wrap_attrs .= ' data-remember-pq-type="' . esc_attr( (string) $q->field_type ) . '"';
@@ -755,7 +783,7 @@ class Remember_Profile_Questions {
 			}
 
 			if ( 'select' === $q->field_type ) {
-				echo '<select name="' . esc_attr( $name ) . '" id="' . esc_attr( $id ) . '" class="' . esc_attr( $input_class ) . '"' . ( $req ? ' required' : '' ) . '>';
+				echo '<select name="' . esc_attr( $name ) . '" id="' . esc_attr( $id ) . '" class="' . esc_attr( $field_class ) . '"' . ( $req ? ' required' : '' ) . $invalid_attr . '>';
 				echo '<option value="">' . esc_html__( '— Select —', 'remember' ) . '</option>';
 				foreach ( self::parse_options( $q->options_json ) as $opt ) {
 					echo '<option value="' . esc_attr( $opt['key'] ) . '" ' . selected( $value, $opt['key'], false ) . '>' . esc_html( $opt['label'] ) . '</option>';
@@ -769,7 +797,10 @@ class Remember_Profile_Questions {
 				} else {
 					$box_class = 'remember-pq-checkboxes remember-checkbox-grid';
 				}
-				echo '<div class="' . esc_attr( $box_class ) . '" role="group" aria-label="' . esc_attr( $label ) . '"' . ( $req ? ' data-remember-pq-require-one="1"' : '' ) . '>';
+				if ( $is_invalid ) {
+					$box_class .= ' remember-field-invalid-group';
+				}
+				echo '<div class="' . esc_attr( $box_class ) . '" role="group" aria-label="' . esc_attr( $label ) . '"' . ( $req ? ' data-remember-pq-require-one="1"' : '' ) . $invalid_attr . '>';
 				foreach ( self::parse_options( $q->options_json ) as $opt_i => $opt ) {
 					$cid = $id . '_' . $opt_i;
 					echo '<label class="remember-checkbox-label" for="' . esc_attr( $cid ) . '">';
@@ -779,7 +810,11 @@ class Remember_Profile_Questions {
 				}
 				echo '</div>';
 			} else {
-				echo '<input type="text" name="' . esc_attr( $name ) . '" id="' . esc_attr( $id ) . '" value="' . esc_attr( $value ) . '" class="' . esc_attr( $input_class ) . '"' . ( $req ? ' required' : '' ) . '>';
+				echo '<input type="text" name="' . esc_attr( $name ) . '" id="' . esc_attr( $id ) . '" value="' . esc_attr( $value ) . '" class="' . esc_attr( $field_class ) . '"' . ( $req ? ' required' : '' ) . $invalid_attr . '>';
+			}
+
+			if ( $is_invalid && ! $is_admin ) {
+				echo '<p class="remember-field-error">' . esc_html__( 'Required.', 'remember' ) . '</p>';
 			}
 
 			if ( $is_admin ) {

@@ -47,73 +47,104 @@ if ( ! isset( $is_edit ) ) {
 	$is_edit = isset( $_GET['edit'] ) && $_GET['edit'];
 }
 
-// Handle form submission
+// Handle form submission. Validation failures re-render from POST instead of redirecting.
+$remember_sticky           = false;
+$profile_error             = '';
+$password_error            = '';
+$pq_answers                = null;
+$profile_data              = array();
+$meta_data                 = array();
+$remember_new_email        = '';
+$remember_invalid_fields   = array();
+$remember_invalid_pq_ids   = array();
+$remember_field_messages   = array();
+
 if ( isset( $_POST['remember_profile_action'] ) && check_admin_referer( 'remember_profile_action', 'remember_profile_nonce' ) ) {
 	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-questions.php';
 	$profile_data = Remember_Profile_Fields::collect_profile_data_from_request();
 	$meta_data    = Remember_Profile_Fields::collect_meta_from_request();
 	$pq_answers   = Remember_Profile_Questions::collect_from_request();
-	$missing      = Remember_Profile_Fields::first_missing_required( $profile_data, $meta_data );
-	if ( '' !== $missing ) {
-		wp_safe_redirect( Remember_Profile_Audit::with_return_args( add_query_arg( array( 'edit' => '1', 'remember_profile_error' => $missing ) ) ) );
-		exit;
-	}
-	$missing_pq = Remember_Profile_Questions::first_missing_required( $pq_answers );
-	if ( null !== $missing_pq ) {
-		wp_safe_redirect( Remember_Profile_Audit::with_return_args( add_query_arg( array( 'edit' => '1', 'remember_profile_error' => 'custom_field' ) ) ) );
-		exit;
-	}
-	$missing_health = Remember_Profile_Fields::first_missing_required_health_catalog();
-	if ( '' !== $missing_health ) {
-		wp_safe_redirect( Remember_Profile_Audit::with_return_args( add_query_arg( array( 'edit' => '1', 'remember_profile_error' => $missing_health ) ) ) );
-		exit;
-	}
-	if ( Remember_Profile_Fields::allergy_reaction_is_missing() ) {
-		wp_safe_redirect( Remember_Profile_Audit::with_return_args( add_query_arg( array( 'edit' => '1', 'remember_profile_error' => 'allergy_reaction' ) ) ) );
-		exit;
-	}
+	$missing_keys   = Remember_Profile_Fields::missing_required( $profile_data, $meta_data );
+	$missing_pq     = Remember_Profile_Questions::missing_required( $pq_answers );
+	$missing_health = Remember_Profile_Fields::missing_required_health_catalogs();
 	$remember_new_email = isset( $_POST['user_email'] ) ? sanitize_email( wp_unslash( $_POST['user_email'] ) ) : '';
 	$remember_email_error = Remember_Profile_Fields::user_email_change_error( $user->ID, $remember_new_email );
+
+	$remember_invalid_fields = array_merge( $missing_keys, $missing_health );
+	$remember_invalid_pq_ids = array_map( 'intval', array_keys( $missing_pq ) );
+	$banner_labels           = array_merge( Remember_Profile_Fields::labels_for( $remember_invalid_fields ), array_values( $missing_pq ) );
+	$banner_extras           = array();
+
+	if ( Remember_Profile_Fields::allergy_reaction_is_missing() ) {
+		$remember_invalid_fields[] = 'allergy_reaction';
+		$banner_labels[]           = Remember_Profile_Fields::labels()['allergy_reaction'];
+	}
 	if ( '' !== $remember_email_error ) {
-		wp_safe_redirect( Remember_Profile_Audit::with_return_args( add_query_arg( array( 'edit' => '1', 'remember_profile_error' => $remember_email_error ) ) ) );
-		exit;
+		$remember_invalid_fields[] = 'user_email';
+		$remember_field_messages['user_email'] = Remember_Profile_Fields::user_email_change_message( $remember_email_error );
+		$banner_extras[] = $remember_field_messages['user_email'];
 	}
 	if ( Remember_Profile_Fields::interests_is_over_limit( $profile_data['interests'] ) ) {
-		wp_safe_redirect( Remember_Profile_Audit::with_return_args( add_query_arg( array( 'edit' => '1', 'remember_profile_error' => 'interests_too_long' ) ) ) );
-		exit;
+		$remember_invalid_fields[] = 'interests';
+		$remember_field_messages['interests'] = Remember_Profile_Fields::interests_too_long_message();
+		$banner_extras[] = $remember_field_messages['interests'];
 	}
 	if ( isset( $_POST['timezone_string'] ) ) {
 		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-timezone.php';
 		$remember_posted_timezone = sanitize_text_field( wp_unslash( $_POST['timezone_string'] ) );
 		if ( '' !== $remember_posted_timezone && ! Remember_Timezone::is_valid_timezone( $remember_posted_timezone ) ) {
-			wp_safe_redirect( Remember_Profile_Audit::with_return_args( add_query_arg( array( 'edit' => '1', 'remember_profile_error' => 'invalid_timezone' ) ) ) );
-			exit;
+			if ( ! in_array( 'timezone_string', $remember_invalid_fields, true ) ) {
+				$remember_invalid_fields[] = 'timezone_string';
+			}
+			$remember_field_messages['timezone_string'] = __( 'Please select a valid time zone.', 'remember' );
+			$banner_extras[] = $remember_field_messages['timezone_string'];
 		}
 	}
+
+	$profile_error = Remember_Profile_Fields::banner_message( $banner_labels, $banner_extras );
 
 	$current_password = isset( $_POST['current_password'] ) ? (string) wp_unslash( $_POST['current_password'] ) : '';
 	$new_password     = isset( $_POST['new_password'] ) ? (string) wp_unslash( $_POST['new_password'] ) : '';
 	$confirm_password = isset( $_POST['new_password_confirm'] ) ? (string) wp_unslash( $_POST['new_password_confirm'] ) : '';
 	$change_password  = ( '' !== $current_password || '' !== $new_password || '' !== $confirm_password );
 	if ( $change_password ) {
-		$password_error = '';
 		if ( '' === $current_password || '' === $new_password || '' === $confirm_password ) {
 			$password_error = 'password_missing';
+			if ( '' === $current_password ) {
+				$remember_invalid_fields[] = 'current_password';
+			}
+			if ( '' === $new_password ) {
+				$remember_invalid_fields[] = 'new_password';
+			}
+			if ( '' === $confirm_password ) {
+				$remember_invalid_fields[] = 'new_password_confirm';
+			}
 		} elseif ( ! wp_check_password( $current_password, $user->user_pass, $user->ID ) ) {
 			$password_error = 'password_wrong';
+			$remember_invalid_fields[] = 'current_password';
+			$remember_field_messages['current_password'] = __( 'That current password is not correct.', 'remember' );
 		} elseif ( $new_password !== $confirm_password ) {
 			$password_error = 'password_mismatch';
+			$remember_invalid_fields[] = 'new_password';
+			$remember_invalid_fields[] = 'new_password_confirm';
+			$remember_field_messages['new_password']         = __( 'These passwords do not match.', 'remember' );
+			$remember_field_messages['new_password_confirm'] = __( 'These passwords do not match.', 'remember' );
 		} else {
 			$min_len = (int) apply_filters( 'remember_registration_password_min_length', 8 );
 			if ( $min_len > 0 && strlen( $new_password ) < $min_len ) {
 				$password_error = 'weak_password';
+				$remember_invalid_fields[] = 'new_password';
+				$remember_field_messages['new_password'] = __( 'Please choose a stronger password (at least eight characters).', 'remember' );
 			}
 		}
-		if ( '' !== $password_error ) {
-			wp_safe_redirect( Remember_Profile_Audit::with_return_args( add_query_arg( array( 'edit' => '1', 'remember_password_error' => $password_error ), remove_query_arg( array( 'remember_password_updated', 'remember_profile_error' ) ) ) ) );
-			exit;
-		}
 	}
+
+	$remember_invalid_fields = array_values( array_unique( $remember_invalid_fields ) );
+
+	if ( '' !== $profile_error || '' !== $password_error ) {
+		$remember_sticky = true;
+		$is_edit         = true;
+	} else {
 
 	$photo_error   = '';
 	$has_new_photo = ! empty( $_FILES['photo_file']['name'] );
@@ -254,6 +285,7 @@ if ( isset( $_POST['remember_profile_action'] ) && check_admin_referer( 'remembe
 	}
 	wp_safe_redirect( $redirect_url );
 	exit;
+	}
 }
 
 // Load timezone utility
@@ -261,7 +293,7 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remem
 
 // Get timezone from WP user meta (not from member_profiles)
 $selected_timezone = get_user_meta( $user->ID, 'timezone_string', true );
-if ( empty( $selected_timezone ) ) {
+if ( empty( $selected_timezone ) && ! $remember_sticky ) {
 	$selected_timezone = 'America/Los_Angeles'; // Default
 	// Auto-assign default timezone
 	update_user_meta( $user->ID, 'timezone_string', $selected_timezone );
@@ -371,6 +403,33 @@ if ( ! empty( $selected_allergy_ids ) ) {
 		)
 	);
 }
+
+$sticky_email = $user->user_email;
+if ( $remember_sticky ) {
+	$profile = Remember_Profile_Fields::apply_profile_data_to_row( $profile, $profile_data );
+	if ( ! empty( $meta_data['timezone_string'] ) ) {
+		$selected_timezone = $meta_data['timezone_string'];
+	}
+	if ( isset( $meta_data['nickname'] ) && '' !== $meta_data['nickname'] ) {
+		$nickname_value = $meta_data['nickname'];
+	}
+	$user->first_name = isset( $profile_data['legal_first_name'] ) ? $profile_data['legal_first_name'] : $user->first_name;
+	$user->last_name  = isset( $profile_data['legal_last_name'] ) ? $profile_data['legal_last_name'] : $user->last_name;
+	$display_choices  = Remember_Member::get_public_display_name_choices( $user, $nickname_value );
+	if ( ! empty( $meta_data['display_name'] ) ) {
+		$current_display = $meta_data['display_name'];
+		if ( ! in_array( $current_display, $display_choices, true ) ) {
+			$display_choices[] = $current_display;
+		}
+	}
+	if ( '' !== $remember_new_email ) {
+		$sticky_email = $remember_new_email;
+	}
+	$selected_dietary_ids = Remember_Profile_Fields::catalog_ids_from_request( 'dietary_restrictions' );
+	$selected_medical_ids = Remember_Profile_Fields::catalog_ids_from_request( 'medical_accommodations' );
+	$selected_allergy_ids = Remember_Profile_Fields::catalog_ids_from_request( 'allergies' );
+	$social_profiles      = Remember_Profile_Fields::social_slots_from_request();
+}
 ?>
 
 <div class="remember-profile">
@@ -380,8 +439,38 @@ if ( ! empty( $selected_allergy_ids ) ) {
 		if ( $photo_error_notice ) {
 			delete_transient( 'remember_profile_photo_error_' . $user->ID );
 		}
-		$profile_error  = isset( $_GET['remember_profile_error'] ) ? sanitize_text_field( wp_unslash( $_GET['remember_profile_error'] ) ) : '';
-		$password_error = isset( $_GET['remember_password_error'] ) ? sanitize_key( wp_unslash( $_GET['remember_password_error'] ) ) : '';
+		if ( '' === $profile_error ) {
+			$profile_error = isset( $_GET['remember_profile_error'] ) ? sanitize_text_field( wp_unslash( $_GET['remember_profile_error'] ) ) : '';
+		}
+		if ( '' === $password_error ) {
+			$password_error = isset( $_GET['remember_password_error'] ) ? sanitize_key( wp_unslash( $_GET['remember_password_error'] ) ) : '';
+		}
+		if ( $photo_error_notice ) {
+			$remember_invalid_fields[] = 'photo_file';
+			$remember_field_messages['photo_file'] = (string) $photo_error_notice;
+		}
+		$remember_error_labels = Remember_Profile_Fields::labels();
+		if ( isset( $remember_error_labels[ $profile_error ] ) && ! in_array( $profile_error, $remember_invalid_fields, true ) ) {
+			$remember_invalid_fields[] = $profile_error;
+		}
+		if ( 'interests_too_long' === $profile_error && ! in_array( 'interests', $remember_invalid_fields, true ) ) {
+			$remember_invalid_fields[] = 'interests';
+			$remember_field_messages['interests'] = Remember_Profile_Fields::interests_too_long_message();
+		}
+		if ( in_array( $profile_error, array( 'invalid_email', 'email_exists' ), true ) && ! in_array( 'user_email', $remember_invalid_fields, true ) ) {
+			$remember_invalid_fields[] = 'user_email';
+			$remember_field_messages['user_email'] = Remember_Profile_Fields::user_email_change_message( $profile_error );
+		}
+		if ( 'invalid_timezone' === $profile_error && ! in_array( 'timezone_string', $remember_invalid_fields, true ) ) {
+			$remember_invalid_fields[] = 'timezone_string';
+			$remember_field_messages['timezone_string'] = __( 'Please select a valid time zone.', 'remember' );
+		}
+		$remember_ifc = static function ( $key, $base = 'remember-form-control' ) use ( $remember_invalid_fields ) {
+			return Remember_Profile_Fields::control_class( $key, $remember_invalid_fields, $base );
+		};
+		$remember_ifa = static function ( $key ) use ( $remember_invalid_fields ) {
+			return Remember_Profile_Fields::control_invalid_attr( $key, $remember_invalid_fields );
+		};
 		// Refresh member so photo preview reflects latest save.
 		$member = $member_model->get( $user->ID );
 		?>
@@ -412,8 +501,10 @@ if ( ! empty( $selected_allergy_ids ) ) {
 								$labels[ $profile_error ]
 							)
 						);
-					} else {
+					} elseif ( 'custom_field' === $profile_error ) {
 						esc_html_e( 'Please fill in all required fields.', 'remember' );
+					} else {
+						echo esc_html( $profile_error );
 					}
 					?>
 				</p>
@@ -486,7 +577,8 @@ if ( ! empty( $selected_allergy_ids ) ) {
 					</div>
 
 					<label for="photo_file" class="remember-form-label"><?php esc_html_e( 'Upload photo', 'remember' ); ?></label>
-					<input type="file" id="photo_file" name="photo_file" class="remember-form-control remember-form-control-file" accept="image/jpeg,image/png,image/gif">
+					<input type="file" id="photo_file" name="photo_file" class="<?php echo esc_attr( $remember_ifc( 'photo_file', 'remember-form-control remember-form-control-file' ) ); ?>" accept="image/jpeg,image/png,image/gif"<?php echo $remember_ifa( 'photo_file' ); ?>>
+					<?php Remember_Profile_Fields::render_field_error( 'photo_file', $remember_invalid_fields, $remember_field_messages ); ?>
 					<p class="remember-form-help">
 						<?php
 						echo esc_html(
@@ -511,8 +603,9 @@ if ( ! empty( $selected_allergy_ids ) ) {
 							<?php esc_html_e( 'Nickname', 'remember' ); ?>
 							<span class="remember-required">*</span>
 						</label>
-						<input type="text" id="nickname" name="nickname" class="remember-form-control" required
+						<input type="text" id="nickname" name="nickname" class="<?php echo esc_attr( $remember_ifc( 'nickname' ) ); ?>" required<?php echo $remember_ifa( 'nickname' ); ?>
 							value="<?php echo esc_attr( $nickname_value ); ?>">
+						<?php Remember_Profile_Fields::render_field_error( 'nickname', $remember_invalid_fields, $remember_field_messages ); ?>
 						<p class="remember-form-help"><?php esc_html_e( 'WordPress nickname — available as a public display option.', 'remember' ); ?></p>
 					</div>
 					<div class="remember-form-col">
@@ -556,16 +649,18 @@ if ( ! empty( $selected_allergy_ids ) ) {
 							<?php esc_html_e( 'Legal First Name', 'remember' ); ?>
 							<span class="remember-required">*</span>
 						</label>
-						<input type="text" id="legal_first_name" name="legal_first_name" class="remember-form-control" 
-							value="<?php echo esc_attr( $profile ? $profile->legal_first_name : get_user_meta( $user->ID, 'first_name', true ) ); ?>" required>
+						<input type="text" id="legal_first_name" name="legal_first_name" class="<?php echo esc_attr( $remember_ifc( 'legal_first_name' ) ); ?>"
+							value="<?php echo esc_attr( $profile ? $profile->legal_first_name : get_user_meta( $user->ID, 'first_name', true ) ); ?>" required<?php echo $remember_ifa( 'legal_first_name' ); ?>>
+						<?php Remember_Profile_Fields::render_field_error( 'legal_first_name', $remember_invalid_fields, $remember_field_messages ); ?>
 					</div>
 					<div class="remember-form-col">
 						<label for="legal_last_name" class="remember-form-label">
 							<?php esc_html_e( 'Legal Last Name', 'remember' ); ?>
 							<span class="remember-required">*</span>
 						</label>
-						<input type="text" id="legal_last_name" name="legal_last_name" class="remember-form-control" 
-							value="<?php echo esc_attr( $profile ? $profile->legal_last_name : get_user_meta( $user->ID, 'last_name', true ) ); ?>" required>
+						<input type="text" id="legal_last_name" name="legal_last_name" class="<?php echo esc_attr( $remember_ifc( 'legal_last_name' ) ); ?>"
+							value="<?php echo esc_attr( $profile ? $profile->legal_last_name : get_user_meta( $user->ID, 'last_name', true ) ); ?>" required<?php echo $remember_ifa( 'legal_last_name' ); ?>>
+						<?php Remember_Profile_Fields::render_field_error( 'legal_last_name', $remember_invalid_fields, $remember_field_messages ); ?>
 					</div>
 				</div>
 				<?php
@@ -607,17 +702,20 @@ if ( ! empty( $selected_allergy_ids ) ) {
 				<div class="remember-form-row">
 					<div class="remember-form-col remember-form-col-full">
 						<label for="current_password" class="remember-form-label"><?php esc_html_e( 'Current password', 'remember' ); ?></label>
-						<input type="password" id="current_password" name="current_password" class="remember-form-control" autocomplete="current-password" value="">
+						<input type="password" id="current_password" name="current_password" class="<?php echo esc_attr( $remember_ifc( 'current_password' ) ); ?>" autocomplete="current-password" value=""<?php echo $remember_ifa( 'current_password' ); ?>>
+						<?php Remember_Profile_Fields::render_field_error( 'current_password', $remember_invalid_fields, $remember_field_messages ); ?>
 					</div>
 				</div>
 				<div class="remember-form-row">
 					<div class="remember-form-col">
 						<label for="new_password" class="remember-form-label"><?php esc_html_e( 'New password', 'remember' ); ?></label>
-						<input type="password" id="new_password" name="new_password" class="remember-form-control" autocomplete="new-password" minlength="8" value="">
+						<input type="password" id="new_password" name="new_password" class="<?php echo esc_attr( $remember_ifc( 'new_password' ) ); ?>" autocomplete="new-password" minlength="8" value=""<?php echo $remember_ifa( 'new_password' ); ?>>
+						<?php Remember_Profile_Fields::render_field_error( 'new_password', $remember_invalid_fields, $remember_field_messages ); ?>
 					</div>
 					<div class="remember-form-col">
 						<label for="new_password_confirm" class="remember-form-label"><?php esc_html_e( 'Confirm new password', 'remember' ); ?></label>
-						<input type="password" id="new_password_confirm" name="new_password_confirm" class="remember-form-control" autocomplete="new-password" minlength="8" value="">
+						<input type="password" id="new_password_confirm" name="new_password_confirm" class="<?php echo esc_attr( $remember_ifc( 'new_password_confirm' ) ); ?>" autocomplete="new-password" minlength="8" value=""<?php echo $remember_ifa( 'new_password_confirm' ); ?>>
+						<?php Remember_Profile_Fields::render_field_error( 'new_password_confirm', $remember_invalid_fields, $remember_field_messages ); ?>
 					</div>
 				</div>
 			</div>
@@ -630,8 +728,9 @@ if ( ! empty( $selected_allergy_ids ) ) {
 							<?php esc_html_e( 'Email Address', 'remember' ); ?>
 							<span class="remember-required">*</span>
 						</label>
-						<input type="email" id="user_email" name="user_email" class="remember-form-control" required autocomplete="email"
-							value="<?php echo esc_attr( $user->user_email ); ?>">
+						<input type="email" id="user_email" name="user_email" class="<?php echo esc_attr( $remember_ifc( 'user_email' ) ); ?>" required autocomplete="email"<?php echo $remember_ifa( 'user_email' ); ?>
+							value="<?php echo esc_attr( $sticky_email ); ?>">
+						<?php Remember_Profile_Fields::render_field_error( 'user_email', $remember_invalid_fields, $remember_field_messages ); ?>
 						<p class="remember-form-help"><?php esc_html_e( 'This is your login and password-reset address. Saving a different address changes it immediately, updates the linked Xero or QuickBooks contact, and WordPress emails the previous address.', 'remember' ); ?></p>
 					</div>
 				</div>
@@ -641,8 +740,9 @@ if ( ! empty( $selected_allergy_ids ) ) {
 							<?php esc_html_e( 'Cell Phone', 'remember' ); ?>
 							<span class="remember-required">*</span>
 						</label>
-						<input type="text" id="cell_phone" name="cell_phone" class="remember-form-control" required
+						<input type="text" id="cell_phone" name="cell_phone" class="<?php echo esc_attr( $remember_ifc( 'cell_phone' ) ); ?>" required<?php echo $remember_ifa( 'cell_phone' ); ?>
 							value="<?php echo esc_attr( $profile ? $profile->cell_phone : '' ); ?>" placeholder="<?php esc_attr_e( '+18055551212', 'remember' ); ?>">
+						<?php Remember_Profile_Fields::render_field_error( 'cell_phone', $remember_invalid_fields, $remember_field_messages ); ?>
 						<p class="remember-form-help"><?php esc_html_e( 'Include a leading + and country code. Examples: +18055551212 (USA/Canada), +447700900123 (UK).', 'remember' ); ?></p>
 					</div>
 					<div class="remember-form-col">
@@ -650,7 +750,8 @@ if ( ! empty( $selected_allergy_ids ) ) {
 							<?php esc_html_e( 'Time Zone', 'remember' ); ?>
 							<span class="remember-required">*</span>
 						</label>
-						<?php echo Remember_Timezone::dropdown( $selected_timezone, 'timezone_string', 'timezone_string', true ); ?>
+						<?php echo Remember_Timezone::dropdown( $selected_timezone, 'timezone_string', 'timezone_string', true, $remember_ifc( 'timezone_string' ) ); ?>
+						<?php Remember_Profile_Fields::render_field_error( 'timezone_string', $remember_invalid_fields, $remember_field_messages ); ?>
 						<p class="remember-form-help"><?php echo esc_html( Remember_Timezone::help_text() ); ?></p>
 					</div>
 				</div>
@@ -661,25 +762,29 @@ if ( ! empty( $selected_allergy_ids ) ) {
 				<div class="remember-form-row">
 					<div class="remember-form-col remember-form-col-full">
 						<label for="address_street" class="remember-form-label"><?php esc_html_e( 'Street Address', 'remember' ); ?> <span class="remember-required">*</span></label>
-						<input type="text" id="address_street" name="address_street" class="remember-form-control" required
+						<input type="text" id="address_street" name="address_street" class="<?php echo esc_attr( $remember_ifc( 'address_street' ) ); ?>" required<?php echo $remember_ifa( 'address_street' ); ?>
 							value="<?php echo esc_attr( $profile ? $profile->address_street : '' ); ?>">
+						<?php Remember_Profile_Fields::render_field_error( 'address_street', $remember_invalid_fields, $remember_field_messages ); ?>
 					</div>
 				</div>
 				<div class="remember-form-row">
 					<div class="remember-form-col">
 						<label for="address_city" class="remember-form-label"><?php esc_html_e( 'City', 'remember' ); ?> <span class="remember-required">*</span></label>
-						<input type="text" id="address_city" name="address_city" class="remember-form-control" required
+						<input type="text" id="address_city" name="address_city" class="<?php echo esc_attr( $remember_ifc( 'address_city' ) ); ?>" required<?php echo $remember_ifa( 'address_city' ); ?>
 							value="<?php echo esc_attr( $profile ? $profile->address_city : '' ); ?>">
+						<?php Remember_Profile_Fields::render_field_error( 'address_city', $remember_invalid_fields, $remember_field_messages ); ?>
 					</div>
 					<div class="remember-form-col">
 						<label for="address_state" class="remember-form-label"><?php esc_html_e( 'State/Province', 'remember' ); ?> <span class="remember-required">*</span></label>
-						<input type="text" id="address_state" name="address_state" class="remember-form-control" required
+						<input type="text" id="address_state" name="address_state" class="<?php echo esc_attr( $remember_ifc( 'address_state' ) ); ?>" required<?php echo $remember_ifa( 'address_state' ); ?>
 							value="<?php echo esc_attr( $profile ? $profile->address_state : '' ); ?>">
+						<?php Remember_Profile_Fields::render_field_error( 'address_state', $remember_invalid_fields, $remember_field_messages ); ?>
 					</div>
 					<div class="remember-form-col">
 						<label for="address_postal" class="remember-form-label"><?php esc_html_e( 'Postal Code', 'remember' ); ?> <span class="remember-required">*</span></label>
-						<input type="text" id="address_postal" name="address_postal" class="remember-form-control" required
+						<input type="text" id="address_postal" name="address_postal" class="<?php echo esc_attr( $remember_ifc( 'address_postal' ) ); ?>" required<?php echo $remember_ifa( 'address_postal' ); ?>
 							value="<?php echo esc_attr( $profile ? $profile->address_postal : '' ); ?>">
+						<?php Remember_Profile_Fields::render_field_error( 'address_postal', $remember_invalid_fields, $remember_field_messages ); ?>
 					</div>
 					<div class="remember-form-col">
 						<label for="address_country" class="remember-form-label"><?php esc_html_e( 'Country', 'remember' ); ?> <span class="remember-required">*</span></label>
@@ -690,10 +795,11 @@ if ( ! empty( $selected_allergy_ids ) ) {
 							$selected_country,
 							array(
 								'id'       => 'address_country',
-								'class'    => 'remember-form-control',
+								'class'    => $remember_ifc( 'address_country' ),
 								'required' => true,
 							)
 						);
+						Remember_Profile_Fields::render_field_error( 'address_country', $remember_invalid_fields, $remember_field_messages );
 						?>
 					</div>
 				</div>
@@ -736,7 +842,7 @@ if ( ! empty( $selected_allergy_ids ) ) {
 				<div class="remember-form-section">
 					<h3 class="remember-form-section-title"><?php esc_html_e( 'Dietary Restrictions', 'remember' ); ?> <span class="remember-required">*</span></h3>
 					<p class="remember-form-help"><?php esc_html_e( 'Required. Select at least one — choose None if none apply. Used by event organizers — not shown to other participants.', 'remember' ); ?></p>
-					<div class="remember-checkbox-grid" data-remember-require-one="1">
+					<div class="<?php echo esc_attr( Remember_Profile_Fields::group_class( 'dietary_restrictions', $remember_invalid_fields, 'remember-checkbox-grid' ) ); ?>" data-remember-require-one="1"<?php echo $remember_ifa( 'dietary_restrictions' ); ?>>
 						<?php foreach ( $dietary_restrictions as $restriction ) : ?>
 							<label class="remember-checkbox-label">
 								<input type="checkbox" name="dietary_restrictions[]" value="<?php echo esc_attr( $restriction->restriction_id ); ?>" <?php checked( in_array( (string) $restriction->restriction_id, array_map( 'strval', (array) $selected_dietary_ids ), true ) ); ?><?php echo ( 'None' === $restriction->restriction_name ) ? ' data-remember-none="1"' : ''; ?>>
@@ -744,6 +850,7 @@ if ( ! empty( $selected_allergy_ids ) ) {
 							</label>
 						<?php endforeach; ?>
 					</div>
+					<?php Remember_Profile_Fields::render_field_error( 'dietary_restrictions', $remember_invalid_fields, $remember_field_messages ); ?>
 				</div>
 			<?php endif; ?>
 
@@ -751,7 +858,7 @@ if ( ! empty( $selected_allergy_ids ) ) {
 				<div class="remember-form-section">
 					<h3 class="remember-form-section-title"><?php esc_html_e( 'Medical Accommodations', 'remember' ); ?> <span class="remember-required">*</span></h3>
 					<p class="remember-form-help"><?php esc_html_e( 'Required. Select at least one — choose None if none apply. Used by event organizers — not shown to other participants.', 'remember' ); ?></p>
-					<div class="remember-checkbox-grid" data-remember-require-one="1">
+					<div class="<?php echo esc_attr( Remember_Profile_Fields::group_class( 'medical_accommodations', $remember_invalid_fields, 'remember-checkbox-grid' ) ); ?>" data-remember-require-one="1"<?php echo $remember_ifa( 'medical_accommodations' ); ?>>
 						<?php foreach ( $medical_accommodations as $accommodation ) : ?>
 							<label class="remember-checkbox-label">
 								<input type="checkbox" name="medical_accommodations[]" value="<?php echo esc_attr( $accommodation->accommodation_id ); ?>" <?php checked( in_array( (string) $accommodation->accommodation_id, array_map( 'strval', (array) $selected_medical_ids ), true ) ); ?><?php echo ( 'None' === $accommodation->accommodation_name ) ? ' data-remember-none="1"' : ''; ?>>
@@ -764,6 +871,7 @@ if ( ! empty( $selected_allergy_ids ) ) {
 							</label>
 						<?php endforeach; ?>
 					</div>
+					<?php Remember_Profile_Fields::render_field_error( 'medical_accommodations', $remember_invalid_fields, $remember_field_messages ); ?>
 				</div>
 			<?php endif; ?>
 
@@ -781,7 +889,7 @@ if ( ! empty( $selected_allergy_ids ) ) {
 				<div class="remember-form-section" data-remember-allergy-group="1">
 					<h3 class="remember-form-section-title"><?php esc_html_e( 'Known Allergies', 'remember' ); ?> <span class="remember-required">*</span></h3>
 					<p class="remember-form-help"><?php esc_html_e( 'Required. Select at least one — choose None if none apply. Used by event organizers — not shown to other participants.', 'remember' ); ?></p>
-					<div class="remember-checkbox-grid" data-remember-require-one="1">
+					<div class="<?php echo esc_attr( Remember_Profile_Fields::group_class( 'allergies', $remember_invalid_fields, 'remember-checkbox-grid' ) ); ?>" data-remember-require-one="1"<?php echo $remember_ifa( 'allergies' ); ?>>
 						<?php foreach ( $allergies as $allergy ) : ?>
 							<label class="remember-checkbox-label">
 								<input type="checkbox" name="allergies[]" value="<?php echo esc_attr( $allergy->allergy_id ); ?>" <?php checked( in_array( (string) $allergy->allergy_id, array_map( 'strval', (array) $selected_allergy_ids ), true ) ); ?><?php echo ( 'None' === $allergy->allergy_name ) ? ' data-remember-none="1"' : ''; ?>>
@@ -789,11 +897,13 @@ if ( ! empty( $selected_allergy_ids ) ) {
 							</label>
 						<?php endforeach; ?>
 					</div>
+					<?php Remember_Profile_Fields::render_field_error( 'allergies', $remember_invalid_fields, $remember_field_messages ); ?>
 					<div class="remember-allergy-reaction" data-remember-allergy-reaction="1"<?php echo $remember_reaction_needed ? '' : ' hidden'; ?>>
 						<div class="remember-form-row">
 							<div class="remember-form-col remember-form-col-full">
 								<label for="remember_allergy_reaction" class="remember-form-label"><?php echo esc_html( Remember_Profile_Fields::allergy_reaction_prompt() ); ?> <span class="remember-required">*</span></label>
-								<textarea name="allergy_reaction" id="remember_allergy_reaction" rows="5" class="remember-form-control"<?php echo $remember_reaction_needed ? ' required' : ''; ?>><?php echo esc_textarea( $remember_reaction_text ); ?></textarea>
+								<textarea name="allergy_reaction" id="remember_allergy_reaction" rows="5" class="<?php echo esc_attr( $remember_ifc( 'allergy_reaction' ) ); ?>"<?php echo $remember_reaction_needed ? ' required' : ''; ?><?php echo $remember_ifa( 'allergy_reaction' ); ?>><?php echo esc_textarea( $remember_reaction_text ); ?></textarea>
+								<?php Remember_Profile_Fields::render_field_error( 'allergy_reaction', $remember_invalid_fields, $remember_field_messages ); ?>
 							</div>
 						</div>
 					</div>
@@ -815,8 +925,9 @@ if ( ! empty( $selected_allergy_ids ) ) {
 					</div>
 					<div class="remember-form-col">
 						<label for="im_handle" class="remember-form-label"><?php esc_html_e( 'Handle', 'remember' ); ?> <span class="remember-required">*</span></label>
-						<input type="text" id="im_handle" name="im_handle" class="remember-form-control" required
+						<input type="text" id="im_handle" name="im_handle" class="<?php echo esc_attr( $remember_ifc( 'im_handle' ) ); ?>" required<?php echo $remember_ifa( 'im_handle' ); ?>
 							value="<?php echo esc_attr( $profile ? $profile->im_handle : '' ); ?>" placeholder="<?php esc_attr_e( 'Handle', 'remember' ); ?>">
+						<?php Remember_Profile_Fields::render_field_error( 'im_handle', $remember_invalid_fields, $remember_field_messages ); ?>
 					</div>
 				</div>
 			</div>
@@ -875,21 +986,24 @@ if ( ! empty( $selected_allergy_ids ) ) {
 				<div class="remember-form-row">
 					<div class="remember-form-col remember-form-col-full">
 						<label for="interests" class="remember-form-label"><?php esc_html_e( 'Interests', 'remember' ); ?></label>
+						<div class="<?php echo esc_attr( Remember_Profile_Fields::group_class( 'interests', $remember_invalid_fields ) ); ?>">
 						<?php
 						Remember_Profile_Fields::render_interests_editor(
 							$profile && isset( $profile->interests ) ? $profile->interests : '',
 							'interests',
 							'interests',
-							'remember-form-control'
+							$remember_ifc( 'interests' )
 						);
+						Remember_Profile_Fields::render_field_error( 'interests', $remember_invalid_fields, $remember_field_messages );
 						?>
+						</div>
 					</div>
 				</div>
 			</div>
 
 			<?php
 			require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-questions.php';
-			Remember_Profile_Questions::render_fields( (int) $user->ID, 'front' );
+			Remember_Profile_Questions::render_fields( (int) $user->ID, 'front', $remember_sticky ? $pq_answers : null, $remember_invalid_pq_ids );
 			?>
 
 			<div class="remember-form-section">
@@ -897,25 +1011,29 @@ if ( ! empty( $selected_allergy_ids ) ) {
 				<div class="remember-form-row">
 					<div class="remember-form-col">
 						<label for="emergency_contact_first" class="remember-form-label"><?php esc_html_e( 'First Name', 'remember' ); ?> <span class="remember-required">*</span></label>
-						<input type="text" id="emergency_contact_first" name="emergency_contact_first" class="remember-form-control" required
+						<input type="text" id="emergency_contact_first" name="emergency_contact_first" class="<?php echo esc_attr( $remember_ifc( 'emergency_contact_first' ) ); ?>" required<?php echo $remember_ifa( 'emergency_contact_first' ); ?>
 							value="<?php echo esc_attr( $profile ? $profile->emergency_contact_first : '' ); ?>">
+						<?php Remember_Profile_Fields::render_field_error( 'emergency_contact_first', $remember_invalid_fields, $remember_field_messages ); ?>
 					</div>
 					<div class="remember-form-col">
 						<label for="emergency_contact_last" class="remember-form-label"><?php esc_html_e( 'Last Name', 'remember' ); ?> <span class="remember-required">*</span></label>
-						<input type="text" id="emergency_contact_last" name="emergency_contact_last" class="remember-form-control" required
+						<input type="text" id="emergency_contact_last" name="emergency_contact_last" class="<?php echo esc_attr( $remember_ifc( 'emergency_contact_last' ) ); ?>" required<?php echo $remember_ifa( 'emergency_contact_last' ); ?>
 							value="<?php echo esc_attr( $profile ? $profile->emergency_contact_last : '' ); ?>">
+						<?php Remember_Profile_Fields::render_field_error( 'emergency_contact_last', $remember_invalid_fields, $remember_field_messages ); ?>
 					</div>
 				</div>
 				<div class="remember-form-row">
 					<div class="remember-form-col">
 						<label for="emergency_contact_phone" class="remember-form-label"><?php esc_html_e( 'Phone', 'remember' ); ?> <span class="remember-required">*</span></label>
-						<input type="text" id="emergency_contact_phone" name="emergency_contact_phone" class="remember-form-control" required
+						<input type="text" id="emergency_contact_phone" name="emergency_contact_phone" class="<?php echo esc_attr( $remember_ifc( 'emergency_contact_phone' ) ); ?>" required<?php echo $remember_ifa( 'emergency_contact_phone' ); ?>
 							value="<?php echo esc_attr( $profile ? $profile->emergency_contact_phone : '' ); ?>" placeholder="<?php esc_attr_e( '+18055551212', 'remember' ); ?>">
+						<?php Remember_Profile_Fields::render_field_error( 'emergency_contact_phone', $remember_invalid_fields, $remember_field_messages ); ?>
 					</div>
 					<div class="remember-form-col">
 						<label for="emergency_contact_relationship" class="remember-form-label"><?php esc_html_e( 'Relationship', 'remember' ); ?> <span class="remember-required">*</span></label>
-						<input type="text" id="emergency_contact_relationship" name="emergency_contact_relationship" class="remember-form-control" required
+						<input type="text" id="emergency_contact_relationship" name="emergency_contact_relationship" class="<?php echo esc_attr( $remember_ifc( 'emergency_contact_relationship' ) ); ?>" required<?php echo $remember_ifa( 'emergency_contact_relationship' ); ?>
 							value="<?php echo esc_attr( $profile ? $profile->emergency_contact_relationship : '' ); ?>" placeholder="<?php esc_attr_e( 'e.g., Spouse, Parent, Friend', 'remember' ); ?>">
+						<?php Remember_Profile_Fields::render_field_error( 'emergency_contact_relationship', $remember_invalid_fields, $remember_field_messages ); ?>
 					</div>
 				</div>
 			</div>
