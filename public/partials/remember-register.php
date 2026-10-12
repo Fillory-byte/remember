@@ -66,6 +66,9 @@ $allergies = $wpdb->get_results(
 $remember_reg_timezone = $remember_reg_val( 'timezone', '' );
 $remember_reg_country  = $remember_reg_val( 'address_country', 'US' );
 $remember_reg_im_type  = $remember_reg_val( 'im_type', '' );
+$remember_reg_dietary_ids = Remember_Profile_Fields::catalog_ids_from_request( 'dietary_restrictions' );
+$remember_reg_medical_ids = Remember_Profile_Fields::catalog_ids_from_request( 'medical_accommodations' );
+$remember_reg_social      = Remember_Profile_Fields::social_slots_from_request();
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-im-platforms.php';
 if ( '' === $remember_reg_im_type ) {
 	$remember_reg_im_type = Remember_Im_Platforms::default_key();
@@ -197,7 +200,11 @@ if ( '' === $remember_reg_im_type ) {
 
 			<?php
 			require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-questions.php';
-			Remember_Profile_Questions::render_fields( 0, 'register' );
+			Remember_Profile_Questions::render_fields(
+				0,
+				'register',
+				isset( $_POST['remember_register_submit'] ) ? Remember_Profile_Questions::collect_from_request() : null // phpcs:ignore WordPress.Security.NonceVerification.Missing -- sticky display only.
+			);
 			?>
 
 			<h3 class="remember-register-section-title"><?php esc_html_e( 'Emergency Contact', 'remember' ); ?></h3>
@@ -284,10 +291,10 @@ if ( '' === $remember_reg_im_type ) {
 							<select id="remember_reg_social_platform_<?php echo esc_attr( (string) $i ); ?>" name="social_media[<?php echo esc_attr( (string) $i ); ?>][platform_id]" class="remember-register-input remember-register-input--im-type">
 								<option value=""><?php esc_html_e( '— Select —', 'remember' ); ?></option>
 								<?php foreach ( $social_platforms as $platform ) : ?>
-									<option value="<?php echo esc_attr( $platform->platform_id ); ?>"><?php echo esc_html( $platform->platform_name ); ?></option>
+									<option value="<?php echo esc_attr( $platform->platform_id ); ?>" <?php selected( isset( $remember_reg_social[ $i ] ) ? (int) $remember_reg_social[ $i ]->platform_id : 0, (int) $platform->platform_id ); ?>><?php echo esc_html( $platform->platform_name ); ?></option>
 								<?php endforeach; ?>
 							</select>
-							<input type="text" name="social_media[<?php echo esc_attr( (string) $i ); ?>][handle]" class="remember-register-input remember-register-input--im-handle" placeholder="<?php esc_attr_e( '@handle', 'remember' ); ?>" />
+							<input type="text" name="social_media[<?php echo esc_attr( (string) $i ); ?>][handle]" class="remember-register-input remember-register-input--im-handle" placeholder="<?php esc_attr_e( '@handle', 'remember' ); ?>" value="<?php echo esc_attr( isset( $remember_reg_social[ $i ] ) ? $remember_reg_social[ $i ]->handle : '' ); ?>" />
 						</div>
 					</div>
 				<?php endfor; ?>
@@ -299,7 +306,7 @@ if ( '' === $remember_reg_im_type ) {
 				<div class="remember-register-checkboxes" data-remember-require-one="1">
 					<?php foreach ( $dietary_restrictions as $restriction ) : ?>
 						<label class="remember-checkbox-label">
-							<input type="checkbox" name="dietary_restrictions[]" value="<?php echo esc_attr( $restriction->restriction_id ); ?>"<?php echo ( 'None' === $restriction->restriction_name ) ? ' data-remember-none="1"' : ''; ?>>
+							<input type="checkbox" name="dietary_restrictions[]" value="<?php echo esc_attr( $restriction->restriction_id ); ?>" <?php checked( in_array( (int) $restriction->restriction_id, $remember_reg_dietary_ids, true ) ); ?><?php echo ( 'None' === $restriction->restriction_name ) ? ' data-remember-none="1"' : ''; ?>>
 							<span><?php echo esc_html( $restriction->restriction_name ); ?></span>
 						</label>
 					<?php endforeach; ?>
@@ -312,7 +319,7 @@ if ( '' === $remember_reg_im_type ) {
 				<div class="remember-register-checkboxes" data-remember-require-one="1">
 					<?php foreach ( $medical_accommodations as $accommodation ) : ?>
 						<label class="remember-checkbox-label">
-							<input type="checkbox" name="medical_accommodations[]" value="<?php echo esc_attr( $accommodation->accommodation_id ); ?>"<?php echo ( 'None' === $accommodation->accommodation_name ) ? ' data-remember-none="1"' : ''; ?>>
+							<input type="checkbox" name="medical_accommodations[]" value="<?php echo esc_attr( $accommodation->accommodation_id ); ?>" <?php checked( in_array( (int) $accommodation->accommodation_id, $remember_reg_medical_ids, true ) ); ?><?php echo ( 'None' === $accommodation->accommodation_name ) ? ' data-remember-none="1"' : ''; ?>>
 							<span><?php echo esc_html( $accommodation->accommodation_name ); ?></span>
 						</label>
 					<?php endforeach; ?>
@@ -370,27 +377,27 @@ if ( '' === $remember_reg_im_type ) {
 			<p class="remember-register-section-help"><?php esc_html_e( 'Optional. Consider allowing other event attendees to see at least your photo and IM so that you can begin networking with them. Use these controls to do that.', 'remember' ); ?></p>
 			<div class="remember-register-checkboxes">
 				<label class="remember-checkbox-label">
-					<input type="checkbox" name="share_photo_with_events" value="1">
+					<input type="checkbox" name="share_photo_with_events" value="1" <?php checked( ! empty( $_POST['share_photo_with_events'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- sticky display only. ?>>
 					<span><?php esc_html_e( 'Share Profile Photo', 'remember' ); ?></span>
 				</label>
 				<label class="remember-checkbox-label">
-					<input type="checkbox" name="share_email_with_events" value="1">
+					<input type="checkbox" name="share_email_with_events" value="1" <?php checked( ! empty( $_POST['share_email_with_events'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- sticky display only. ?>>
 					<span><?php esc_html_e( 'Share Email', 'remember' ); ?></span>
 				</label>
 				<label class="remember-checkbox-label">
-					<input type="checkbox" name="share_phone_with_events" value="1">
+					<input type="checkbox" name="share_phone_with_events" value="1" <?php checked( ! empty( $_POST['share_phone_with_events'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- sticky display only. ?>>
 					<span><?php esc_html_e( 'Share Cell Phone', 'remember' ); ?></span>
 				</label>
 				<label class="remember-checkbox-label">
-					<input type="checkbox" name="share_location_with_events" value="1">
+					<input type="checkbox" name="share_location_with_events" value="1" <?php checked( ! empty( $_POST['share_location_with_events'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- sticky display only. ?>>
 					<span><?php esc_html_e( 'Share Location', 'remember' ); ?></span>
 				</label>
 				<label class="remember-checkbox-label">
-					<input type="checkbox" name="share_im_with_events" value="1">
+					<input type="checkbox" name="share_im_with_events" value="1" <?php checked( ! empty( $_POST['share_im_with_events'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- sticky display only. ?>>
 					<span><?php esc_html_e( 'Share Instant Messenger', 'remember' ); ?></span>
 				</label>
 				<label class="remember-checkbox-label">
-					<input type="checkbox" name="share_interests_with_events" value="1">
+					<input type="checkbox" name="share_interests_with_events" value="1" <?php checked( ! empty( $_POST['share_interests_with_events'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- sticky display only. ?>>
 					<span><?php esc_html_e( 'Share Interests', 'remember' ); ?></span>
 				</label>
 			</div>

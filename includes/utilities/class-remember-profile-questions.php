@@ -672,17 +672,20 @@ class Remember_Profile_Questions {
 	/**
 	 * Render form fields HTML for active questions.
 	 *
-	 * @param int    $member_id Member ID (0 on register).
-	 * @param string $context   admin|front|register.
+	 * @param int                    $member_id Member ID (0 on register).
+	 * @param string                 $context   admin|front|register.
+	 * @param array<int,string>|null $responses Posted answers, or null to load stored ones.
 	 * @return void
 	 */
-	public static function render_fields( $member_id = 0, $context = 'front' ) {
+	public static function render_fields( $member_id = 0, $context = 'front', $responses = null ) {
 		$model = self::question_model();
 		$qs    = $model->get_active();
 		if ( empty( $qs ) ) {
 			return;
 		}
-		$responses   = $member_id > 0 ? self::get_responses_map( $member_id ) : array();
+		if ( ! is_array( $responses ) ) {
+			$responses = $member_id > 0 ? self::get_responses_map( $member_id ) : array();
+		}
 		$is_admin    = ( 'admin' === $context );
 		$is_register = ( 'register' === $context );
 		$input_class = $is_admin ? 'regular-text' : ( $is_register ? 'remember-register-input' : 'remember-form-control' );

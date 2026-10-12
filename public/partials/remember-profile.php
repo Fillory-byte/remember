@@ -47,47 +47,43 @@ if ( ! isset( $is_edit ) ) {
 	$is_edit = isset( $_GET['edit'] ) && $_GET['edit'];
 }
 
-// Handle form submission
+// Handle form submission. Validation failures re-render from POST instead of redirecting.
+$remember_sticky    = false;
+$profile_error      = '';
+$password_error     = '';
+$pq_answers         = null;
+$profile_data       = array();
+$meta_data          = array();
+$remember_new_email = '';
+
 if ( isset( $_POST['remember_profile_action'] ) && check_admin_referer( 'remember_profile_action', 'remember_profile_nonce' ) ) {
 	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-questions.php';
 	$profile_data = Remember_Profile_Fields::collect_profile_data_from_request();
 	$meta_data    = Remember_Profile_Fields::collect_meta_from_request();
 	$pq_answers   = Remember_Profile_Questions::collect_from_request();
 	$missing      = Remember_Profile_Fields::first_missing_required( $profile_data, $meta_data );
-	if ( '' !== $missing ) {
-		wp_safe_redirect( Remember_Profile_Audit::with_return_args( add_query_arg( array( 'edit' => '1', 'remember_profile_error' => $missing ) ) ) );
-		exit;
-	}
-	$missing_pq = Remember_Profile_Questions::first_missing_required( $pq_answers );
-	if ( null !== $missing_pq ) {
-		wp_safe_redirect( Remember_Profile_Audit::with_return_args( add_query_arg( array( 'edit' => '1', 'remember_profile_error' => 'custom_field' ) ) ) );
-		exit;
-	}
+	$missing_pq   = Remember_Profile_Questions::first_missing_required( $pq_answers );
 	$missing_health = Remember_Profile_Fields::first_missing_required_health_catalog();
-	if ( '' !== $missing_health ) {
-		wp_safe_redirect( Remember_Profile_Audit::with_return_args( add_query_arg( array( 'edit' => '1', 'remember_profile_error' => $missing_health ) ) ) );
-		exit;
-	}
-	if ( Remember_Profile_Fields::allergy_reaction_is_missing() ) {
-		wp_safe_redirect( Remember_Profile_Audit::with_return_args( add_query_arg( array( 'edit' => '1', 'remember_profile_error' => 'allergy_reaction' ) ) ) );
-		exit;
-	}
 	$remember_new_email = isset( $_POST['user_email'] ) ? sanitize_email( wp_unslash( $_POST['user_email'] ) ) : '';
 	$remember_email_error = Remember_Profile_Fields::user_email_change_error( $user->ID, $remember_new_email );
-	if ( '' !== $remember_email_error ) {
-		wp_safe_redirect( Remember_Profile_Audit::with_return_args( add_query_arg( array( 'edit' => '1', 'remember_profile_error' => $remember_email_error ) ) ) );
-		exit;
-	}
-	if ( Remember_Profile_Fields::interests_is_over_limit( $profile_data['interests'] ) ) {
-		wp_safe_redirect( Remember_Profile_Audit::with_return_args( add_query_arg( array( 'edit' => '1', 'remember_profile_error' => 'interests_too_long' ) ) ) );
-		exit;
-	}
-	if ( isset( $_POST['timezone_string'] ) ) {
+
+	if ( '' !== $missing ) {
+		$profile_error = $missing;
+	} elseif ( null !== $missing_pq ) {
+		$profile_error = 'custom_field';
+	} elseif ( '' !== $missing_health ) {
+		$profile_error = $missing_health;
+	} elseif ( Remember_Profile_Fields::allergy_reaction_is_missing() ) {
+		$profile_error = 'allergy_reaction';
+	} elseif ( '' !== $remember_email_error ) {
+		$profile_error = $remember_email_error;
+	} elseif ( Remember_Profile_Fields::interests_is_over_limit( $profile_data['interests'] ) ) {
+		$profile_error = 'interests_too_long';
+	} elseif ( isset( $_POST['timezone_string'] ) ) {
 		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-timezone.php';
 		$remember_posted_timezone = sanitize_text_field( wp_unslash( $_POST['timezone_string'] ) );
 		if ( '' !== $remember_posted_timezone && ! Remember_Timezone::is_valid_timezone( $remember_posted_timezone ) ) {
-			wp_safe_redirect( Remember_Profile_Audit::with_return_args( add_query_arg( array( 'edit' => '1', 'remember_profile_error' => 'invalid_timezone' ) ) ) );
-			exit;
+			$profile_error = 'invalid_timezone';
 		}
 	}
 
@@ -95,8 +91,7 @@ if ( isset( $_POST['remember_profile_action'] ) && check_admin_referer( 'remembe
 	$new_password     = isset( $_POST['new_password'] ) ? (string) wp_unslash( $_POST['new_password'] ) : '';
 	$confirm_password = isset( $_POST['new_password_confirm'] ) ? (string) wp_unslash( $_POST['new_password_confirm'] ) : '';
 	$change_password  = ( '' !== $current_password || '' !== $new_password || '' !== $confirm_password );
-	if ( $change_password ) {
-		$password_error = '';
+	if ( '' === $profile_error && $change_password ) {
 		if ( '' === $current_password || '' === $new_password || '' === $confirm_password ) {
 			$password_error = 'password_missing';
 		} elseif ( ! wp_check_password( $current_password, $user->user_pass, $user->ID ) ) {
@@ -109,11 +104,12 @@ if ( isset( $_POST['remember_profile_action'] ) && check_admin_referer( 'remembe
 				$password_error = 'weak_password';
 			}
 		}
-		if ( '' !== $password_error ) {
-			wp_safe_redirect( Remember_Profile_Audit::with_return_args( add_query_arg( array( 'edit' => '1', 'remember_password_error' => $password_error ), remove_query_arg( array( 'remember_password_updated', 'remember_profile_error' ) ) ) ) );
-			exit;
-		}
 	}
+
+	if ( '' !== $profile_error || '' !== $password_error ) {
+		$remember_sticky = true;
+		$is_edit         = true;
+	} else {
 
 	$photo_error   = '';
 	$has_new_photo = ! empty( $_FILES['photo_file']['name'] );
@@ -254,6 +250,7 @@ if ( isset( $_POST['remember_profile_action'] ) && check_admin_referer( 'remembe
 	}
 	wp_safe_redirect( $redirect_url );
 	exit;
+	}
 }
 
 // Load timezone utility
@@ -261,7 +258,7 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remem
 
 // Get timezone from WP user meta (not from member_profiles)
 $selected_timezone = get_user_meta( $user->ID, 'timezone_string', true );
-if ( empty( $selected_timezone ) ) {
+if ( empty( $selected_timezone ) && ! $remember_sticky ) {
 	$selected_timezone = 'America/Los_Angeles'; // Default
 	// Auto-assign default timezone
 	update_user_meta( $user->ID, 'timezone_string', $selected_timezone );
@@ -371,6 +368,33 @@ if ( ! empty( $selected_allergy_ids ) ) {
 		)
 	);
 }
+
+$sticky_email = $user->user_email;
+if ( $remember_sticky ) {
+	$profile = Remember_Profile_Fields::apply_profile_data_to_row( $profile, $profile_data );
+	if ( ! empty( $meta_data['timezone_string'] ) ) {
+		$selected_timezone = $meta_data['timezone_string'];
+	}
+	if ( isset( $meta_data['nickname'] ) && '' !== $meta_data['nickname'] ) {
+		$nickname_value = $meta_data['nickname'];
+	}
+	$user->first_name = isset( $profile_data['legal_first_name'] ) ? $profile_data['legal_first_name'] : $user->first_name;
+	$user->last_name  = isset( $profile_data['legal_last_name'] ) ? $profile_data['legal_last_name'] : $user->last_name;
+	$display_choices  = Remember_Member::get_public_display_name_choices( $user, $nickname_value );
+	if ( ! empty( $meta_data['display_name'] ) ) {
+		$current_display = $meta_data['display_name'];
+		if ( ! in_array( $current_display, $display_choices, true ) ) {
+			$display_choices[] = $current_display;
+		}
+	}
+	if ( '' !== $remember_new_email ) {
+		$sticky_email = $remember_new_email;
+	}
+	$selected_dietary_ids = Remember_Profile_Fields::catalog_ids_from_request( 'dietary_restrictions' );
+	$selected_medical_ids = Remember_Profile_Fields::catalog_ids_from_request( 'medical_accommodations' );
+	$selected_allergy_ids = Remember_Profile_Fields::catalog_ids_from_request( 'allergies' );
+	$social_profiles      = Remember_Profile_Fields::social_slots_from_request();
+}
 ?>
 
 <div class="remember-profile">
@@ -380,8 +404,12 @@ if ( ! empty( $selected_allergy_ids ) ) {
 		if ( $photo_error_notice ) {
 			delete_transient( 'remember_profile_photo_error_' . $user->ID );
 		}
-		$profile_error  = isset( $_GET['remember_profile_error'] ) ? sanitize_text_field( wp_unslash( $_GET['remember_profile_error'] ) ) : '';
-		$password_error = isset( $_GET['remember_password_error'] ) ? sanitize_key( wp_unslash( $_GET['remember_password_error'] ) ) : '';
+		if ( '' === $profile_error ) {
+			$profile_error = isset( $_GET['remember_profile_error'] ) ? sanitize_text_field( wp_unslash( $_GET['remember_profile_error'] ) ) : '';
+		}
+		if ( '' === $password_error ) {
+			$password_error = isset( $_GET['remember_password_error'] ) ? sanitize_key( wp_unslash( $_GET['remember_password_error'] ) ) : '';
+		}
 		// Refresh member so photo preview reflects latest save.
 		$member = $member_model->get( $user->ID );
 		?>
@@ -631,7 +659,7 @@ if ( ! empty( $selected_allergy_ids ) ) {
 							<span class="remember-required">*</span>
 						</label>
 						<input type="email" id="user_email" name="user_email" class="remember-form-control" required autocomplete="email"
-							value="<?php echo esc_attr( $user->user_email ); ?>">
+							value="<?php echo esc_attr( $sticky_email ); ?>">
 						<p class="remember-form-help"><?php esc_html_e( 'This is your login and password-reset address. Saving a different address changes it immediately, updates the linked Xero or QuickBooks contact, and WordPress emails the previous address.', 'remember' ); ?></p>
 					</div>
 				</div>
@@ -889,7 +917,7 @@ if ( ! empty( $selected_allergy_ids ) ) {
 
 			<?php
 			require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-questions.php';
-			Remember_Profile_Questions::render_fields( (int) $user->ID, 'front' );
+			Remember_Profile_Questions::render_fields( (int) $user->ID, 'front', $remember_sticky ? $pq_answers : null );
 			?>
 
 			<div class="remember-form-section">

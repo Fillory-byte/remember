@@ -218,6 +218,77 @@ class Remember_Profile_Fields {
 	}
 
 	/**
+	 * Copy posted profile columns onto a profile row for a sticky re-render.
+	 *
+	 * @param object|null         $profile      Existing row, or null.
+	 * @param array<string,mixed> $profile_data From collect_profile_data_from_request().
+	 * @return object
+	 */
+	public static function apply_profile_data_to_row( $profile, array $profile_data ) {
+		if ( ! is_object( $profile ) ) {
+			$profile = new stdClass();
+		}
+		foreach ( $profile_data as $key => $value ) {
+			$profile->{$key} = $value;
+		}
+		return $profile;
+	}
+
+	/**
+	 * Posted checkbox catalog IDs.
+	 *
+	 * @param string $post_key POST array key.
+	 * @return int[]
+	 */
+	public static function catalog_ids_from_request( $post_key ) {
+		$post_key = (string) $post_key;
+		if ( '' === $post_key || ! isset( $_POST[ $post_key ] ) || ! is_array( $_POST[ $post_key ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- caller verifies.
+			return array();
+		}
+		$ids = array();
+		foreach ( wp_unslash( $_POST[ $post_key ] ) as $raw_id ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			$id = absint( $raw_id );
+			if ( $id > 0 ) {
+				$ids[] = $id;
+			}
+		}
+		return $ids;
+	}
+
+	/**
+	 * Posted social-media slots (up to three) for a sticky re-render.
+	 *
+	 * @return array<int,object>
+	 */
+	public static function social_slots_from_request() {
+		$slots = array();
+		$raw   = ( isset( $_POST['social_media'] ) && is_array( $_POST['social_media'] ) ) ? $_POST['social_media'] : array(); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- caller verifies.
+		$i     = 0;
+		foreach ( $raw as $row ) {
+			if ( $i >= 3 ) {
+				break;
+			}
+			$slot              = new stdClass();
+			$slot->platform_id = 0;
+			$slot->handle      = '';
+			if ( is_array( $row ) ) {
+				$slot->platform_id = isset( $row['platform_id'] ) ? absint( $row['platform_id'] ) : 0;
+				$slot->handle      = isset( $row['handle'] ) ? sanitize_text_field( wp_unslash( $row['handle'] ) ) : '';
+			}
+			$slots[ $i ] = $slot;
+			++$i;
+		}
+		while ( $i < 3 ) {
+			$slot              = new stdClass();
+			$slot->platform_id = 0;
+			$slot->handle      = '';
+			$slots[ $i ]       = $slot;
+			++$i;
+		}
+		return $slots;
+	}
+
+	/**
 	 * First missing required key among profile + meta, or empty string if complete.
 	 *
 	 * @param array<string,mixed>  $profile_data Profile columns.
