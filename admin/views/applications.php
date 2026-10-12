@@ -818,7 +818,7 @@ $status_colors = array(
 	<!-- Applications List -->
 	<?php if ( ! empty( $applications ) ) : ?>
 		<div class="remember-table-scroll">
-		<table class="wp-list-table widefat striped remember-responsive-table">
+		<table class="wp-list-table widefat striped remember-responsive-table remember-list-cards">
 			<thead>
 				<tr>
 					<th class="column-event"><?php esc_html_e( 'Event', 'remember' ); ?></th>
@@ -866,7 +866,7 @@ $status_colors = array(
 							<?php if ( $user ) : ?>
 								<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-members&view=' . $application->member_id ) ); ?>">
 									<strong><?php echo esc_html( $user->display_name ); ?></strong>
-								</a><br>
+								</a><br class="remember-list-break">
 								<span class="description"><?php echo esc_html( $user->user_email ); ?></span>
 							<?php else : ?>
 								<span class="description"><?php esc_html_e( 'Member not found', 'remember' ); ?></span>
@@ -888,6 +888,7 @@ $status_colors = array(
 						</td>
 						<?php endif; ?>
 						<td class="column-date" data-label="<?php echo esc_attr__( 'Applied', 'remember' ); ?>">
+							<span class="remember-list-meta-label"><?php esc_html_e( 'Applied:', 'remember' ); ?></span>
 							<?php echo esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $application->applied_at ) ) ); ?>
 						</td>
 						<td class="column-actions" data-label="<?php echo esc_attr__( 'Actions', 'remember' ); ?>">

@@ -244,7 +244,7 @@ class Remember_Billing_Template {
 			return;
 		}
 
-		$table_classes = array( 'remember-billing-payments-table', 'wp-list-table', 'widefat', 'striped', 'remember-responsive-table' );
+		$table_classes = array( 'remember-billing-payments-table', 'wp-list-table', 'widefat', 'striped', 'remember-responsive-table', 'remember-list-cards' );
 		if ( '' !== $table_extra ) {
 			$table_classes[] = $table_extra;
 		}
@@ -277,7 +277,7 @@ class Remember_Billing_Template {
 							if ( $user ) :
 								$member_detail_url = admin_url( 'admin.php?page=remember-members&view=' . absint( $payment->member_id ) );
 								?>
-								<a href="<?php echo esc_url( $member_detail_url ); ?>"><?php echo esc_html( $user->display_name ); ?></a><br>
+								<a href="<?php echo esc_url( $member_detail_url ); ?>"><?php echo esc_html( $user->display_name ); ?></a><br class="remember-list-break">
 								<span class="description"><?php echo esc_html( $user->user_email ); ?></span>
 							<?php else : ?>
 								<span class="description"><?php esc_html_e( 'Member not found', 'remember' ); ?></span>
@@ -287,12 +287,15 @@ class Remember_Billing_Template {
 							<?php self::render_invoice_number_cell( $payment ); ?>
 						</td>
 						<td class="column-amount remember-num" data-label="<?php echo esc_attr__( 'Subtotal Amount', 'remember' ); ?>">
+							<span class="remember-list-meta-label"><?php esc_html_e( 'Subtotal:', 'remember' ); ?></span>
 							<strong>$<?php echo esc_html( number_format( (float) $payment->total_amount, 2 ) ); ?></strong>
 						</td>
 						<td class="column-paid remember-num" data-label="<?php echo esc_attr__( 'Payment/Credit', 'remember' ); ?>">
+							<span class="remember-list-meta-label"><?php esc_html_e( 'Paid:', 'remember' ); ?></span>
 							$<?php echo esc_html( number_format( self::get_payment_and_credit_total( $payment ), 2 ) ); ?>
 						</td>
 						<td class="column-due remember-num" data-label="<?php echo esc_attr__( 'Amount Due', 'remember' ); ?>">
+							<span class="remember-list-meta-label"><?php esc_html_e( 'Due:', 'remember' ); ?></span>
 							<strong style="color: <?php echo (float) $payment->amount_due > 0 ? '#dc3232' : '#46b450'; ?>;">
 								$<?php echo esc_html( number_format( (float) $payment->amount_due, 2 ) ); ?>
 							</strong>

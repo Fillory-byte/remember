@@ -1007,19 +1007,20 @@ if ( isset( $_GET['view'] ) ) {
 
 		<!-- Events List -->
 		<?php if ( ! empty( $events ) ) : ?>
-	<table class="wp-list-table widefat fixed striped">
-		<thead>
-			<tr>
+		<div class="remember-table-scroll">
+		<table class="wp-list-table widefat striped remember-responsive-table remember-list-cards">
+			<thead>
+				<tr>
 					<th class="column-name"><?php esc_html_e( 'Event Name', 'remember' ); ?></th>
 					<th class="column-location"><?php esc_html_e( 'Location', 'remember' ); ?></th>
 					<th class="column-dates"><?php esc_html_e( 'Dates', 'remember' ); ?></th>
 					<th class="column-status"><?php esc_html_e( 'Status', 'remember' ); ?></th>
 					<th class="column-type"><?php esc_html_e( 'Type', 'remember' ); ?></th>
 					<th class="column-actions"><?php esc_html_e( 'Actions', 'remember' ); ?></th>
-			</tr>
-		</thead>
-		<tbody>
-				<?php foreach ( $events as $event ) : 
+				</tr>
+			</thead>
+			<tbody>
+				<?php foreach ( $events as $event ) :
 					$location = $event->location_id ? $location_model->get( $event->location_id ) : null;
 					$status_labels = array(
 						'draft'     => __( 'Draft', 'remember' ),
@@ -1037,24 +1038,24 @@ if ( isset( $_GET['view'] ) ) {
 					);
 				?>
 					<tr>
-						<td class="column-name"><strong><?php echo esc_html( $event->event_name ); ?></strong></td>
-						<td class="column-location"><?php echo $location ? esc_html( $location->location_name ) : '<span class="description">—</span>'; ?></td>
-						<td class="column-dates">
+						<td class="column-name" data-label="<?php echo esc_attr__( 'Event Name', 'remember' ); ?>"><strong><?php echo esc_html( $event->event_name ); ?></strong></td>
+						<td class="column-location" data-label="<?php echo esc_attr__( 'Location', 'remember' ); ?>"><?php echo $location ? esc_html( $location->location_name ) : '<span class="description">—</span>'; ?></td>
+						<td class="column-dates" data-label="<?php echo esc_attr__( 'Dates', 'remember' ); ?>">
 							<?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $event->start_date ) ) ); ?>
 							<?php if ( $event->start_date !== $event->end_date ) : ?>
-								<br><span class="description"><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $event->end_date ) ) ); ?></span>
+								<br class="remember-list-break"><span class="remember-event-list-end description"><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $event->end_date ) ) ); ?></span>
 							<?php endif; ?>
 							<?php $registration_summary = Remember_Event::registration_window_summary( $event ); ?>
 							<?php if ( $registration_summary ) : ?>
-								<br><span class="description"><?php echo esc_html( $registration_summary ); ?></span>
+								<br class="remember-list-break"><span class="remember-event-list-window description"><?php echo esc_html( $registration_summary ); ?></span>
 							<?php endif; ?>
 						</td>
-						<td class="column-status">
+						<td class="column-status" data-label="<?php echo esc_attr__( 'Status', 'remember' ); ?>">
 							<span style="color: <?php echo esc_attr( $status_colors[ $event->status ] ); ?>;">
 								<?php echo esc_html( $status_labels[ $event->status ] ); ?>
 							</span>
 						</td>
-						<td class="column-type">
+						<td class="column-type" data-label="<?php echo esc_attr__( 'Type', 'remember' ); ?>">
 							<?php if ( $event->is_private ) : ?>
 								<?php
 								$invite_count = isset( $invite_counts[ (int) $event->event_id ] ) ? (int) $invite_counts[ (int) $event->event_id ] : 0;
@@ -1076,7 +1077,7 @@ if ( isset( $_GET['view'] ) ) {
 								<span class="dashicons dashicons-unlock" title="<?php esc_attr_e( 'Public', 'remember' ); ?>"></span> <?php esc_html_e( 'Public', 'remember' ); ?>
 							<?php endif; ?>
 						</td>
-						<td class="column-actions">
+						<td class="column-actions" data-label="<?php echo esc_attr__( 'Actions', 'remember' ); ?>">
 							<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-events&view=' . $event->event_id ) ); ?>"><?php esc_html_e( 'View', 'remember' ); ?></a>
 							<?php if ( current_user_can( 'remember_update_events' ) ) : ?>
 								| <a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-events&edit=' . $event->event_id ) ); ?>"><?php esc_html_e( 'Edit', 'remember' ); ?></a>
@@ -1087,8 +1088,9 @@ if ( isset( $_GET['view'] ) ) {
 						</td>
 					</tr>
 				<?php endforeach; ?>
-		</tbody>
-	</table>
+			</tbody>
+		</table>
+		</div>
 		<?php else : ?>
 			<p><?php esc_html_e( 'No events found. Add your first event above.', 'remember' ); ?></p>
 		<?php endif; ?>
