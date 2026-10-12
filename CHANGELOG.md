@@ -6,7 +6,7 @@ All notable changes to reMember are listed here. The current plugin version is i
 
 - **Feature:** A private event is hidden from members who are not invited. Checking Private on create or edit shows a compact member pick list. Invite emails go out when registration opens, or when the event is saved as Open if no open time is set. An invite is not an application; invited members still complete the usual apply workflow. Database 2.4.0.
 - **Fix:** A failed profile save or public registration keeps the submitted values on the form instead of reloading a blank copy from the database. Passwords are left empty. A new photo still has to be chosen again.
-- **Fix:** Validation names every failing field in the error banner and marks those fields on the profile edit and public registration forms.
+- **Fix:** Validation names every failing field in the error banner and marks those fields on the profile edit and public registration forms. On registration the note sits under the field, and the red border shows against the theme.
 
 ## 2.2.0
 

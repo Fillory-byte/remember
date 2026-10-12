@@ -325,6 +325,10 @@
 	max-width: 28rem;
 }
 
+.remember-register-form .remember-register-row > .remember-field-error {
+	grid-column: 2;
+}
+
 .remember-register-form .remember-register-row--photo {
 	align-items: start;
 }
@@ -420,6 +424,10 @@
 		grid-column: 1;
 		max-width: none;
 	}
+
+	.remember-register-form .remember-register-row > .remember-field-error {
+		grid-column: 1;
+	}
 }
 
 /* Notice Styles */
@@ -482,7 +490,10 @@
 .remember-register-input.remember-field-invalid,
 select.remember-field-invalid,
 textarea.remember-field-invalid,
-.remember-field-invalid {
+.remember-field-invalid,
+.remember-register-form .remember-register-input.remember-field-invalid,
+.remember-register-form select.remember-register-input.remember-field-invalid,
+.remember-profile-form-modern .remember-form-control.remember-field-invalid {
 	border-color: #dc3232;
 	box-shadow: 0 0 0 1px #dc3232;
 }
