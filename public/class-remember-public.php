@@ -44,6 +44,27 @@ class Remember_Public {
 	private $register_inline_error = '';
 
 	/**
+	 * Field keys to mark invalid on a failed registration re-render.
+	 *
+	 * @var string[]
+	 */
+	private $register_invalid_fields = array();
+
+	/**
+	 * Custom-question IDs to mark invalid on a failed registration re-render.
+	 *
+	 * @var int[]
+	 */
+	private $register_invalid_pq_ids = array();
+
+	/**
+	 * Per-field error copy for a failed registration re-render.
+	 *
+	 * @var array<string,string>
+	 */
+	private $register_field_messages = array();
+
+	/**
 	 * Initialize the class and set its properties.
 	 *
 	 * @param      string $plugin_name       The name of the plugin.
@@ -206,77 +227,101 @@ class Remember_Public {
 		$first_name   = $profile_data['legal_first_name'];
 		$last_name    = $profile_data['legal_last_name'];
 
-		if ( '' === $username || '' === $email || '' === $password || '' === $password_confirm ) {
-			$this->fail_member_registration( 'missing_fields' );
-			return;
-		}
-
 		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-profile-questions.php';
 		$pq_answers = Remember_Profile_Questions::collect_from_request();
 
-		$missing = Remember_Profile_Fields::first_missing_required( $profile_data, $meta_data );
-		if ( '' !== $missing ) {
-			$this->fail_member_registration( 'missing_fields' );
-			return;
+		$invalid_fields  = array();
+		$field_messages  = array();
+		$banner_labels   = array();
+		$banner_extras   = array();
+
+		if ( '' === $username ) {
+			$invalid_fields[] = 'username';
 		}
-		if ( null !== Remember_Profile_Questions::first_missing_required( $pq_answers ) ) {
-			$this->fail_member_registration( 'missing_fields' );
-			return;
+		if ( '' === $email ) {
+			$invalid_fields[] = 'user_email';
 		}
-		if ( '' !== Remember_Profile_Fields::first_missing_required_health_catalog() ) {
-			$this->fail_member_registration( 'missing_fields' );
-			return;
+		if ( '' === $password ) {
+			$invalid_fields[] = 'password';
 		}
+		if ( '' === $password_confirm ) {
+			$invalid_fields[] = 'password_confirm';
+		}
+
+		$missing_keys   = Remember_Profile_Fields::missing_required( $profile_data, $meta_data );
+		$missing_pq     = Remember_Profile_Questions::missing_required( $pq_answers );
+		$missing_health = Remember_Profile_Fields::missing_required_health_catalogs();
+		$invalid_fields = array_merge( $invalid_fields, $missing_keys, $missing_health );
+		$invalid_pq_ids = array_map( 'intval', array_keys( $missing_pq ) );
+		$banner_labels  = array_merge( Remember_Profile_Fields::labels_for( $invalid_fields ), array_values( $missing_pq ) );
+
 		if ( Remember_Profile_Fields::allergy_reaction_is_missing() ) {
-			$this->fail_member_registration( 'allergy_reaction' );
-			return;
+			$invalid_fields[] = 'allergy_reaction';
+			$banner_labels[]  = Remember_Profile_Fields::labels()['allergy_reaction'];
 		}
 		if ( Remember_Profile_Fields::interests_is_over_limit( $profile_data['interests'] ) ) {
-			$this->fail_member_registration( 'interests_too_long' );
-			return;
+			$invalid_fields[] = 'interests';
+			$field_messages['interests'] = Remember_Profile_Fields::interests_too_long_message();
+			$banner_extras[] = $field_messages['interests'];
 		}
-
-		if ( ! Remember_Timezone::is_valid_timezone( $timezone ) ) {
-			$this->fail_member_registration( 'invalid_timezone' );
-			return;
+		if ( '' === $timezone || ! Remember_Timezone::is_valid_timezone( $timezone ) ) {
+			if ( ! in_array( 'timezone_string', $invalid_fields, true ) ) {
+				$invalid_fields[] = 'timezone_string';
+				$banner_labels[]  = Remember_Profile_Fields::labels()['timezone_string'];
+			}
+			if ( '' !== $timezone && ! Remember_Timezone::is_valid_timezone( $timezone ) ) {
+				$field_messages['timezone_string'] = $this->get_member_registration_error_message( 'invalid_timezone' );
+				$banner_extras[] = $field_messages['timezone_string'];
+			}
 		}
-
-		if ( $password !== $password_confirm ) {
-			$this->fail_member_registration( 'password_mismatch' );
-			return;
+		if ( '' !== $password && '' !== $password_confirm && $password !== $password_confirm ) {
+			$invalid_fields[] = 'password';
+			$invalid_fields[] = 'password_confirm';
+			$field_messages['password']         = $this->get_member_registration_error_message( 'password_mismatch' );
+			$field_messages['password_confirm'] = $field_messages['password'];
+			$banner_extras[] = $field_messages['password'];
 		}
-
-		if ( ! is_email( $email ) ) {
-			$this->fail_member_registration( 'invalid_email' );
-			return;
+		if ( '' !== $email && ! is_email( $email ) ) {
+			if ( ! in_array( 'user_email', $invalid_fields, true ) ) {
+				$invalid_fields[] = 'user_email';
+			}
+			$field_messages['user_email'] = $this->get_member_registration_error_message( 'invalid_email' );
+			$banner_extras[] = $field_messages['user_email'];
 		}
-
-		if ( ! validate_username( $username ) ) {
-			$this->fail_member_registration( 'invalid_username' );
-			return;
+		if ( '' !== $username && ! validate_username( $username ) ) {
+			if ( ! in_array( 'username', $invalid_fields, true ) ) {
+				$invalid_fields[] = 'username';
+			}
+			$field_messages['username'] = $this->get_member_registration_error_message( 'invalid_username' );
+			$banner_extras[] = $field_messages['username'];
 		}
-
 		$min_len = (int) apply_filters( 'remember_registration_password_min_length', 8 );
-		if ( $min_len > 0 && strlen( $password ) < $min_len ) {
-			$this->fail_member_registration( 'weak_password' );
-			return;
+		if ( '' !== $password && $min_len > 0 && strlen( $password ) < $min_len ) {
+			if ( ! in_array( 'password', $invalid_fields, true ) ) {
+				$invalid_fields[] = 'password';
+			}
+			$field_messages['password'] = $this->get_member_registration_error_message( 'weak_password' );
+			$banner_extras[] = $field_messages['password'];
 		}
-
-		if ( username_exists( $username ) ) {
-			$this->fail_member_registration( 'username_exists' );
-			return;
+		if ( '' !== $username && validate_username( $username ) && username_exists( $username ) ) {
+			if ( ! in_array( 'username', $invalid_fields, true ) ) {
+				$invalid_fields[] = 'username';
+			}
+			$field_messages['username'] = $this->get_member_registration_error_message( 'username_exists' );
+			$banner_extras[] = $field_messages['username'];
 		}
-
-		if ( email_exists( $email ) ) {
-			$this->fail_member_registration( 'email_exists' );
-			return;
+		if ( '' !== $email && is_email( $email ) && email_exists( $email ) ) {
+			if ( ! in_array( 'user_email', $invalid_fields, true ) ) {
+				$invalid_fields[] = 'user_email';
+			}
+			$field_messages['user_email'] = $this->get_member_registration_error_message( 'email_exists' );
+			$banner_extras[] = $field_messages['user_email'];
 		}
 
 		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-registration-guard.php';
 		$blocked = Remember_Registration_Guard::before_create( $username, $email );
 		if ( '' !== $blocked ) {
-			$this->fail_member_registration( $blocked );
-			return;
+			$banner_extras[] = $this->get_member_registration_error_message( $blocked );
 		}
 
 		$remember_options     = get_option( 'remember_options', array() );
@@ -291,17 +336,30 @@ class Remember_Public {
 
 		$has_photo = ! empty( $_FILES['photo_file']['name'] );
 		if ( ! $has_photo ) {
-			$this->fail_member_registration( 'photo_required' );
-			return;
+			$invalid_fields[] = 'photo_file';
+			$banner_labels[]  = Remember_Profile_Fields::labels()['photo_file'];
+		} else {
+			$file_size = isset( $_FILES['photo_file']['size'] ) ? absint( $_FILES['photo_file']['size'] ) : 0;
+			if ( $file_size > 0 && $file_size > $photo_max_bytes ) {
+				$invalid_fields[] = 'photo_file';
+				$field_messages['photo_file'] = $this->get_member_registration_error_message( 'photo_too_large' );
+				$banner_extras[] = $field_messages['photo_file'];
+			}
+			$upload_err = isset( $_FILES['photo_file']['error'] ) ? (int) $_FILES['photo_file']['error'] : UPLOAD_ERR_NO_FILE;
+			if ( UPLOAD_ERR_OK !== $upload_err ) {
+				$invalid_fields[] = 'photo_file';
+				$field_messages['photo_file'] = $this->get_member_registration_error_message( 'photo_failed' );
+				$banner_extras[] = $field_messages['photo_file'];
+			}
 		}
-		$file_size = isset( $_FILES['photo_file']['size'] ) ? absint( $_FILES['photo_file']['size'] ) : 0;
-		if ( $file_size > 0 && $file_size > $photo_max_bytes ) {
-			$this->fail_member_registration( 'photo_too_large' );
-			return;
-		}
-		$upload_err = isset( $_FILES['photo_file']['error'] ) ? (int) $_FILES['photo_file']['error'] : UPLOAD_ERR_NO_FILE;
-		if ( UPLOAD_ERR_OK !== $upload_err ) {
-			$this->fail_member_registration( 'photo_failed' );
+
+		$invalid_fields = array_values( array_unique( $invalid_fields ) );
+		$banner_message = Remember_Profile_Fields::banner_message( $banner_labels, $banner_extras );
+		if ( '' !== $banner_message ) {
+			$this->register_invalid_fields   = $invalid_fields;
+			$this->register_invalid_pq_ids   = $invalid_pq_ids;
+			$this->register_field_messages   = $field_messages;
+			$this->fail_member_registration( 'missing_fields', $banner_message );
 			return;
 		}
 
@@ -320,6 +378,8 @@ class Remember_Public {
 					'error' => is_wp_error( $upload_result ) ? $upload_result->get_error_message() : '',
 				)
 			);
+			$this->register_invalid_fields[] = 'photo_file';
+			$this->register_field_messages['photo_file'] = $this->get_member_registration_error_message( 'photo_failed' );
 			$this->fail_member_registration( 'photo_failed' );
 			return;
 		}
@@ -429,11 +489,14 @@ class Remember_Public {
 	/**
 	 * Keep the registration POST and show the error on this request.
 	 *
-	 * @param string $error_code Error code.
+	 * @param string $error_code        Error code.
+	 * @param string $override_message  Optional full banner copy.
 	 * @return void
 	 */
-	private function fail_member_registration( $error_code ) {
-		$this->register_inline_error = $this->get_member_registration_error_message( $error_code );
+	private function fail_member_registration( $error_code, $override_message = '' ) {
+		$this->register_inline_error = '' !== (string) $override_message
+			? (string) $override_message
+			: $this->get_member_registration_error_message( $error_code );
 	}
 
 	/**
@@ -536,6 +599,10 @@ class Remember_Public {
 
 		$remember_register_success = isset( $_GET['remember_registered'] ) && '1' === $_GET['remember_registered'];
 		$remember_register_error_message = '';
+
+		$remember_invalid_fields = $this->register_invalid_fields;
+		$remember_invalid_pq_ids = $this->register_invalid_pq_ids;
+		$remember_field_messages = $this->register_field_messages;
 
 		if ( '' !== $this->register_inline_error ) {
 			$remember_register_error_message = $this->register_inline_error;
