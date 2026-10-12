@@ -1020,6 +1020,18 @@ p.remember-interests-count.is-over {
 	font-weight: 600 !important;
 }
 
+.remember-interests-notice {
+	display: none;
+	margin: 0.4em 0 0;
+	color: #b32d2e;
+	font-size: 13px;
+	line-height: 1.5;
+}
+
+.remember-interests-notice.is-visible {
+	display: block;
+}
+
 .remember-form-section {
 	margin-bottom: 2em;
 	padding-bottom: 1.5em;
