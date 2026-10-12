@@ -1436,7 +1436,8 @@
 	text-decoration: none;
 }
 
-.remember-member-list-joined-label {
+.remember-member-list-joined-label,
+.remember-list-meta-label {
 	display: none;
 }
 
@@ -2075,6 +2076,69 @@
 	.remember-events .remember-list-cards td.column-actions {
 		order: 5;
 		margin-left: auto;
+		text-align: right;
+	}
+
+	.remember-vetting .remember-list-cards tbody tr {
+		display: grid;
+		grid-template-columns: auto auto 1fr auto;
+		grid-template-areas:
+			"case member member member"
+			"vetter vetter scheduled scheduled"
+			"status decision . actions";
+		align-items: baseline;
+		column-gap: 12px;
+		row-gap: 6px;
+	}
+
+	.remember-vetting .remember-list-cards td.column-case {
+		grid-area: case;
+	}
+
+	.remember-vetting .remember-list-cards td.column-member {
+		grid-area: member;
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 8px 16px;
+		min-width: 0;
+	}
+
+	.remember-vetting .remember-list-cards td.column-member .description {
+		margin-left: auto;
+		text-align: right;
+		overflow-wrap: anywhere;
+		color: #1d2327;
+	}
+
+	.remember-vetting .remember-list-cards td.column-vetter {
+		grid-area: vetter;
+		color: #646970;
+	}
+
+	.remember-vetting .remember-list-cards td.column-scheduled {
+		grid-area: scheduled;
+		justify-self: end;
+		text-align: right;
+		color: #646970;
+	}
+
+	.remember-vetting .remember-list-cards td.column-status {
+		grid-area: status;
+	}
+
+	.remember-vetting .remember-list-cards td.column-decision {
+		grid-area: decision;
+	}
+
+	.remember-vetting .remember-list-cards td.column-decision.remember-list-empty {
+		display: none;
+	}
+
+	.remember-vetting .remember-list-cards td.column-actions {
+		grid-area: actions;
+		justify-self: end;
 		text-align: right;
 	}
 

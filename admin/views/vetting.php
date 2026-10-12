@@ -488,10 +488,11 @@ $decision_labels = array(
 
 	<!-- Vetting Records List -->
 	<?php if ( ! empty( $vetting_records ) ) : ?>
-		<table class="wp-list-table widefat fixed striped">
+		<div class="remember-table-scroll">
+		<table class="wp-list-table widefat striped remember-responsive-table remember-list-cards">
 			<thead>
 				<tr>
-					<th class="column-case" style="width: 80px;"><?php esc_html_e( 'Case', 'remember' ); ?></th>
+					<th class="column-case"><?php esc_html_e( 'Case', 'remember' ); ?></th>
 					<th class="column-member"><?php esc_html_e( 'Member', 'remember' ); ?></th>
 					<th class="column-vetter"><?php esc_html_e( 'Primary Vetter', 'remember' ); ?></th>
 					<th class="column-status"><?php esc_html_e( 'Status', 'remember' ); ?></th>
@@ -507,20 +508,21 @@ $decision_labels = array(
 					$vetter = get_user_by( 'ID', $vetting->primary_vetter_id );
 				?>
 					<tr>
-						<td class="column-case">
+						<td class="column-case" data-label="<?php echo esc_attr__( 'Case', 'remember' ); ?>">
 							<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-vetting&view=' . $vetting->vetting_id ) ); ?>">
 								<strong>#<?php echo esc_html( $vetting->vetting_id ); ?></strong>
 							</a>
 						</td>
-						<td class="column-member">
+						<td class="column-member" data-label="<?php echo esc_attr__( 'Member', 'remember' ); ?>">
 							<?php if ( $user ) : ?>
-								<strong><a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-members&view=' . $vetting->member_id ) ); ?>"><?php echo esc_html( $user->display_name ); ?></a></strong><br>
+								<strong><a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-members&view=' . $vetting->member_id ) ); ?>"><?php echo esc_html( $user->display_name ); ?></a></strong><br class="remember-list-break">
 								<span class="description"><?php echo esc_html( $user->user_email ); ?></span>
 							<?php else : ?>
 								<span class="description"><?php esc_html_e( 'Member not found', 'remember' ); ?></span>
 							<?php endif; ?>
 						</td>
-						<td class="column-vetter">
+						<td class="column-vetter" data-label="<?php echo esc_attr__( 'Primary Vetter', 'remember' ); ?>">
+							<span class="remember-list-meta-label"><?php esc_html_e( 'Vetter:', 'remember' ); ?></span>
 							<?php if ( $vetter ) : ?>
 								<?php 
 								// Check if vetter is also a member
@@ -536,19 +538,20 @@ $decision_labels = array(
 								<span class="description">—</span>
 							<?php endif; ?>
 						</td>
-						<td class="column-status">
+						<td class="column-status" data-label="<?php echo esc_attr__( 'Status', 'remember' ); ?>">
 							<span style="color: <?php echo esc_attr( $status_colors[ $vetting->status ] ); ?>; font-weight: bold;">
 								<?php echo esc_html( $status_labels[ $vetting->status ] ); ?>
 							</span>
 						</td>
-						<td class="column-scheduled">
+						<td class="column-scheduled" data-label="<?php echo esc_attr__( 'Scheduled', 'remember' ); ?>">
+							<span class="remember-list-meta-label"><?php esc_html_e( 'Scheduled:', 'remember' ); ?></span>
 							<?php if ( $vetting->scheduled_at ) : ?>
 								<?php echo esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $vetting->scheduled_at ) ) ); ?>
 							<?php else : ?>
 								<span class="description">—</span>
 							<?php endif; ?>
 						</td>
-						<td class="column-decision">
+						<td class="column-decision<?php echo ( 'completed' === $vetting->status ) ? '' : ' remember-list-empty'; ?>" data-label="<?php echo esc_attr__( 'Decision', 'remember' ); ?>">
 							<?php if ( 'completed' === $vetting->status ) : ?>
 								<span style="color: <?php echo 'accepted' === $vetting->decision ? '#46b450' : '#dc3232'; ?>; font-weight: bold;">
 									<?php echo esc_html( $decision_labels[ $vetting->decision ] ); ?>
@@ -557,13 +560,14 @@ $decision_labels = array(
 								<span class="description">—</span>
 							<?php endif; ?>
 						</td>
-						<td class="column-actions">
-							<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-vetting&view=' . $vetting->vetting_id ) ); ?>" class="button button-small"><?php esc_html_e( 'View Case', 'remember' ); ?></a>
+						<td class="column-actions" data-label="<?php echo esc_attr__( 'Actions', 'remember' ); ?>">
+							<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-vetting&view=' . $vetting->vetting_id ) ); ?>"><?php esc_html_e( 'View Case', 'remember' ); ?></a>
 						</td>
 					</tr>
 				<?php endforeach; ?>
 			</tbody>
 		</table>
+		</div>
 		
 		<p class="description" style="margin-top: 15px;">
 			<?php echo esc_html( sprintf( __( 'Showing %d vetting record(s)', 'remember' ), count( $vetting_records ) ) ); ?>

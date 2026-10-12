@@ -5,6 +5,7 @@ All notable changes to reMember are listed here. The current plugin version is i
 ## 2.2.2
 
 - **Fix:** The Events list on a phone is a compact card like Members: name and location on the first line, dates, status, type, and actions on the next.
+- **Fix:** The Vetting list on a phone is a compact card like Members: case and member on the first line, vetter and schedule, then status, decision, and View Case.
 
 ## 2.2.1
 
