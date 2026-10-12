@@ -2270,50 +2270,54 @@
 		width: auto;
 	}
 
-	.remember-surveys .remember-responsive-table tbody tr {
-		display: flex;
-		flex-wrap: wrap;
+	.remember-surveys .remember-list-cards tbody tr {
+		display: grid;
+		grid-template-columns: auto 1fr auto;
+		grid-template-areas:
+			"name name event"
+			"roles when questions"
+			"status status actions";
 		align-items: baseline;
 		column-gap: 12px;
-		row-gap: 4px;
-		padding: 8px 12px;
-		margin-bottom: 8px;
+		row-gap: 6px;
 	}
 
-	.remember-surveys .remember-responsive-table tbody td {
-		display: block;
-		width: auto;
-		max-width: none;
-		padding: 0;
+	.remember-surveys .remember-list-cards td.column-name {
+		grid-area: name;
+		min-width: 0;
 	}
 
-	.remember-surveys .remember-responsive-table tbody td::before {
-		content: none;
-	}
-
-	.remember-surveys .remember-responsive-table td.column-name {
-		order: 0;
-		flex: 1 0 100%;
-		width: 100%;
-	}
-
-	.remember-surveys .remember-responsive-table td.column-event,
-	.remember-surveys .remember-responsive-table td.column-roles,
-	.remember-surveys .remember-responsive-table td.column-when,
-	.remember-surveys .remember-responsive-table td.column-questions,
-	.remember-surveys .remember-responsive-table td.column-status,
-	.remember-surveys .remember-responsive-table td.column-actions {
-		order: 1;
-		flex: 0 0 auto;
-		width: auto !important;
-	}
-
-	.remember-surveys .remember-responsive-table td.column-roles {
+	.remember-surveys .remember-list-cards td.column-event {
+		grid-area: event;
+		justify-self: end;
+		text-align: right;
 		color: #646970;
 	}
 
-	.remember-surveys .remember-responsive-table td.column-actions {
-		margin-left: auto;
+	.remember-surveys .remember-list-cards td.column-roles {
+		grid-area: roles;
+		color: #646970;
+	}
+
+	.remember-surveys .remember-list-cards td.column-when {
+		grid-area: when;
+		color: #646970;
+	}
+
+	.remember-surveys .remember-list-cards td.column-questions {
+		grid-area: questions;
+		justify-self: end;
+		text-align: right;
+		color: #646970;
+	}
+
+	.remember-surveys .remember-list-cards td.column-status {
+		grid-area: status;
+	}
+
+	.remember-surveys .remember-list-cards td.column-actions {
+		grid-area: actions;
+		justify-self: end;
 		text-align: right;
 	}
 
@@ -2322,6 +2326,144 @@
 		font-weight: 600;
 		margin-right: 0.25em;
 		color: #1d2327;
+	}
+
+	.remember-applications .remember-list-cards tbody tr {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		grid-template-areas:
+			"event member"
+			"role billing"
+			"status actions"
+			"date date";
+		align-items: baseline;
+		column-gap: 12px;
+		row-gap: 6px;
+	}
+
+	.remember-applications .remember-list-cards td.column-event {
+		grid-area: event;
+	}
+
+	.remember-applications .remember-list-cards td.column-member {
+		grid-area: member;
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		align-items: baseline;
+		gap: 4px 12px;
+		min-width: 0;
+		text-align: right;
+	}
+
+	.remember-applications .remember-list-cards td.column-member .description {
+		overflow-wrap: anywhere;
+		color: #1d2327;
+	}
+
+	.remember-applications .remember-list-cards td.column-role {
+		grid-area: role;
+		color: #646970;
+	}
+
+	.remember-applications .remember-list-cards td.column-status {
+		grid-area: status;
+	}
+
+	.remember-applications .remember-list-cards td.column-billing {
+		grid-area: billing;
+		justify-self: end;
+		text-align: right;
+	}
+
+	.remember-applications .remember-list-cards td.column-date {
+		grid-area: date;
+		color: #646970;
+	}
+
+	.remember-applications .remember-list-cards td.column-actions {
+		grid-area: actions;
+		justify-self: end;
+		text-align: right;
+		width: auto;
+	}
+
+	.remember-applications .remember-list-cards td.column-actions form,
+	.remember-applications .remember-list-cards td.column-actions .button {
+		display: inline-block;
+		width: auto;
+		margin: 0;
+		text-align: center;
+	}
+
+	.remember-applications .remember-list-cards .remember-row-actions {
+		justify-content: flex-end;
+	}
+
+	.remember-billing .remember-list-cards tbody tr {
+		display: grid;
+		grid-template-columns: 1fr auto auto;
+		grid-template-areas:
+			"member member invoice"
+			"amount paid due"
+			"status method date";
+		align-items: baseline;
+		column-gap: 12px;
+		row-gap: 6px;
+	}
+
+	.remember-billing .remember-list-cards td.column-member {
+		grid-area: member;
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 4px 12px;
+		min-width: 0;
+	}
+
+	.remember-billing .remember-list-cards td.column-member .description {
+		margin-left: auto;
+		text-align: right;
+		overflow-wrap: anywhere;
+		color: #1d2327;
+	}
+
+	.remember-billing .remember-list-cards td.column-qb-invoice {
+		grid-area: invoice;
+		justify-self: end;
+		text-align: right;
+	}
+
+	.remember-billing .remember-list-cards td.column-amount {
+		grid-area: amount;
+	}
+
+	.remember-billing .remember-list-cards td.column-paid {
+		grid-area: paid;
+		text-align: left !important;
+	}
+
+	.remember-billing .remember-list-cards td.column-due {
+		grid-area: due;
+		justify-self: end;
+		text-align: right !important;
+	}
+
+	.remember-billing .remember-list-cards td.column-status {
+		grid-area: status;
+	}
+
+	.remember-billing .remember-list-cards td.column-method {
+		grid-area: method;
+		color: #646970;
+	}
+
+	.remember-billing .remember-list-cards td.column-date {
+		grid-area: date;
+		justify-self: end;
+		text-align: right;
+		color: #646970;
 	}
 }
 

@@ -550,7 +550,7 @@ if (window.history && history.replaceState) {
 	<?php $survey_list = Remember_Surveys::list_for_admin( $event_id ); ?>
 	<?php if ( $survey_list ) : ?>
 		<div class="remember-table-scroll">
-		<table class="wp-list-table widefat striped remember-responsive-table">
+		<table class="wp-list-table widefat striped remember-responsive-table remember-list-cards">
 			<thead>
 				<tr>
 					<th class="column-name"><?php esc_html_e( 'Survey', 'remember' ); ?></th>
@@ -595,14 +595,14 @@ if (window.history && history.replaceState) {
 					}
 					?>
 					<tr>
-						<td class="column-name">
+						<td class="column-name" data-label="<?php echo esc_attr__( 'Survey', 'remember' ); ?>">
 							<strong><a href="<?php echo esc_url( $edit_url ); ?>"><?php echo esc_html( $row->title ); ?></a></strong>
 						</td>
-						<td class="column-event"><?php echo esc_html( $row->event_name ? $row->event_name : __( '(event removed)', 'remember' ) ); ?></td>
-						<td class="column-roles">
+						<td class="column-event" data-label="<?php echo esc_attr__( 'Event', 'remember' ); ?>"><?php echo esc_html( $row->event_name ? $row->event_name : __( '(event removed)', 'remember' ) ); ?></td>
+						<td class="column-roles" data-label="<?php echo esc_attr__( 'Roles', 'remember' ); ?>">
 							<?php echo esc_html( $row->role_names ? $row->role_names : __( 'All roles', 'remember' ) ); ?>
 						</td>
-						<td class="column-when">
+						<td class="column-when" data-label="<?php echo esc_attr__( 'When', 'remember' ); ?>">
 							<?php
 							if ( $on_application ) {
 								echo '—';
@@ -611,14 +611,14 @@ if (window.history && history.replaceState) {
 							}
 							?>
 						</td>
-						<td class="column-questions">
+						<td class="column-questions" data-label="<?php echo esc_attr__( 'Questions', 'remember' ); ?>">
 							<span class="remember-survey-list-meta-label"><?php esc_html_e( 'Questions', 'remember' ); ?></span>
 							<?php echo esc_html( (string) $row->question_count ); ?>
 						</td>
-						<td class="column-status">
+						<td class="column-status" data-label="<?php echo esc_attr__( 'Status', 'remember' ); ?>">
 							<span style="color: <?php echo esc_attr( $status_color ); ?>; font-weight: bold;"><?php echo esc_html( $status_label ); ?></span>
 						</td>
-						<td class="column-actions">
+						<td class="column-actions" data-label="<?php echo esc_attr__( 'Actions', 'remember' ); ?>">
 							<a href="<?php echo esc_url( $edit_url ); ?>"><?php esc_html_e( 'Edit', 'remember' ); ?></a>
 							<?php if ( $can_edit ) : ?>
 								| <a href="<?php echo esc_url( $delete_url ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Delete this survey and its questions?', 'remember' ) ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
