@@ -88,6 +88,23 @@ $is_multi_day = $viewing_event->start_date !== $viewing_event->end_date;
 							</a>
 						</p>
 					<?php endif; ?>
+					<?php
+					if ( ! empty( $viewing_event->is_private ) ) {
+						require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-event-invites.php';
+						$invitee_ids = Remember_Event_Invites::member_ids_for_event( (int) $viewing_event->event_id );
+						$invitee_names = array();
+						foreach ( $invitee_ids as $invitee_id ) {
+							$invitee_user = get_user_by( 'id', $invitee_id );
+							$invitee_names[] = $invitee_user && $invitee_user->display_name ? $invitee_user->display_name : '#' . $invitee_id;
+						}
+						?>
+						<p style="margin: 5px 0;">
+							<strong><?php esc_html_e( 'Invitees:', 'remember' ); ?></strong>
+							<?php echo $invitee_names ? esc_html( implode( ', ', $invitee_names ) ) : esc_html__( 'None selected.', 'remember' ); ?>
+						</p>
+						<?php
+					}
+					?>
 					<?php if ( ! empty( $viewing_event->event_description ) ) : ?>
 						<div style="margin: 10px 0;">
 							<strong><?php esc_html_e( 'Public description:', 'remember' ); ?></strong>

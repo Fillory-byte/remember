@@ -373,6 +373,63 @@
 		if (typeof window.rememberInitTimezoneComboboxes === 'function') {
 			window.rememberInitTimezoneComboboxes();
 		}
+
+		$('.remember-events form').each(function() {
+			var $form = $(this);
+			var $toggle = $form.find('.remember-event-private-toggle');
+			var $row = $form.find('.remember-event-invitees-row');
+			if (!$toggle.length || !$row.length) {
+				return;
+			}
+
+			function syncPrivateRow() {
+				if ($toggle.is(':checked')) {
+					$row.removeAttr('hidden');
+				} else {
+					$row.attr('hidden', 'hidden');
+				}
+			}
+
+			function visibleLabels() {
+				return $form.find('.remember-event-invite-list label').not('.is-filtered-out');
+			}
+
+			function updateCount() {
+				$form.find('.remember-event-invite-count').text(
+					$form.find('.remember-event-invite-list input:checked').length
+				);
+			}
+
+			$toggle.on('change', syncPrivateRow);
+			syncPrivateRow();
+
+			$form.find('.remember-event-invite-filter').on('input', function() {
+				var query = $.trim($(this).val()).toLowerCase();
+				$form.find('.remember-event-invite-list label').each(function() {
+					var haystack = ($(this).attr('data-search') || '').toLowerCase();
+					$(this).toggleClass('is-filtered-out', !!query && haystack.indexOf(query) === -1);
+				});
+			});
+
+			$form.find('.remember-event-invite-list').on('change', 'input', function() {
+				$(this).closest('label').toggleClass('is-checked', this.checked);
+				updateCount();
+			});
+
+			$form.find('.remember-event-invite-select-shown').on('click', function() {
+				visibleLabels().each(function() {
+					$(this).find('input').prop('checked', true).trigger('change');
+				});
+			});
+
+			$form.find('.remember-event-invite-clear-shown').on('click', function() {
+				visibleLabels().each(function() {
+					$(this).find('input').prop('checked', false).trigger('change');
+				});
+			});
+
+			updateCount();
+		});
 	});
 	
 })(jQuery);

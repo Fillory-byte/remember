@@ -20,6 +20,7 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-merchand
 require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-product.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-addon-role-limits.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-agreements.php';
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-event-invites.php';
 
 Remember_Logger::debug( 'Events page loaded' );
 
@@ -390,6 +391,107 @@ function remember_event_checkin_enabled() {
 	return ! empty( $_POST['checkin_enabled'] ) ? 1 : 0;
 }
 
+/**
+ * Save invitees and send due invitation emails.
+ *
+ * @param int $event_id Event ID.
+ * @return void
+ */
+function remember_save_event_invites( $event_id ) {
+	$event_id = absint( $event_id );
+	if ( $event_id < 1 ) {
+		return;
+	}
+	Remember_Event_Invites::sync_from_request( $event_id );
+	$sent = Remember_Event_Invites::send_due_for_event( $event_id );
+	if ( $sent > 0 ) {
+		echo '<div class="notice notice-success is-dismissible"><p>';
+		echo esc_html(
+			sprintf(
+				/* translators: %d: number of emails sent */
+				_n( 'Invitation email sent to %d member.', 'Invitation emails sent to %d members.', $sent, 'remember' ),
+				$sent
+			)
+		);
+		echo '</p></div>';
+	}
+}
+
+/**
+ * Private checkbox and member invite pick list.
+ *
+ * @param object|null $event Event being edited.
+ * @return void
+ */
+function remember_render_private_invite_fields( $event = null ) {
+	$is_private = $event && ! empty( $event->is_private );
+	$selected   = array();
+	if ( $event && ! empty( $event->event_id ) ) {
+		$selected = Remember_Event_Invites::member_ids_for_event( (int) $event->event_id );
+	}
+	$selected_lookup = array_fill_keys( $selected, true );
+	$candidates      = Remember_Event_Invites::invite_candidates();
+	$status_labels   = array(
+		'pending_vetting' => __( 'Pending Vetting', 'remember' ),
+		'unvetted'        => __( 'Unvetted', 'remember' ),
+		'in_vetting'      => __( 'In Vetting', 'remember' ),
+		'vetted'          => __( 'Vetted', 'remember' ),
+		'rejected'        => __( 'Rejected', 'remember' ),
+		'inactive'        => __( 'Inactive', 'remember' ),
+	);
+	?>
+	<tr>
+		<th><label for="is_private"><?php esc_html_e( 'Private Event', 'remember' ); ?></label></th>
+		<td>
+			<label>
+				<input type="checkbox" id="is_private" name="is_private" value="1" class="remember-event-private-toggle" <?php checked( $is_private ); ?>>
+				<?php esc_html_e( 'This is a private event (invite only)', 'remember' ); ?>
+			</label>
+			<p class="description"><?php esc_html_e( 'Only invited members see this event. They still complete the usual application.', 'remember' ); ?></p>
+		</td>
+	</tr>
+	<tr class="remember-event-invitees-row"<?php echo $is_private ? '' : ' hidden'; ?>>
+		<th><?php esc_html_e( 'Invitees', 'remember' ); ?></th>
+		<td>
+			<?php if ( empty( $candidates ) ) : ?>
+				<p class="description"><?php esc_html_e( 'No members are available to invite yet.', 'remember' ); ?></p>
+			<?php else : ?>
+				<div class="remember-event-invite-toolbar">
+					<input type="search" class="remember-event-invite-filter" placeholder="<?php esc_attr_e( 'Filter members…', 'remember' ); ?>" aria-label="<?php esc_attr_e( 'Filter members', 'remember' ); ?>">
+					<button type="button" class="button-link remember-event-invite-select-shown"><?php esc_html_e( 'Select shown', 'remember' ); ?></button>
+					<span class="remember-event-invite-toolbar-sep" aria-hidden="true">·</span>
+					<button type="button" class="button-link remember-event-invite-clear-shown"><?php esc_html_e( 'Clear shown', 'remember' ); ?></button>
+					<span class="remember-event-invite-count-wrap">
+						<span class="remember-event-invite-count"><?php echo esc_html( (string) count( $selected ) ); ?></span>
+						<?php esc_html_e( 'selected', 'remember' ); ?>
+					</span>
+				</div>
+				<div class="remember-event-invite-list" role="group" aria-label="<?php esc_attr_e( 'Invited members', 'remember' ); ?>">
+					<?php foreach ( $candidates as $candidate ) : ?>
+						<?php
+						$member_id = absint( $candidate->member_id );
+						$is_on     = isset( $selected_lookup[ $member_id ] );
+						$status    = isset( $candidate->status ) ? (string) $candidate->status : '';
+						$label     = isset( $status_labels[ $status ] ) ? $status_labels[ $status ] : $status;
+						$name      = isset( $candidate->display_name ) && '' !== $candidate->display_name ? $candidate->display_name : $candidate->user_email;
+						$search    = strtolower( $name . ' ' . $candidate->user_email . ' ' . $label );
+						?>
+						<label class="<?php echo $is_on ? 'is-checked' : ''; ?>" data-search="<?php echo esc_attr( $search ); ?>">
+							<input type="checkbox" name="event_invitees[]" value="<?php echo esc_attr( (string) $member_id ); ?>" <?php checked( $is_on ); ?>>
+							<span class="remember-event-invite-name"><?php echo esc_html( $name ); ?></span>
+							<?php if ( $label ) : ?>
+								<span class="remember-event-invite-meta"><?php echo esc_html( $label ); ?></span>
+							<?php endif; ?>
+						</label>
+					<?php endforeach; ?>
+				</div>
+				<p class="description"><?php esc_html_e( 'Invitation emails go out when registration opens, or when you save the event as Open if no open time is set.', 'remember' ); ?></p>
+			<?php endif; ?>
+		</td>
+	</tr>
+	<?php
+}
+
 // Handle form submissions
 if ( isset( $_POST['remember_event_action'] ) && check_admin_referer( 'remember_event_action', 'remember_event_nonce' ) ) {
 	$action = sanitize_text_field( $_POST['remember_event_action'] );
@@ -429,6 +531,7 @@ if ( isset( $_POST['remember_event_action'] ) && check_admin_referer( 'remember_
 			$addons = remember_build_addons_from_post( $product_model );
 			remember_sync_event_addons( $merchandise_model, $event_id, $addons );
 			Remember_Agreements::sync_event_pins( $event_id, Remember_Agreements::pins_from_request() );
+			remember_save_event_invites( $event_id );
 
 			Remember_Logger::info( 'Event created', array( 'event_id' => $event_id ) );
 			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Event created successfully.', 'remember' ) . '</p></div>';
@@ -472,6 +575,7 @@ if ( isset( $_POST['remember_event_action'] ) && check_admin_referer( 'remember_
 			$addons = remember_build_addons_from_post( $product_model );
 			remember_sync_event_addons( $merchandise_model, $event_id, $addons );
 			Remember_Agreements::sync_event_pins( $event_id, Remember_Agreements::pins_from_request() );
+			remember_save_event_invites( $event_id );
 
 			Remember_Logger::info( 'Event updated', array( 'event_id' => $event_id, 'role_configs' => $role_configs ) );
 			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Event updated successfully.', 'remember' ) . '</p></div>';
@@ -501,6 +605,7 @@ if ( isset( $_POST['remember_event_action'] ) && check_admin_referer( 'remember_
 		$event_id = absint( $_GET['delete'] );
 		$result = $event_model->delete( $event_id );
 		if ( $result !== false ) {
+			Remember_Event_Invites::delete_for_event( $event_id );
 			Remember_Logger::info( 'Event deleted', array( 'event_id' => $event_id ) );
 			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Event deleted successfully.', 'remember' ) . '</p></div>';
 		} else {
@@ -513,6 +618,7 @@ if ( isset( $_POST['remember_event_action'] ) && check_admin_referer( 'remember_
 // Get events and locations
 $events = $event_model->get_all();
 $locations = $location_model->get_active();
+$invite_counts = Remember_Event_Invites::counts_by_event();
 
 // Check if viewing detail or editing
 $viewing_event = null;
@@ -642,10 +748,7 @@ if ( isset( $_GET['view'] ) ) {
 						<td><input type="date" id="end_date" name="end_date" class="regular-text" value="<?php echo esc_attr( $editing_event->end_date ); ?>" required></td>
 					</tr>
 					<?php remember_render_registration_window_fields( $editing_event ); ?>
-					<tr>
-						<th><label for="is_private"><?php esc_html_e( 'Private Event', 'remember' ); ?></label></th>
-						<td><label><input type="checkbox" id="is_private" name="is_private" value="1" <?php checked( $editing_event->is_private, 1 ); ?>> <?php esc_html_e( 'This is a private event (invite only)', 'remember' ); ?></label></td>
-					</tr>
+					<?php remember_render_private_invite_fields( $editing_event ); ?>
 					<tr>
 						<th><label for="status"><?php esc_html_e( 'Status', 'remember' ); ?></label></th>
 						<td>
@@ -830,10 +933,7 @@ if ( isset( $_GET['view'] ) ) {
 						<td><input type="date" id="end_date" name="end_date" class="regular-text" required></td>
 					</tr>
 					<?php remember_render_registration_window_fields(); ?>
-					<tr>
-						<th><label for="is_private"><?php esc_html_e( 'Private Event', 'remember' ); ?></label></th>
-						<td><label><input type="checkbox" id="is_private" name="is_private" value="1"> <?php esc_html_e( 'This is a private event (invite only)', 'remember' ); ?></label></td>
-					</tr>
+					<?php remember_render_private_invite_fields(); ?>
 					<tr>
 						<th><label for="status"><?php esc_html_e( 'Status', 'remember' ); ?></label></th>
 						<td>
@@ -956,7 +1056,22 @@ if ( isset( $_GET['view'] ) ) {
 						</td>
 						<td class="column-type">
 							<?php if ( $event->is_private ) : ?>
-								<span class="dashicons dashicons-lock" title="<?php esc_attr_e( 'Private', 'remember' ); ?>"></span> <?php esc_html_e( 'Private', 'remember' ); ?>
+								<?php
+								$invite_count = isset( $invite_counts[ (int) $event->event_id ] ) ? (int) $invite_counts[ (int) $event->event_id ] : 0;
+								?>
+								<span class="dashicons dashicons-lock" title="<?php esc_attr_e( 'Private', 'remember' ); ?>"></span>
+								<?php esc_html_e( 'Private', 'remember' ); ?>
+								<span class="description">
+									<?php
+									echo esc_html(
+										sprintf(
+											/* translators: %d: number of invited members */
+											_n( '· %d invited', '· %d invited', $invite_count, 'remember' ),
+											$invite_count
+										)
+									);
+									?>
+								</span>
 							<?php else : ?>
 								<span class="dashicons dashicons-unlock" title="<?php esc_attr_e( 'Public', 'remember' ); ?>"></span> <?php esc_html_e( 'Public', 'remember' ); ?>
 							<?php endif; ?>

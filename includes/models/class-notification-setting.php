@@ -119,6 +119,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'survey_issued'                 => __( 'Survey Issued', 'remember' ),
 			'payment_recorded'              => __( 'Payment Recorded', 'remember' ),
 			'payment_due_reminder'          => __( 'Payment Due Reminder', 'remember' ),
+			'event_invite'                  => __( 'Private Event Invitation', 'remember' ),
 			'vetting_collaborator_invited'  => __( 'Vetting Collaborator Invited', 'remember' ),
 			'duplicate_hit_admin'           => __( 'Possible Duplicate Profiles (Admin)', 'remember' ),
 			'duplicate_hit_member'          => __( 'Possible Duplicate Profile', 'remember' ),
@@ -153,6 +154,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'survey_issued'                 => __( 'Sent to accepted participants when a follow-on survey is issued.', 'remember' ),
 			'payment_recorded'              => __( 'Sent when a payment is recorded.', 'remember' ),
 			'payment_due_reminder'          => __( 'Sent as a reminder when payment is due (also used for balance-due blasts).', 'remember' ),
+			'event_invite'                  => __( 'Sent to invited members when a private event\'s registration opens, or when the event is saved as Open if no open time is set. The invite is not an application.', 'remember' ),
 			'vetting_collaborator_invited'  => __( 'Sent when a collaborator is invited to a vetting case.', 'remember' ),
 			'duplicate_hit_admin'           => __( 'Sent to reMember System Administrators when two profiles look like duplicates.', 'remember' ),
 			'duplicate_hit_member'          => __( 'Not sent on scan. Kept for templates; members are emailed when a merge completes instead.', 'remember' ),
@@ -186,6 +188,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'waitlist_spot_opened',
 			'waitlist_promoted',
 			'event_ticket_paid',
+			'event_invite',
 			'survey_issued',
 		);
 		$billing = array(
@@ -226,6 +229,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'waitlist_spot_opened'          => __( 'A spot opened for {event_name}', 'remember' ),
 			'waitlist_promoted'             => __( 'A spot opened for {event_name}', 'remember' ),
 			'event_ticket_paid'             => __( 'Your paid ticket for {event_name}', 'remember' ),
+			'event_invite'                  => __( 'You are invited to apply for {event_name}', 'remember' ),
 			'survey_issued'                 => __( 'Survey for {event_name}', 'remember' ),
 			'payment_recorded'              => __( 'Payment Recorded - \${amount}', 'remember' ),
 			'payment_due_reminder'          => __( 'Payment Reminder - \${amount_due} Due for {event_name}', 'remember' ),
@@ -288,6 +292,8 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'waitlist_promoted' => __( "Hello {member_name},\n\nA spot opened for {event_name} ({role_name}). Your application is pending review.\n\nApplication ID: {application_id}\nDate: {date}\n\nThe Team", 'remember' ),
 
 			'event_ticket_paid' => __( "Hello {member_name},\n\nYour payment for {event_name} has been recorded as paid in full.\n\nTicket ID: {ticket_id}\nApplication ID: {application_id}\nEvent: {event_name}\nDates: {event_dates}\nLocation: {event_location}\n\nView or print your paid admission ticket / receipt:\n{ticket_url}\n\nWe look forward to seeing you at the event.\n\nBest regards,\nThe Team", 'remember' ),
+
+			'event_invite' => __( "Hello {member_name},\n\nYou are invited to apply for {event_name}.\n\nDates: {event_dates}\nLocation: {event_location}\n\nThis invitation is not an application. If you want to attend, start an application here:\n{apply_url}\n\nThe Team", 'remember' ),
 
 			'survey_issued' => __( "Hello {member_name},\n\nPlease complete {survey_title} for {event_name}.\n\n{survey_url}\n\nThank you,\nThe Team", 'remember' ),
 			

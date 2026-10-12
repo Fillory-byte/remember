@@ -15,6 +15,7 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-event.ph
 require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-application.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-location.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-member.php';
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-event-invites.php';
 
 $event_model = new Remember_Event();
 $application_model = new Remember_Application();
@@ -23,7 +24,7 @@ $member_model = new Remember_Member();
 
 $event = $event_model->get( $event_id );
 
-if ( ! $event ) {
+if ( ! $event || ! Remember_Event_Invites::member_can_see( $event, get_current_user_id() ) ) {
 	echo '<p class="remember-notice remember-error">' . esc_html__( 'Event not found.', 'remember' ) . '</p>';
 	return;
 }
