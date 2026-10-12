@@ -1993,6 +1993,91 @@
 		max-width: none;
 	}
 
+	/* Compact list cards: title row, then a tight meta row. Desktop stays a table. */
+	.remember-list-cards tbody tr {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		column-gap: 12px;
+		row-gap: 6px;
+		padding: 10px 12px;
+		margin-bottom: 8px;
+	}
+
+	.remember-list-cards tbody td {
+		display: block;
+		width: auto;
+		max-width: none;
+		padding: 0;
+	}
+
+	.remember-list-cards tbody td::before {
+		content: none;
+	}
+
+	.remember-list-cards .remember-list-meta-label {
+		display: inline;
+		font-weight: 600;
+		margin-right: 0.25em;
+		color: #1d2327;
+	}
+
+	.remember-list-cards .remember-list-break {
+		display: none;
+	}
+
+	.remember-events .remember-list-cards td.column-name {
+		order: 1;
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+
+	.remember-events .remember-list-cards td.column-location {
+		order: 1;
+		margin-left: auto;
+		text-align: right;
+		color: #1d2327;
+	}
+
+	.remember-events .remember-list-cards td.column-dates {
+		order: 2;
+		flex: 1 1 100%;
+		width: 100%;
+		color: #646970;
+	}
+
+	.remember-events .remember-list-cards .remember-event-list-end::before {
+		content: " – ";
+	}
+
+	.remember-events .remember-list-cards .remember-event-list-window {
+		display: block;
+		margin-top: 2px;
+	}
+
+	.remember-events .remember-list-cards td.column-status {
+		order: 3;
+		font-weight: 600;
+	}
+
+	.remember-events .remember-list-cards td.column-type {
+		order: 4;
+	}
+
+	.remember-events .remember-list-cards td.column-type .dashicons {
+		font-size: 16px;
+		width: 16px;
+		height: 16px;
+		line-height: 16px;
+		vertical-align: text-bottom;
+	}
+
+	.remember-events .remember-list-cards td.column-actions {
+		order: 5;
+		margin-left: auto;
+		text-align: right;
+	}
+
 	/* Members cards use both sides of each row. Desktop column order is unchanged. */
 	.remember-members .remember-responsive-table tbody tr {
 		display: flex;

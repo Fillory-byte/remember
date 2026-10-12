@@ -2,6 +2,10 @@
 
 All notable changes to reMember are listed here. The current plugin version is in `remember.php` (`REMEMBER_VERSION`) and [GitHub Releases](https://github.com/ctucker1984/remember/releases).
 
+## 2.2.2
+
+- **Fix:** The Events list on a phone is a compact card like Members: name and location on the first line, dates, status, type, and actions on the next.
+
 ## 2.2.1
 
 - **Feature:** A private event is hidden from members who are not invited. Checking Private on create or edit shows a compact member pick list. Invite emails go out when registration opens, or when the event is saved as Open if no open time is set. An invite is not an application; invited members still complete the usual apply workflow. Database 2.4.0.
