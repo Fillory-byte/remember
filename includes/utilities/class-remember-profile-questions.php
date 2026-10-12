@@ -676,13 +676,15 @@ class Remember_Profile_Questions {
 	 * @param string $context   admin|front|register.
 	 * @return void
 	 */
-	public static function render_fields( $member_id = 0, $context = 'front' ) {
+	public static function render_fields( $member_id = 0, $context = 'front', $overrides = null ) {
 		$model = self::question_model();
 		$qs    = $model->get_active();
 		if ( empty( $qs ) ) {
 			return;
 		}
-		$responses   = $member_id > 0 ? self::get_responses_map( $member_id ) : array();
+		// $overrides (qid => stored-value map, e.g. from collect_from_request()) repopulates
+		// the fields after a failed save so the member's answers are not lost.
+		$responses   = is_array( $overrides ) ? $overrides : ( $member_id > 0 ? self::get_responses_map( $member_id ) : array() );
 		$is_admin    = ( 'admin' === $context );
 		$is_register = ( 'register' === $context );
 		$input_class = $is_admin ? 'regular-text' : ( $is_register ? 'remember-register-input' : 'remember-form-control' );

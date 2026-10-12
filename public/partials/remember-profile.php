@@ -49,6 +49,10 @@ if ( ! isset( $is_edit ) ) {
 
 // Handle form submission
 if ( isset( $_POST['remember_profile_action'] ) && check_admin_referer( 'remember_profile_action', 'remember_profile_nonce' ) ) {
+	// Keep the submitted values briefly so a validation failure (which redirects and
+	// re-renders from the database) can repopulate the form instead of discarding
+	// everything the member typed. Cleared once the save succeeds (below).
+	set_transient( 'remember_profile_draft_' . get_current_user_id(), wp_unslash( $_POST ), 10 * MINUTE_IN_SECONDS ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- stored verbatim, re-sanitized by the collectors on reuse.
 	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-questions.php';
 	$profile_data = Remember_Profile_Fields::collect_profile_data_from_request();
 	$meta_data    = Remember_Profile_Fields::collect_meta_from_request();
@@ -233,6 +237,9 @@ if ( isset( $_POST['remember_profile_action'] ) && check_admin_referer( 'remembe
 		wp_set_auth_cookie( $user->ID, true, is_ssl() );
 	}
 
+	// Save succeeded — drop the repopulation draft so a later reload shows saved data.
+	delete_transient( 'remember_profile_draft_' . get_current_user_id() );
+
 	// Redirect: stay on edit if photo failed so the member can retry.
 	if ( ! empty( $photo_error ) ) {
 		set_transient( 'remember_profile_photo_error_' . $user->ID, $photo_error, MINUTE_IN_SECONDS );
@@ -370,6 +377,50 @@ if ( ! empty( $selected_allergy_ids ) ) {
 			$user->ID
 		)
 	);
+}
+
+/*
+ * Sticky repopulation: after a failed save the page is reloaded (redirect) with
+ * ?remember_profile_error=..., and the form would otherwise render from the
+ * database, discarding everything the member typed. If a draft of the submitted
+ * values was stored (above), overlay it onto the render variables so the member
+ * keeps their entries — including when JavaScript never ran to block the submit.
+ */
+$remember_pq_overrides = null;
+if ( isset( $_GET['remember_profile_error'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- repopulation only; the failed POST was nonce-checked.
+	$remember_draft = get_transient( 'remember_profile_draft_' . $user->ID );
+	if ( is_array( $remember_draft ) ) {
+		delete_transient( 'remember_profile_draft_' . $user->ID );
+		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-questions.php';
+		$remember_saved_post = $_POST;
+		$_POST               = $remember_draft;
+		$draft_profile         = Remember_Profile_Fields::collect_profile_data_from_request();
+		$draft_meta            = Remember_Profile_Fields::collect_meta_from_request();
+		$remember_pq_overrides = Remember_Profile_Questions::collect_from_request();
+		$_POST                 = $remember_saved_post;
+
+		if ( ! is_object( $profile ) ) {
+			$profile = (object) array();
+		}
+		foreach ( $draft_profile as $remember_k => $remember_v ) {
+			$profile->$remember_k = $remember_v;
+		}
+		if ( '' !== (string) $draft_meta['nickname'] ) {
+			$nickname_value = $draft_meta['nickname'];
+		}
+		if ( '' !== (string) $draft_meta['timezone_string'] ) {
+			$selected_timezone = $draft_meta['timezone_string'];
+		}
+		if ( isset( $remember_draft['display_name'] ) ) {
+			$current_display = sanitize_text_field( wp_unslash( $remember_draft['display_name'] ) );
+			if ( '' !== $current_display && ! in_array( $current_display, $display_choices, true ) ) {
+				$display_choices[] = $current_display;
+			}
+		}
+		$selected_dietary_ids = isset( $remember_draft['dietary_restrictions'] ) ? array_map( 'absint', (array) $remember_draft['dietary_restrictions'] ) : $selected_dietary_ids;
+		$selected_medical_ids = isset( $remember_draft['medical_accommodations'] ) ? array_map( 'absint', (array) $remember_draft['medical_accommodations'] ) : $selected_medical_ids;
+		$selected_allergy_ids = isset( $remember_draft['allergies'] ) ? array_map( 'absint', (array) $remember_draft['allergies'] ) : $selected_allergy_ids;
+	}
 }
 ?>
 
@@ -889,7 +940,7 @@ if ( ! empty( $selected_allergy_ids ) ) {
 
 			<?php
 			require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-questions.php';
-			Remember_Profile_Questions::render_fields( (int) $user->ID, 'front' );
+			Remember_Profile_Questions::render_fields( (int) $user->ID, 'front', isset( $remember_pq_overrides ) ? $remember_pq_overrides : null );
 			?>
 
 			<div class="remember-form-section">
