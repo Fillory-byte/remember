@@ -514,6 +514,44 @@
 	/**
 	 * Conditional custom profile fields: show/hide + required when a gate field matches.
 	 */
+	/**
+	 * Guard always-required multiselect custom questions.
+	 *
+	 * Conditional multiselects are handled by initConditionalProfileQuestions();
+	 * always-required ones (no required_when rule) were previously guarded by
+	 * neither path, so a member could submit them empty and the server would
+	 * reject the save and reload the form from the database, discarding every
+	 * other response. This mirrors initRequireOneCheckboxGroups(): when nothing
+	 * is checked, the first box is marked required so the browser blocks submit
+	 * and the member keeps their entries.
+	 *
+	 * @return {void}
+	 */
+	function initAlwaysRequiredPqMultiselects() {
+		$('.remember-pq-field[data-remember-pq-always-required="1"]').each(function() {
+			var $field = $(this);
+			if ($field.data('remember-pq-type') !== 'multiselect') {
+				return;
+			}
+			if ($field.is('[data-remember-pq-when]')) {
+				return; // Conditional fields are managed elsewhere.
+			}
+			var $boxes = $field.find('input[type="checkbox"]');
+			if (!$boxes.length) {
+				return;
+			}
+			function syncRequired() {
+				var anyChecked = $boxes.filter(':checked').length > 0;
+				$boxes.prop('required', false);
+				if (!anyChecked) {
+					$boxes.first().prop('required', true);
+				}
+			}
+			$boxes.on('change', syncRequired);
+			syncRequired();
+		});
+	}
+
 	function initConditionalProfileQuestions() {
 		var $fields = $('.remember-pq-field[data-remember-pq-when]');
 		if (!$fields.length) {
@@ -772,6 +810,7 @@
 		initDisplayNameNicknameSync();
 		initProfilePhotoCropper();
 		initRequireOneCheckboxGroups();
+		initAlwaysRequiredPqMultiselects();
 		initAllergyReactionFields();
 		rememberInitSurvey();
 		initRegistrationSuccessSplash();
@@ -821,6 +860,44 @@
 	function rememberInterestsCountLabel(count, max, template) {
 		var label = template || '%1$s / %2$s characters';
 		return label.replace('%1$s', String(count)).replace('%2$s', String(max));
+	}
+
+	/**
+	 * Show a short, auto-hiding notice next to an Interests counter so an
+	 * over-limit paste is not silently discarded.
+	 *
+	 * @param {object} $counter jQuery counter element.
+	 * @param {string} message  Message to show.
+	 * @return {void}
+	 */
+	function rememberShowInterestsNotice($counter, message) {
+		if (!$counter || !$counter.length) {
+			return;
+		}
+		var $notice = $counter.data('remember-interests-notice');
+		if (!$notice || !$notice.length) {
+			$notice = $('<span class="remember-interests-notice" role="status" aria-live="polite"></span>');
+			$counter.after($notice);
+			$counter.data('remember-interests-notice', $notice);
+		}
+		$notice.text(message).addClass('is-visible');
+		var prior = $counter.data('remember-interests-notice-timer');
+		if (prior) {
+			window.clearTimeout(prior);
+		}
+		$counter.data('remember-interests-notice-timer', window.setTimeout(function() {
+			$notice.removeClass('is-visible');
+		}, 6000));
+	}
+
+	/**
+	 * Message shown when an Interests paste is over the limit.
+	 *
+	 * @param {number} max Character limit.
+	 * @return {string}
+	 */
+	function rememberInterestsOverLimitMessage(max) {
+		return 'Your pasted text was over the ' + String(max) + '-character limit, so it was not added. Please shorten it and try again.';
 	}
 
 	/**
@@ -1001,6 +1078,7 @@
 			window.setTimeout(function() {
 				if (plainLen() > max && editor.undoManager) {
 					editor.undoManager.undo();
+					rememberShowInterestsNotice($counter, rememberInterestsOverLimitMessage(max));
 				}
 				updateCounter();
 			}, 0);
@@ -1075,6 +1153,7 @@
 					}
 					$area.val(value);
 					len = max;
+					rememberShowInterestsNotice($counter, 'Your text was shortened to the ' + String(max) + '-character limit.');
 				}
 				$counter.text(rememberInterestsCountLabel(len, max, template));
 				$counter.toggleClass('is-over', len > max);
