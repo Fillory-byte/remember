@@ -8,6 +8,7 @@ All notable changes to reMember are listed here. The current plugin version is i
 - **Fix:** An application that fails a check the member can fix, such as an incomplete survey, a missing agreement, or the profile confirmation, shows the form again under the error. The chosen role, add-ons and quantities, and survey answers are kept. Agreements and the profile confirmation are left for the member to complete again.
 - **Feature:** On the admin member screen, health information and the emergency contact stay hidden until staff click Show for that section. Opening a profile to view or edit it no longer writes to the access log; each Show does, for that section only. A profile save changes health or emergency data only when that section was opened, and the save is logged as well.
 - **Feature:** Printing the Confidential profile, from the Print menu or with Ctrl/Cmd+P, writes one access log entry before the print preview opens and always includes the emergency contact and health sections the user may see. It requires the confidential print right and access to emergency contact or health; without them, the print does not load or log that data. If the entry cannot be written, nothing is printed.
+- **Fix:** On a phone, the event Add and Edit forms show each event role as a compact card: the checkbox and role name on one line, then labeled price and capacity. Tapping the role name ticks its box. Each add-on's per-role limits are one line per role, with the name on the left and the quantity on the right. Desktop is unchanged.
 
 ## 2.2.2
 
