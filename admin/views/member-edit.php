@@ -20,37 +20,6 @@ $social_media_platforms = $wpdb->get_results(
 	"SELECT * FROM {$wpdb->prefix}remember_social_media_platforms WHERE is_active = 1 ORDER BY sort_order ASC, platform_name ASC"
 );
 
-// Get dietary restrictions
-$dietary_restrictions = $wpdb->get_results(
-	"SELECT * FROM {$wpdb->prefix}remember_dietary_restrictions WHERE is_active = 1 ORDER BY CASE WHEN restriction_name = 'None' THEN 0 ELSE 1 END ASC, sort_order ASC, restriction_name ASC"
-);
-
-// Get medical accommodations
-$medical_accommodations = $wpdb->get_results(
-	"SELECT * FROM {$wpdb->prefix}remember_medical_accommodations WHERE is_active = 1 ORDER BY CASE WHEN accommodation_name = 'None' THEN 0 ELSE 1 END ASC, sort_order ASC, accommodation_name ASC"
-);
-
-// Get allergies
-$allergies = $wpdb->get_results(
-	"SELECT * FROM {$wpdb->prefix}remember_allergies WHERE is_active = 1 ORDER BY CASE WHEN allergy_name = 'None' THEN 0 ELSE 1 END ASC, sort_order ASC, allergy_name ASC"
-);
-
-// Get selected IDs for multi-selects (from junction tables)
-$selected_dietary_ids = $wpdb->get_col( $wpdb->prepare(
-	"SELECT restriction_id FROM {$wpdb->prefix}remember_member_dietary_restrictions WHERE member_id = %d",
-	$view_member_id
-) );
-
-$selected_medical_ids = $wpdb->get_col( $wpdb->prepare(
-	"SELECT accommodation_id FROM {$wpdb->prefix}remember_member_medical_accommodations WHERE member_id = %d",
-	$view_member_id
-) );
-
-$selected_allergy_ids = $wpdb->get_col( $wpdb->prepare(
-	"SELECT allergy_id FROM {$wpdb->prefix}remember_member_allergies WHERE member_id = %d",
-	$view_member_id
-) );
-
 // Load timezone utility
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-timezone.php';
 
@@ -344,36 +313,10 @@ if ( $photo_max_bytes < 1 ) {
 	echo '</table>';
 	?>
 	
-	<?php if ( current_user_can( 'remember_access_emergency_contact' ) ) : ?>
-	<!-- Emergency Contact -->
-	<h3><?php esc_html_e( 'Emergency Contact', 'remember' ); ?></h3>
-	<table class="form-table">
-		<tr>
-			<th><label for="emergency_contact_first"><?php esc_html_e( 'First Name', 'remember' ); ?></label></th>
-			<td>
-				<input type="text" id="emergency_contact_first" name="emergency_contact_first" class="regular-text" value="<?php echo esc_attr( $view_profile ? $view_profile->emergency_contact_first : '' ); ?>">
-			</td>
-		</tr>
-		<tr>
-			<th><label for="emergency_contact_last"><?php esc_html_e( 'Last Name', 'remember' ); ?></label></th>
-			<td>
-				<input type="text" id="emergency_contact_last" name="emergency_contact_last" class="regular-text" value="<?php echo esc_attr( $view_profile ? $view_profile->emergency_contact_last : '' ); ?>">
-			</td>
-		</tr>
-		<tr>
-			<th><label for="emergency_contact_phone"><?php esc_html_e( 'Phone', 'remember' ); ?></label></th>
-			<td>
-				<input type="text" id="emergency_contact_phone" name="emergency_contact_phone" class="regular-text" value="<?php echo esc_attr( $view_profile ? $view_profile->emergency_contact_phone : '' ); ?>" placeholder="<?php esc_attr_e( '+18055551212', 'remember' ); ?>">
-			</td>
-		</tr>
-		<tr>
-			<th><label for="emergency_contact_relationship"><?php esc_html_e( 'Relationship', 'remember' ); ?></label></th>
-			<td>
-				<input type="text" id="emergency_contact_relationship" name="emergency_contact_relationship" class="regular-text" value="<?php echo esc_attr( $view_profile ? $view_profile->emergency_contact_relationship : '' ); ?>" placeholder="<?php esc_attr_e( 'e.g., Spouse, Parent, Friend', 'remember' ); ?>">
-			</td>
-		</tr>
-	</table>
-	<?php endif; ?>
+	<?php
+	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-sensitive-profile.php';
+	echo Remember_Sensitive_Profile::placeholder( (int) $view_member_id, 'emergency', 'edit' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the helper.
+	?>
 	
 	<!-- Social Media -->
 	<?php if ( ! empty( $social_media_platforms ) ) : ?>
@@ -398,86 +341,7 @@ if ( $photo_max_bytes < 1 ) {
 		</table>
 	<?php endif; ?>
 	
-	<?php if ( current_user_can( 'remember_access_health' ) ) : ?>
-	<!-- Dietary Restrictions -->
-	<?php if ( ! empty( $dietary_restrictions ) ) : ?>
-		<h3><?php esc_html_e( 'Dietary Restrictions', 'remember' ); ?></h3>
-		<table class="form-table">
-			<tr>
-				<th><?php esc_html_e( 'Select Restrictions', 'remember' ); ?></th>
-				<td>
-					<fieldset style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 3px;">
-						<?php foreach ( $dietary_restrictions as $restriction ) : ?>
-							<label style="display: block; margin: 5px 0;">
-								<input type="checkbox" name="dietary_restrictions[]" value="<?php echo esc_attr( $restriction->restriction_id ); ?>" <?php checked( in_array( $restriction->restriction_id, $selected_dietary_ids ) ); ?>>
-								<?php echo esc_html( $restriction->restriction_name ); ?>
-							</label>
-						<?php endforeach; ?>
-					</fieldset>
-				</td>
-			</tr>
-		</table>
-	<?php endif; ?>
-	
-	<!-- Medical Accommodations -->
-	<?php if ( ! empty( $medical_accommodations ) ) : ?>
-		<h3><?php esc_html_e( 'Medical Accommodations', 'remember' ); ?></h3>
-		<table class="form-table">
-			<tr>
-				<th><?php esc_html_e( 'Select Accommodations', 'remember' ); ?></th>
-				<td>
-					<fieldset style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 3px;">
-						<?php foreach ( $medical_accommodations as $accommodation ) : ?>
-							<label style="display: block; margin: 5px 0;">
-								<input type="checkbox" name="medical_accommodations[]" value="<?php echo esc_attr( $accommodation->accommodation_id ); ?>" <?php checked( in_array( $accommodation->accommodation_id, $selected_medical_ids ) ); ?>>
-								<?php echo esc_html( $accommodation->accommodation_name ); ?>
-								<?php if ( ! empty( $accommodation->description ) ) : ?>
-									<span class="description" style="margin-left: 5px;">- <?php echo esc_html( $accommodation->description ); ?></span>
-								<?php endif; ?>
-							</label>
-						<?php endforeach; ?>
-					</fieldset>
-				</td>
-			</tr>
-		</table>
-	<?php endif; ?>
-	
-	<!-- Allergies -->
-	<?php if ( ! empty( $allergies ) ) : ?>
-		<?php
-		$remember_reaction_needed = false;
-		foreach ( $allergies as $allergy ) {
-			if ( 'None' !== $allergy->allergy_name && in_array( (string) $allergy->allergy_id, array_map( 'strval', (array) $selected_allergy_ids ), true ) ) {
-				$remember_reaction_needed = true;
-				break;
-			}
-		}
-		$remember_reaction_text = ( $view_profile && isset( $view_profile->allergy_reaction ) ) ? (string) $view_profile->allergy_reaction : '';
-		?>
-		<div data-remember-allergy-group="1">
-			<h3><?php esc_html_e( 'Known Allergies', 'remember' ); ?></h3>
-			<table class="form-table">
-				<tr>
-					<th><?php esc_html_e( 'Select Allergies', 'remember' ); ?></th>
-					<td>
-						<fieldset style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 3px;">
-							<?php foreach ( $allergies as $allergy ) : ?>
-								<label style="display: block; margin: 5px 0;">
-									<input type="checkbox" name="allergies[]" value="<?php echo esc_attr( $allergy->allergy_id ); ?>" <?php checked( in_array( (string) $allergy->allergy_id, array_map( 'strval', (array) $selected_allergy_ids ), true ) ); ?><?php echo ( 'None' === $allergy->allergy_name ) ? ' data-remember-none="1"' : ''; ?>>
-									<?php echo esc_html( $allergy->allergy_name ); ?>
-								</label>
-							<?php endforeach; ?>
-						</fieldset>
-						<div class="remember-allergy-reaction" data-remember-allergy-reaction="1"<?php echo $remember_reaction_needed ? '' : ' hidden'; ?>>
-							<label for="remember_allergy_reaction"><?php echo esc_html( Remember_Profile_Fields::allergy_reaction_prompt() ); ?></label>
-							<textarea name="allergy_reaction" id="remember_allergy_reaction" rows="6" class="large-text"<?php echo $remember_reaction_needed ? ' required' : ''; ?>><?php echo esc_textarea( $remember_reaction_text ); ?></textarea>
-						</div>
-					</td>
-				</tr>
-			</table>
-		</div>
-	<?php endif; ?>
-	<?php endif; ?>
+	<?php echo Remember_Sensitive_Profile::placeholder( (int) $view_member_id, 'health', 'edit' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the helper. ?>
 	
 	<!-- Member Roles (only if user has update_members capability) -->
 	<?php if ( current_user_can( 'remember_update_members' ) ) : 

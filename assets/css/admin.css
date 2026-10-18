@@ -3367,6 +3367,26 @@
 	margin-top: 12px;
 }
 
+.remember-sensitive-placeholder {
+	margin: 20px 0;
+	padding: 12px 16px;
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+}
+
+.remember-sensitive-placeholder h3 {
+	margin-top: 0;
+}
+
+.remember-sensitive-error {
+	color: #b32d2e;
+}
+
+.remember-sensitive-error[hidden] {
+	display: none;
+}
+
 .remember-member-detail-reaction__label {
 	display: block;
 	margin: 0 0 4px;

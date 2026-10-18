@@ -370,6 +370,41 @@
 			});
 		}
 
+		// Health and emergency sections stay out of the page until staff open one; the server logs each open.
+		$(document).on('click', '.remember-sensitive-open', function(e) {
+			e.preventDefault();
+			var $button = $(this);
+			var $holder = $button.closest('[data-remember-sensitive]');
+			var $error = $holder.find('.remember-sensitive-error');
+
+			var fail = function(message) {
+				$button.prop('disabled', false);
+				$error.text(message || $holder.attr('data-error') || '').prop('hidden', false);
+			};
+
+			$button.prop('disabled', true);
+			$error.prop('hidden', true).text('');
+			$.post(rememberAjax.ajaxurl, {
+				action: 'remember_reveal_sensitive',
+				nonce: $holder.attr('data-nonce'),
+				member_id: $holder.attr('data-member-id'),
+				topic: $holder.attr('data-remember-sensitive'),
+				mode: $holder.attr('data-mode')
+			}).done(function(response) {
+				if (response && response.success && response.data && response.data.html) {
+					$holder.replaceWith($.parseHTML(String(response.data.html).trim()));
+					if (typeof window.rememberInitAllergyReaction === 'function') {
+						window.rememberInitAllergyReaction();
+					}
+					return;
+				}
+				fail(response && response.data && response.data.message);
+			}).fail(function(xhr) {
+				var data = xhr && xhr.responseJSON && xhr.responseJSON.data;
+				fail(data && data.message);
+			});
+		});
+
 		if (typeof window.rememberInitTimezoneComboboxes === 'function') {
 			window.rememberInitTimezoneComboboxes();
 		}

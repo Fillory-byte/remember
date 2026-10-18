@@ -6,6 +6,7 @@ All notable changes to reMember are listed here. The current plugin version is i
 
 - **Fix:** A follow-up survey that is missing a required answer keeps everything else the member entered instead of clearing the form. Required text, choice, and paragraph questions are also checked by the browser before the form is sent. Thanks to Forrest (PR #89).
 - **Fix:** An application that fails a check the member can fix, such as an incomplete survey, a missing agreement, or the profile confirmation, shows the form again under the error. The chosen role, add-ons and quantities, and survey answers are kept. Agreements and the profile confirmation are left for the member to complete again.
+- **Feature:** On the admin member screen, health information and the emergency contact stay hidden until staff click Show for that section. Opening a profile to view or edit it no longer writes to the access log; each Show does, for that section only. A profile save changes health or emergency data only when that section was opened, and the save is logged as well.
 
 ## 2.2.2
 
