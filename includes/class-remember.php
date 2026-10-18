@@ -121,6 +121,7 @@ class Remember {
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/utilities/class-remember-profile-duplicates.php';
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/utilities/class-remember-reports.php';
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/utilities/class-remember-access-log.php';
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/utilities/class-remember-sensitive-profile.php';
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/utilities/class-remember-privacy.php';
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/utilities/class-remember-registration-guard.php';
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/utilities/class-remember-waitlist.php';
@@ -235,6 +236,7 @@ class Remember {
 		Remember_Profile_Duplicates::init();
 		Remember_Reports::init();
 		Remember_Access_Log::init();
+		Remember_Sensitive_Profile::init();
 		Remember_Privacy::init();
 		Remember_Waitlist::init();
 		Remember_Event_Invites::init();

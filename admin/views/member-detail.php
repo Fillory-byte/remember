@@ -12,7 +12,7 @@ if ( ! defined( 'WPINC' ) ) {
 }
 
 // Variables are set in members.php: $view_member, $view_user, $view_profile, $view_roles, $view_payments, $billing_register
-// Also: $view_social_media, $view_dietary_restrictions, $view_medical_accommodations, $view_allergies
+// Also: $view_social_media. Health and emergency data load through Remember_Sensitive_Profile.
 // Check if editing
 $is_editing = isset( $_GET['edit'] ) && $_GET['edit'] === '1';
 $is_merged  = isset( $view_member->status ) && 'merged' === $view_member->status;
@@ -39,6 +39,9 @@ $remember_default_print_mode = $remember_can_print_confidential
 	: ( $remember_can_print_event ? 'event' : 'denied' );
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-fields.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-questions.php';
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-sensitive-profile.php';
+// A confidential print loads health and emergency and is logged before the print dialog opens.
+$remember_print_sensitive = ! empty( Remember_Sensitive_Profile::print_topics() );
 ?>
 <div
 	class="remember-member-detail"
@@ -46,6 +49,12 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remem
 	data-print-display-name="<?php echo esc_attr( $remember_print_name ); ?>"
 	data-print-can-confidential="<?php echo $remember_can_print_confidential ? '1' : '0'; ?>"
 	data-print-can-event="<?php echo $remember_can_print_event ? '1' : '0'; ?>"
+	data-print-sensitive="<?php echo $remember_print_sensitive ? '1' : '0'; ?>"
+	data-member-id="<?php echo esc_attr( (string) (int) $view_member_id ); ?>"
+	<?php if ( $remember_print_sensitive ) : ?>
+	data-print-nonce="<?php echo esc_attr( wp_create_nonce( Remember_Sensitive_Profile::NONCE ) ); ?>"
+	data-print-error="<?php esc_attr_e( 'The confidential print could not be logged, so it was not opened. Reload the page and try again.', 'remember' ); ?>"
+	<?php endif; ?>
 >
 <?php
 /*
@@ -249,23 +258,9 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remem
 	<?php Remember_Profile_Questions::render_event_sheet_continuation_rows( (int) $view_member_id ); ?>
 
 	<?php
-	$remember_show_emergency = current_user_can( 'remember_access_emergency_contact' );
-	$remember_show_health    = current_user_can( 'remember_access_health' );
-	if ( $remember_show_emergency || $remember_show_health ) {
-		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-access-log.php';
-		$remember_access_topics = array();
-		if ( $remember_show_health ) {
-			$remember_access_topics[] = 'health';
-		}
-		if ( $remember_show_emergency ) {
-			$remember_access_topics[] = 'emergency';
-		}
-		Remember_Access_Log::record(
-			(int) $view_member_id,
-			Remember_Access_Log::what_from_topics( $remember_access_topics ),
-			$is_editing ? __( 'Member edit', 'remember' ) : __( 'Member detail', 'remember' )
-		);
-	}
+	// Health and emergency load only when staff open them; Remember_Sensitive_Profile logs each open.
+	$remember_show_emergency = Remember_Sensitive_Profile::can_open( 'emergency' );
+	$remember_show_health    = Remember_Sensitive_Profile::can_open( 'health' );
 	// Emergency and health are capability-gated, so the row can hold one, two, or
 	// three cards. Track the count and let the remaining cards claim the full width.
 	$remember_detail_columns = 1 + ( $remember_show_emergency ? 1 : 0 ) + ( $remember_show_health ? 1 : 0 );
@@ -411,100 +406,8 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remem
 			<div class="remember-member-detail-sensitive-column">
 			<?php endif; ?>
 
-			<?php if ( $remember_show_emergency ) : ?>
-			<!-- Emergency Contact — confidential printout only; excluded from the event card. -->
-			<div class="remember-member-detail-section remember-member-detail-emergency-card">
-				<h3><?php esc_html_e( 'Emergency Contact', 'remember' ); ?></h3>
-				<table class="form-table">
-					<tr>
-						<th><?php esc_html_e( 'Name', 'remember' ); ?></th>
-						<td>
-							<?php if ( $view_profile ) : ?>
-								<?php echo esc_html( trim( $view_profile->emergency_contact_first . ' ' . $view_profile->emergency_contact_last ) ); ?>
-							<?php else : ?>
-								<span class="description"><?php esc_html_e( 'Not provided', 'remember' ); ?></span>
-							<?php endif; ?>
-						</td>
-					</tr>
-					<tr>
-						<th><?php esc_html_e( 'Phone', 'remember' ); ?></th>
-						<td>
-							<?php echo $view_profile && $view_profile->emergency_contact_phone ? esc_html( $view_profile->emergency_contact_phone ) : '<span class="description">' . esc_html__( 'Not provided', 'remember' ) . '</span>'; ?>
-						</td>
-					</tr>
-					<tr>
-						<th><?php esc_html_e( 'Relationship', 'remember' ); ?></th>
-						<td>
-							<?php echo $view_profile && $view_profile->emergency_contact_relationship ? esc_html( $view_profile->emergency_contact_relationship ) : '<span class="description">' . esc_html__( 'Not provided', 'remember' ) . '</span>'; ?>
-						</td>
-					</tr>
-				</table>
-			</div>
-			<?php endif; ?>
-
-			<?php if ( $remember_show_health ) : ?>
-			<!-- Dietary, Allergies, Medical: stacked in the last column; always show all three cards -->
-			<div class="remember-member-detail-health-column">
-				<div class="remember-member-detail-section remember-member-detail-health-card">
-					<h3><?php esc_html_e( 'Dietary Restrictions', 'remember' ); ?></h3>
-					<?php if ( ! empty( $view_dietary_restrictions ) ) : ?>
-						<div class="remember-member-detail-pill-row">
-							<?php foreach ( $view_dietary_restrictions as $restriction ) : ?>
-								<span class="remember-member-detail-pill remember-member-detail-pill--dietary"><?php echo esc_html( $restriction ); ?></span>
-							<?php endforeach; ?>
-						</div>
-					<?php else : ?>
-						<p class="remember-member-detail-none"><?php esc_html_e( 'None', 'remember' ); ?></p>
-					<?php endif; ?>
-				</div>
-				<div class="remember-member-detail-section remember-member-detail-health-card">
-					<h3><?php esc_html_e( 'Known Allergies', 'remember' ); ?></h3>
-					<?php if ( ! empty( $view_allergies ) ) : ?>
-						<div class="remember-member-detail-pill-row">
-							<?php foreach ( $view_allergies as $allergy ) : ?>
-								<span class="remember-member-detail-pill remember-member-detail-pill--allergy"><?php echo esc_html( $allergy ); ?></span>
-							<?php endforeach; ?>
-						</div>
-					<?php else : ?>
-						<p class="remember-member-detail-none"><?php esc_html_e( 'None', 'remember' ); ?></p>
-					<?php endif; ?>
-					<?php
-					$remember_reaction_text = ( $view_profile && isset( $view_profile->allergy_reaction ) ) ? trim( (string) $view_profile->allergy_reaction ) : '';
-					$remember_show_reaction = ( '' !== $remember_reaction_text );
-					if ( ! $remember_show_reaction && ! empty( $view_allergies ) ) {
-						foreach ( $view_allergies as $remember_allergy_name ) {
-							if ( 'None' !== $remember_allergy_name ) {
-								$remember_show_reaction = true;
-								break;
-							}
-						}
-					}
-					if ( $remember_show_reaction ) :
-						?>
-						<div class="remember-member-detail-reaction">
-							<strong class="remember-member-detail-reaction__label"><?php echo esc_html( Remember_Profile_Fields::allergy_reaction_prompt() ); ?></strong>
-							<?php if ( '' !== $remember_reaction_text ) : ?>
-								<p><?php echo nl2br( esc_html( $remember_reaction_text ) ); ?></p>
-							<?php else : ?>
-								<p class="remember-member-detail-none"><?php esc_html_e( 'Not provided', 'remember' ); ?></p>
-							<?php endif; ?>
-						</div>
-					<?php endif; ?>
-				</div>
-				<div class="remember-member-detail-section remember-member-detail-health-card">
-					<h3><?php esc_html_e( 'Medical Accommodations', 'remember' ); ?></h3>
-					<?php if ( ! empty( $view_medical_accommodations ) ) : ?>
-						<div class="remember-member-detail-pill-row">
-							<?php foreach ( $view_medical_accommodations as $accommodation ) : ?>
-								<span class="remember-member-detail-pill remember-member-detail-pill--medical"><?php echo esc_html( $accommodation ); ?></span>
-							<?php endforeach; ?>
-						</div>
-					<?php else : ?>
-						<p class="remember-member-detail-none"><?php esc_html_e( 'None', 'remember' ); ?></p>
-					<?php endif; ?>
-				</div>
-			</div>
-			<?php endif; ?>
+			<?php echo Remember_Sensitive_Profile::placeholder( (int) $view_member_id, 'emergency', 'view' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the helper. ?>
+			<?php echo Remember_Sensitive_Profile::placeholder( (int) $view_member_id, 'health', 'view' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the helper. ?>
 
 			<?php if ( $remember_show_emergency || $remember_show_health ) : ?>
 			</div><!-- /.remember-member-detail-sensitive-column -->

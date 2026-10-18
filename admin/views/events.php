@@ -270,7 +270,7 @@ function remember_render_addon_role_limits( $index, $event_roles, $limits_by_rol
 		<p class="description" style="margin:0 0 6px;">
 			<?php esc_html_e( 'Max quantity per event role. Use 0 to hide this add-on from that role (e.g. Inmate uniform = 1 for Inmate, 0 for Guard; Guard polos = 2 for Guard, 0 for Inmate).', 'remember' ); ?>
 		</p>
-		<table class="widefat striped" style="max-width:36rem;">
+		<table class="widefat striped remember-addon-role-limits-table" style="max-width:36rem;">
 			<thead>
 				<tr>
 					<th><?php esc_html_e( 'Event role', 'remember' ); ?></th>
@@ -766,7 +766,7 @@ if ( isset( $_GET['view'] ) ) {
 						<td>
 							<p class="description"><?php esc_html_e( 'Enable roles for this event and define per-role subtotal pricing and capacity.', 'remember' ); ?></p>
 							<?php if ( ! empty( $event_roles ) ) : ?>
-								<table class="widefat striped" style="max-width: 900px; margin-top: 10px;">
+								<table class="widefat striped remember-event-roles-table" style="max-width: 900px; margin-top: 10px;">
 									<thead>
 										<tr>
 											<th><?php esc_html_e( 'Enabled', 'remember' ); ?></th>
@@ -779,17 +779,24 @@ if ( isset( $_GET['view'] ) ) {
 										<?php foreach ( $event_roles as $role ) : ?>
 											<?php
 											$existing_role = isset( $editing_event_roles_by_id[ $role->role_id ] ) ? $editing_event_roles_by_id[ $role->role_id ] : null;
+											$role_input_id = 'remember-edit-role-' . absint( $role->role_id );
 											?>
 											<tr>
-												<td>
-													<input type="checkbox" name="event_roles_config[<?php echo esc_attr( $role->role_id ); ?>][enabled]" value="1" <?php checked( isset( $editing_event_role_ids ) && in_array( $role->role_id, $editing_event_role_ids, true ) ); ?>>
+												<td class="column-enabled">
+													<input type="checkbox" id="<?php echo esc_attr( $role_input_id ); ?>" name="event_roles_config[<?php echo esc_attr( $role->role_id ); ?>][enabled]" value="1" <?php checked( isset( $editing_event_role_ids ) && in_array( $role->role_id, $editing_event_role_ids, true ) ); ?>>
 												</td>
-												<td><?php echo esc_html( $role->role_name ); ?></td>
-												<td>
-													<input type="number" step="0.01" min="0" class="small-text" name="event_roles_config[<?php echo esc_attr( $role->role_id ); ?>][cost]" value="<?php echo esc_attr( $existing_role ? number_format( (float) $existing_role->cost, 2, '.', '' ) : '0.00' ); ?>">
+												<td class="column-role"><label for="<?php echo esc_attr( $role_input_id ); ?>"><?php echo esc_html( $role->role_name ); ?></label></td>
+												<td class="column-cost">
+													<label>
+														<span class="remember-list-meta-label"><?php esc_html_e( 'Subtotal Price', 'remember' ); ?></span>
+														<input type="number" step="0.01" min="0" class="small-text" name="event_roles_config[<?php echo esc_attr( $role->role_id ); ?>][cost]" value="<?php echo esc_attr( $existing_role ? number_format( (float) $existing_role->cost, 2, '.', '' ) : '0.00' ); ?>">
+													</label>
 												</td>
-												<td>
-													<input type="number" min="1" class="small-text" name="event_roles_config[<?php echo esc_attr( $role->role_id ); ?>][max_participants]" value="<?php echo esc_attr( $existing_role && null !== $existing_role->max_participants ? $existing_role->max_participants : '' ); ?>">
+												<td class="column-capacity">
+													<label>
+														<span class="remember-list-meta-label"><?php esc_html_e( 'Capacity', 'remember' ); ?></span>
+														<input type="number" min="1" class="small-text" name="event_roles_config[<?php echo esc_attr( $role->role_id ); ?>][max_participants]" value="<?php echo esc_attr( $existing_role && null !== $existing_role->max_participants ? $existing_role->max_participants : '' ); ?>">
+													</label>
 													<span class="description"><?php esc_html_e( 'Blank = unlimited', 'remember' ); ?></span>
 												</td>
 											</tr>
@@ -951,7 +958,7 @@ if ( isset( $_GET['view'] ) ) {
 						<td>
 							<p class="description"><?php esc_html_e( 'Enable roles for this event and define per-role subtotal pricing and capacity.', 'remember' ); ?></p>
 							<?php if ( ! empty( $event_roles ) ) : ?>
-								<table class="widefat striped" style="max-width: 900px; margin-top: 10px;">
+								<table class="widefat striped remember-event-roles-table" style="max-width: 900px; margin-top: 10px;">
 									<thead>
 										<tr>
 											<th><?php esc_html_e( 'Enabled', 'remember' ); ?></th>
@@ -962,12 +969,21 @@ if ( isset( $_GET['view'] ) ) {
 									</thead>
 									<tbody>
 										<?php foreach ( $event_roles as $role ) : ?>
+											<?php $role_input_id = 'remember-add-role-' . absint( $role->role_id ); ?>
 											<tr>
-												<td><input type="checkbox" name="event_roles_config[<?php echo esc_attr( $role->role_id ); ?>][enabled]" value="1"></td>
-												<td><?php echo esc_html( $role->role_name ); ?></td>
-												<td><input type="number" step="0.01" min="0" class="small-text" name="event_roles_config[<?php echo esc_attr( $role->role_id ); ?>][cost]" value="0.00"></td>
-												<td>
-													<input type="number" min="1" class="small-text" name="event_roles_config[<?php echo esc_attr( $role->role_id ); ?>][max_participants]" value="">
+												<td class="column-enabled"><input type="checkbox" id="<?php echo esc_attr( $role_input_id ); ?>" name="event_roles_config[<?php echo esc_attr( $role->role_id ); ?>][enabled]" value="1"></td>
+												<td class="column-role"><label for="<?php echo esc_attr( $role_input_id ); ?>"><?php echo esc_html( $role->role_name ); ?></label></td>
+												<td class="column-cost">
+													<label>
+														<span class="remember-list-meta-label"><?php esc_html_e( 'Subtotal Price', 'remember' ); ?></span>
+														<input type="number" step="0.01" min="0" class="small-text" name="event_roles_config[<?php echo esc_attr( $role->role_id ); ?>][cost]" value="0.00">
+													</label>
+												</td>
+												<td class="column-capacity">
+													<label>
+														<span class="remember-list-meta-label"><?php esc_html_e( 'Capacity', 'remember' ); ?></span>
+														<input type="number" min="1" class="small-text" name="event_roles_config[<?php echo esc_attr( $role->role_id ); ?>][max_participants]" value="">
+													</label>
 													<span class="description"><?php esc_html_e( 'Blank = unlimited', 'remember' ); ?></span>
 												</td>
 											</tr>
@@ -1125,7 +1141,7 @@ jQuery(document).ready(function($) {
 		return '' +
 			'<div class="remember-addon-role-limits" style="margin-top:10px;">' +
 				'<p class="description" style="margin:0 0 6px;"><?php echo esc_js( __( 'Max quantity per event role. Use 0 to hide this add-on from that role.', 'remember' ) ); ?></p>' +
-				'<table class="widefat striped" style="max-width:36rem;"><thead><tr><th><?php echo esc_js( __( 'Event role', 'remember' ) ); ?></th><th style="width:8rem;"><?php echo esc_js( __( 'Max qty', 'remember' ) ); ?></th></tr></thead><tbody>' +
+				'<table class="widefat striped remember-addon-role-limits-table" style="max-width:36rem;"><thead><tr><th><?php echo esc_js( __( 'Event role', 'remember' ) ); ?></th><th style="width:8rem;"><?php echo esc_js( __( 'Max qty', 'remember' ) ); ?></th></tr></thead><tbody>' +
 				body +
 				'</tbody></table>' +
 			'</div>';

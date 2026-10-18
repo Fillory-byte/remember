@@ -2079,6 +2079,88 @@
 		text-align: right;
 	}
 
+	/* Event form: core stacks every .form-table cell, including these nested tables. */
+	.remember-event-roles-table thead,
+	.remember-addon-role-limits-table thead {
+		display: none;
+	}
+
+	.remember-event-roles-table,
+	.remember-event-roles-table tbody,
+	.remember-addon-role-limits-table,
+	.remember-addon-role-limits-table tbody {
+		display: block;
+		width: 100%;
+		box-sizing: border-box;
+	}
+
+	.remember-event-roles-table tbody tr {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+		grid-template-areas:
+			"enabled role role"
+			". cost capacity";
+		align-items: center;
+		column-gap: 12px;
+		row-gap: 6px;
+		padding: 10px 12px;
+	}
+
+	.remember-event-roles-table tbody td,
+	.remember-addon-role-limits-table tbody td {
+		display: block;
+		width: auto;
+		padding: 0;
+		min-width: 0;
+	}
+
+	.remember-event-roles-table td.column-enabled {
+		grid-area: enabled;
+	}
+
+	.remember-event-roles-table td.column-enabled input[type="checkbox"] {
+		margin: 0;
+	}
+
+	.remember-event-roles-table td.column-role {
+		grid-area: role;
+		font-weight: 600;
+	}
+
+	.remember-event-roles-table td.column-cost {
+		grid-area: cost;
+		align-self: start;
+	}
+
+	.remember-event-roles-table td.column-capacity {
+		grid-area: capacity;
+		align-self: start;
+	}
+
+	.remember-event-roles-table .remember-list-meta-label {
+		display: inline;
+		margin-right: 6px;
+		font-weight: 600;
+		color: #1d2327;
+	}
+
+	.remember-event-roles-table td.column-capacity .description {
+		display: block;
+		margin-top: 2px;
+	}
+
+	.remember-addon-role-limits-table tbody tr {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 6px 10px;
+	}
+
+	.remember-addon-role-limits-table tbody td:last-child {
+		flex: 0 0 auto;
+	}
+
 	.remember-vetting .remember-list-cards tbody tr {
 		display: grid;
 		grid-template-columns: auto auto 1fr auto;
@@ -3365,6 +3447,26 @@
 
 .remember-member-detail-reaction {
 	margin-top: 12px;
+}
+
+.remember-sensitive-placeholder {
+	margin: 20px 0;
+	padding: 12px 16px;
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+}
+
+.remember-sensitive-placeholder h3 {
+	margin-top: 0;
+}
+
+.remember-sensitive-error {
+	color: #b32d2e;
+}
+
+.remember-sensitive-error[hidden] {
+	display: none;
 }
 
 .remember-member-detail-reaction__label {

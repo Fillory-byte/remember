@@ -458,10 +458,11 @@
 				}
 			}
 
-			$boxes.on('change.rememberAllergyReaction', sync);
+			$boxes.off('change.rememberAllergyReaction').on('change.rememberAllergyReaction', sync);
 			sync();
 		});
 	}
+	window.rememberInitAllergyReaction = initAllergyReactionFields;
 
 	function initRegistrationSuccessSplash() {
 		var splash = document.querySelector('[data-remember-register-splash]');

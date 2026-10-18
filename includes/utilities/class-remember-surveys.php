@@ -315,11 +315,12 @@ class Remember_Surveys {
 	/**
 	 * Markup for the apply form, or an empty string when this role has no application survey.
 	 *
-	 * @param int $event_id      Event.
-	 * @param int $event_role_id Event role.
+	 * @param int  $event_id      Event.
+	 * @param int  $event_role_id Event role.
+	 * @param bool $use_posted    Fill the fields from the posted answers. The caller must have checked the nonce.
 	 * @return string
 	 */
-	public static function render_apply_html( $event_id, $event_role_id = 0 ) {
+	public static function render_apply_html( $event_id, $event_role_id = 0, $use_posted = false ) {
 		if ( ! self::role_belongs_to_event( $event_id, $event_role_id ) ) {
 			return '';
 		}
@@ -331,7 +332,7 @@ class Remember_Surveys {
 		if ( empty( $questions ) ) {
 			return '';
 		}
-		return self::render_fields( $survey, $questions, false );
+		return self::render_fields( $survey, $questions, false, null, $use_posted ? self::posted_answers_map( $questions ) : null );
 	}
 
 	/**
@@ -447,10 +448,13 @@ class Remember_Surveys {
 		}
 
 		$notice = '';
+		$sticky = null;
 		if ( isset( $_POST['remember_survey_response'] ) && check_admin_referer( 'remember_survey_response_' . $survey->survey_id, 'remember_survey_response_nonce' ) ) {
 			$error = self::validate_posted( $questions );
 			if ( $error ) {
 				$notice = '<p class="remember-notice remember-error">' . esc_html( $error ) . '</p>';
+				// Keep what the member typed so a missed required question does not wipe the form.
+				$sticky = self::posted_answers_map( $questions );
 			} else {
 				self::save_response( $survey, $member_id, 0 );
 				$notice = '<p class="remember-notice remember-success">' . esc_html__( 'Your response was saved.', 'remember' ) . '</p>';
@@ -462,7 +466,7 @@ class Remember_Surveys {
 		$html    .= '<form class="remember-form" method="post">';
 		$html    .= wp_nonce_field( 'remember_survey_response_' . $survey->survey_id, 'remember_survey_response_nonce', true, false );
 		$html    .= '<input type="hidden" name="remember_survey_response" value="1">';
-		$html    .= self::render_fields( $survey, $questions, true, $existing );
+		$html    .= self::render_fields( $survey, $questions, true, $existing, $sticky );
 		$html    .= '<p><button type="submit" class="remember-button remember-button-primary">' . esc_html__( 'Submit survey', 'remember' ) . '</button></p>';
 		$html    .= '</form>';
 		return $html;
@@ -902,8 +906,12 @@ class Remember_Surveys {
 	 * @param object|null $existing Response row.
 	 * @return string
 	 */
-	private static function render_fields( $survey, $questions, $standalone, $existing = null ) {
-		$answers = $existing ? self::answers_for_response( $existing->response_id ) : array();
+	private static function render_fields( $survey, $questions, $standalone, $existing = null, $answers_override = null ) {
+		// $answers_override (qid => stored-value map, from posted_answers_map()) repopulates
+		// the form after a failed submit so the member's answers are not discarded.
+		$answers = is_array( $answers_override )
+			? $answers_override
+			: ( $existing ? self::answers_for_response( $existing->response_id ) : array() );
 		$html         = '<div class="remember-survey" data-remember-survey="1">';
 		$html        .= '<div class="remember-form-label">' . esc_html( $survey->title ) . '</div>';
 		$instructions = isset( $survey->instructions ) ? trim( (string) $survey->instructions ) : '';
@@ -922,7 +930,7 @@ class Remember_Surveys {
 			$html .= '>';
 			$html .= '<label class="remember-form-label" for="remember_survey_' . esc_attr( (string) $qid ) . '">' . esc_html( $question->label );
 			$html .= ' <span class="remember-required"' . ( $required ? '' : ' hidden' ) . '>*</span></label>';
-			$html .= self::render_input( $question, isset( $answers[ $qid ] ) ? $answers[ $qid ] : '' );
+			$html .= self::render_input( $question, isset( $answers[ $qid ] ) ? $answers[ $qid ] : '', $required );
 			$html .= '</div>';
 		}
 		$html .= '</div>';
@@ -934,17 +942,20 @@ class Remember_Surveys {
 	 * @param string $value    Stored value.
 	 * @return string
 	 */
-	private static function render_input( $question, $value ) {
+	private static function render_input( $question, $value, $required = false ) {
 		$qid   = (int) $question->question_id;
 		$name  = 'remember_survey[' . $qid . ']';
 		$id    = 'remember_survey_' . $qid;
 		$type    = (string) $question->field_type;
 		$options = self::option_pairs( $question );
+		// Only non-conditional required questions get a static HTML5 guard; conditional
+		// ones stay server-validated (and the posted values are kept on failure).
+		$req_attr = $required ? ' required' : '';
 		if ( 'textarea' === $type ) {
-			return '<textarea class="remember-form-control" name="' . esc_attr( $name ) . '" id="' . esc_attr( $id ) . '" rows="4">' . esc_textarea( $value ) . '</textarea>';
+			return '<textarea class="remember-form-control" name="' . esc_attr( $name ) . '" id="' . esc_attr( $id ) . '" rows="4"' . $req_attr . '>' . esc_textarea( $value ) . '</textarea>';
 		}
 		if ( 'select' === $type ) {
-			$html = '<select class="remember-form-control" name="' . esc_attr( $name ) . '" id="' . esc_attr( $id ) . '"><option value="">' . esc_html__( '— Select —', 'remember' ) . '</option>';
+			$html = '<select class="remember-form-control" name="' . esc_attr( $name ) . '" id="' . esc_attr( $id ) . '"' . $req_attr . '><option value="">' . esc_html__( '— Select —', 'remember' ) . '</option>';
 			foreach ( $options as $option ) {
 				$html .= '<option value="' . esc_attr( $option['key'] ) . '"' . selected( $value, $option['key'], false ) . '>' . esc_html( $option['label'] ) . '</option>';
 			}
@@ -962,7 +973,7 @@ class Remember_Surveys {
 			return '<label><input type="radio" name="' . esc_attr( $name ) . '" value="yes"' . checked( $value, 'yes', false ) . '> ' . esc_html__( 'Yes', 'remember' ) . '</label> '
 				. '<label><input type="radio" name="' . esc_attr( $name ) . '" value="no"' . checked( $value, 'no', false ) . '> ' . esc_html__( 'No', 'remember' ) . '</label>';
 		}
-		return '<input class="remember-form-control" type="text" name="' . esc_attr( $name ) . '" id="' . esc_attr( $id ) . '" value="' . esc_attr( $value ) . '">';
+		return '<input class="remember-form-control" type="text" name="' . esc_attr( $name ) . '" id="' . esc_attr( $id ) . '" value="' . esc_attr( $value ) . '"' . $req_attr . '>';
 	}
 
 	/**
@@ -1175,6 +1186,25 @@ class Remember_Surveys {
 			return ! is_array( $raw ) || empty( $raw );
 		}
 		return '' === trim( is_array( $raw ) ? '' : (string) $raw );
+	}
+
+	/**
+	 * Build a qid => stored-value map from the posted answers, in the same format
+	 * render_input() reads, so a failed submit can be shown back to the member.
+	 *
+	 * @param object[] $questions Questions.
+	 * @return array<int,string>
+	 */
+	private static function posted_answers_map( $questions ) {
+		$posted = isset( $_POST['remember_survey'] ) && is_array( $_POST['remember_survey'] ) // phpcs:ignore WordPress.Security.NonceVerification.Missing -- caller checked the nonce.
+			? wp_unslash( $_POST['remember_survey'] ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized per field by sanitize_answer().
+			: array();
+		$out = array();
+		foreach ( $questions as $question ) {
+			$qid         = (int) $question->question_id;
+			$out[ $qid ] = self::sanitize_answer( $question, isset( $posted[ $qid ] ) ? $posted[ $qid ] : '' );
+		}
+		return $out;
 	}
 
 	/**

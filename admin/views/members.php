@@ -266,9 +266,15 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-fields.php';
 		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-questions.php';
 
+		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-sensitive-profile.php';
+
 		$profile_check = Remember_Profile_Fields::collect_profile_data_from_request();
 		$meta_check    = Remember_Profile_Fields::collect_meta_from_request();
 		$pq_answers    = Remember_Profile_Questions::collect_from_request();
+		// Health and emergency are written only when that section was opened on the edit screen.
+		$remember_saved_topics   = Remember_Sensitive_Profile::posted_topics();
+		$remember_save_health    = in_array( 'health', $remember_saved_topics, true );
+		$remember_save_emergency = in_array( 'emergency', $remember_saved_topics, true );
 		// Admin: only nickname, display name, legal first/last, cell phone are required.
 		$missing_key = Remember_Profile_Fields::first_missing_required( $profile_check, $meta_check, 'admin' );
 
@@ -295,7 +301,7 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 					$label
 				)
 			) . '</p></div>';
-		} elseif ( current_user_can( 'remember_access_health' ) && Remember_Profile_Fields::allergy_reaction_is_missing() ) {
+		} elseif ( $remember_save_health && Remember_Profile_Fields::allergy_reaction_is_missing() ) {
 			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( Remember_Profile_Fields::allergy_reaction_prompt() ) . '</p></div>';
 		} elseif ( Remember_Profile_Fields::interests_is_over_limit( $profile_check['interests'] ) ) {
 			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( Remember_Profile_Fields::interests_too_long_message() ) . '</p></div>';
@@ -420,13 +426,13 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 			'updated_by' => get_current_user_id(),
 		);
 
-		// Emergency contact stays unchanged unless the editor is allowed to see it.
-		if ( current_user_can( 'remember_access_health' ) ) {
+		// A closed section, or one the editor may not see, is left exactly as stored.
+		if ( $remember_save_health ) {
 			Remember_Profile_Fields::ensure_allergy_reaction_column();
 			$profile_data['allergy_reaction'] = Remember_Profile_Fields::allergy_reaction_for_storage();
 		}
 
-		if ( current_user_can( 'remember_access_emergency_contact' ) ) {
+		if ( $remember_save_emergency ) {
 			$profile_data['emergency_contact_first']        = isset( $_POST['emergency_contact_first'] ) ? sanitize_text_field( wp_unslash( $_POST['emergency_contact_first'] ) ) : '';
 			$profile_data['emergency_contact_last']         = isset( $_POST['emergency_contact_last'] ) ? sanitize_text_field( wp_unslash( $_POST['emergency_contact_last'] ) ) : '';
 			$profile_data['emergency_contact_phone']        = isset( $_POST['emergency_contact_phone'] ) ? sanitize_text_field( wp_unslash( $_POST['emergency_contact_phone'] ) ) : '';
@@ -476,9 +482,9 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 				}
 			}
 			
-			// Update dietary / medical / allergies only when the editor may see health data.
-			// Without the cap, skip these writes so a forged POST cannot wipe or change them.
-			if ( current_user_can( 'remember_access_health' ) ) {
+			// Update dietary / medical / allergies only when the health section was opened and the editor may see it.
+			// Otherwise skip these writes so a closed section or a forged POST cannot wipe or change them.
+			if ( $remember_save_health ) {
 				$wpdb->delete( $wpdb->prefix . 'remember_member_dietary_restrictions', array( 'member_id' => $member_id ) );
 				if ( isset( $_POST['dietary_restrictions'] ) && is_array( $_POST['dietary_restrictions'] ) ) {
 					foreach ( $_POST['dietary_restrictions'] as $restriction_id ) {
@@ -579,7 +585,11 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 			}
 			
 			Remember_Profile_Questions::save_for_member( $member_id, $pq_answers );
-			Remember_Logger::info( 'Member profile updated', array( 'member_id' => $member_id ) );
+			if ( ! empty( $remember_saved_topics ) ) {
+				require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-access-log.php';
+				Remember_Access_Log::record( $member_id, Remember_Access_Log::what_from_topics( $remember_saved_topics ), __( 'Member edit saved', 'remember' ) );
+			}
+			Remember_Logger::info( 'Member profile updated', array( 'member_id' => $member_id, 'sensitive_topics' => $remember_saved_topics ) );
 			do_action( 'remember_member_profile_saved', $member_id );
 			// Set success flag and clear edit mode (no redirect to avoid headers already sent)
 			$profile_update_success = true;
@@ -828,39 +838,6 @@ if ( $view_member_id > 0 ) {
 		ORDER BY smp.sort_order ASC, smp.platform_name ASC",
 		$view_member_id
 	) );
-	
-	// Get dietary restrictions / medical / allergies only when staff may see health data.
-	$view_dietary_restrictions   = array();
-	$view_medical_accommodations = array();
-	$view_allergies              = array();
-	if ( current_user_can( 'remember_access_health' ) ) {
-		$view_dietary_restrictions = $wpdb->get_col( $wpdb->prepare(
-			"SELECT dr.restriction_name 
-			FROM {$wpdb->prefix}remember_dietary_restrictions dr
-			JOIN {$wpdb->prefix}remember_member_dietary_restrictions mdr ON dr.restriction_id = mdr.restriction_id
-			WHERE mdr.member_id = %d
-			ORDER BY dr.sort_order ASC, dr.restriction_name ASC",
-			$view_member_id
-		) );
-		
-		$view_medical_accommodations = $wpdb->get_col( $wpdb->prepare(
-			"SELECT ma.accommodation_name 
-			FROM {$wpdb->prefix}remember_medical_accommodations ma
-			JOIN {$wpdb->prefix}remember_member_medical_accommodations mma ON ma.accommodation_id = mma.accommodation_id
-			WHERE mma.member_id = %d
-			ORDER BY ma.sort_order ASC, ma.accommodation_name ASC",
-			$view_member_id
-		) );
-		
-		$view_allergies = $wpdb->get_col( $wpdb->prepare(
-			"SELECT a.allergy_name
-			FROM {$wpdb->prefix}remember_allergies a
-			JOIN {$wpdb->prefix}remember_member_allergies ma ON a.allergy_id = ma.allergy_id
-			WHERE ma.member_id = %d
-			ORDER BY a.sort_order ASC, a.allergy_name ASC",
-			$view_member_id
-		) );
-	}
 	
 	// Refresh amounts / lines from the active billing provider before the ledger.
 	// Billing is only read, synced, and rendered for staff who hold the billing cap.

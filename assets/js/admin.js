@@ -317,15 +317,56 @@
 				}
 			};
 
-			var runPrint = function(mode) {
-				mode = resolveAllowedPrintMode(mode);
+			var openPrintDialog = function(mode) {
 				$printDetail.attr('data-print-mode', mode);
-				closePrintMenu();
 				setPrintDocumentTitle(mode);
 				// Yield once so the new mode is styled before the print snapshot.
 				window.setTimeout(function() {
 					window.print();
 				}, 0);
+			};
+
+			var printLoading = false;
+
+			// The confidential sheet always carries health and emergency for staff allowed to see them,
+			// and the server logs the print before the dialog opens. No log, no print.
+			var runPrint = function(mode) {
+				mode = resolveAllowedPrintMode(mode);
+				closePrintMenu();
+				if (mode !== 'confidential' || $printDetail.attr('data-print-sensitive') !== '1') {
+					openPrintDialog(mode);
+					return;
+				}
+				if (printLoading) {
+					return;
+				}
+				printLoading = true;
+				$.post(rememberAjax.ajaxurl, {
+					action: 'remember_print_confidential',
+					nonce: $printDetail.attr('data-print-nonce'),
+					member_id: $printDetail.attr('data-member-id')
+				}).done(function(response) {
+					var sections = response && response.success && response.data ? response.data.sections : null;
+					if (!sections) {
+						window.alert((response && response.data && response.data.message) || $printDetail.attr('data-print-error'));
+						return;
+					}
+					var targets = {
+						emergency: '.remember-member-detail-emergency-card',
+						health: '.remember-member-detail-health-column'
+					};
+					$.each(targets, function(topic, selector) {
+						if (sections[topic]) {
+							$printDetail.find(selector).first().replaceWith($.parseHTML(String(sections[topic]).trim()));
+						}
+					});
+					openPrintDialog(mode);
+				}).fail(function(xhr) {
+					var data = xhr && xhr.responseJSON && xhr.responseJSON.data;
+					window.alert((data && data.message) || $printDetail.attr('data-print-error'));
+				}).always(function() {
+					printLoading = false;
+				});
 			};
 
 			if ($printMenu.length) {
@@ -354,6 +395,11 @@
 					if (e.key === 'Escape') {
 						closePrintMenu();
 					}
+					// Ctrl/Cmd+P goes through the same path as the Print button.
+					if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && String(e.key).toLowerCase() === 'p') {
+						e.preventDefault();
+						runPrint(defaultPrintMode);
+					}
 				});
 			}
 
@@ -369,6 +415,41 @@
 				document.title = originalDocumentTitle;
 			});
 		}
+
+		// Health and emergency sections stay out of the page until staff open one; the server logs each open.
+		$(document).on('click', '.remember-sensitive-open', function(e) {
+			e.preventDefault();
+			var $button = $(this);
+			var $holder = $button.closest('[data-remember-sensitive]');
+			var $error = $holder.find('.remember-sensitive-error');
+
+			var fail = function(message) {
+				$button.prop('disabled', false);
+				$error.text(message || $holder.attr('data-error') || '').prop('hidden', false);
+			};
+
+			$button.prop('disabled', true);
+			$error.prop('hidden', true).text('');
+			$.post(rememberAjax.ajaxurl, {
+				action: 'remember_reveal_sensitive',
+				nonce: $holder.attr('data-nonce'),
+				member_id: $holder.attr('data-member-id'),
+				topic: $holder.attr('data-remember-sensitive'),
+				mode: $holder.attr('data-mode')
+			}).done(function(response) {
+				if (response && response.success && response.data && response.data.html) {
+					$holder.replaceWith($.parseHTML(String(response.data.html).trim()));
+					if (typeof window.rememberInitAllergyReaction === 'function') {
+						window.rememberInitAllergyReaction();
+					}
+					return;
+				}
+				fail(response && response.data && response.data.message);
+			}).fail(function(xhr) {
+				var data = xhr && xhr.responseJSON && xhr.responseJSON.data;
+				fail(data && data.message);
+			});
+		});
 
 		if (typeof window.rememberInitTimezoneComboboxes === 'function') {
 			window.rememberInitTimezoneComboboxes();
