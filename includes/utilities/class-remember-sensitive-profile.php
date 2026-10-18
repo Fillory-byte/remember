@@ -5,7 +5,8 @@
  * Both sections start closed. Staff open one with a button, which loads it
  * over AJAX and writes one access-log entry. A profile save writes a section
  * only when it was opened on the edit screen, so a closed section is never
- * cleared, and that save is logged too.
+ * cleared, and that save is logged too. A confidential print loads every
+ * section the user may see and is logged before the print dialog opens.
  *
  * @package    reMember
  * @subpackage reMember/includes/utilities
@@ -20,17 +21,31 @@ if ( ! defined( 'WPINC' ) ) {
  */
 class Remember_Sensitive_Profile {
 
-	const AJAX_ACTION = 'remember_reveal_sensitive';
-	const NONCE       = 'remember_reveal_sensitive';
-	const POST_FLAG   = 'remember_sensitive_loaded';
+	const AJAX_ACTION  = 'remember_reveal_sensitive';
+	const PRINT_ACTION = 'remember_print_confidential';
+	const NONCE        = 'remember_reveal_sensitive';
+	const POST_FLAG    = 'remember_sensitive_loaded';
 
 	/**
-	 * Register the AJAX handler.
+	 * Register the AJAX handlers.
 	 *
 	 * @return void
 	 */
 	public static function init() {
 		add_action( 'wp_ajax_' . self::AJAX_ACTION, array( __CLASS__, 'ajax_reveal' ) );
+		add_action( 'wp_ajax_' . self::PRINT_ACTION, array( __CLASS__, 'ajax_print' ) );
+	}
+
+	/**
+	 * Sections a confidential print includes for the current user. Empty without the print cap.
+	 *
+	 * @return string[]
+	 */
+	public static function print_topics() {
+		if ( ! current_user_can( 'remember_print_confidential' ) ) {
+			return array();
+		}
+		return array_values( array_filter( array( 'emergency', 'health' ), array( __CLASS__, 'can_open' ) ) );
 	}
 
 	/**
@@ -159,6 +174,55 @@ class Remember_Sensitive_Profile {
 		);
 
 		wp_send_json_success( array( 'html' => $html ) );
+	}
+
+	/**
+	 * AJAX: load every section the confidential print includes and log the print before it opens.
+	 *
+	 * @return void
+	 */
+	public static function ajax_print() {
+		check_ajax_referer( self::NONCE, 'nonce' );
+
+		$member_id = isset( $_POST['member_id'] ) ? absint( $_POST['member_id'] ) : 0;
+		$topics    = self::print_topics();
+		if ( $member_id < 1 || empty( $topics ) || ! self::can_view_member( $member_id ) ) {
+			Remember_Logger::warning(
+				'Confidential print refused',
+				array(
+					'member_id' => $member_id,
+					'user_id'   => get_current_user_id(),
+				)
+			);
+			wp_send_json_error( array( 'message' => __( 'You do not have permission to print this confidential profile.', 'remember' ) ), 403 );
+		}
+
+		require_once plugin_dir_path( __FILE__ ) . '../models/class-member.php';
+		$member_model = new Remember_Member();
+		if ( ! $member_model->get( $member_id ) ) {
+			wp_send_json_error( array( 'message' => __( 'Member not found.', 'remember' ) ), 404 );
+		}
+
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-profile-fields.php';
+		Remember_Profile_Fields::ensure_allergy_reaction_column();
+
+		$sections = array();
+		foreach ( $topics as $topic ) {
+			$sections[ $topic ] = 'health' === $topic ? self::render_health_view( $member_id ) : self::render_emergency_view( $member_id );
+		}
+
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-access-log.php';
+		Remember_Access_Log::record( $member_id, Remember_Access_Log::what_from_topics( $topics ), __( 'Confidential print', 'remember' ) );
+		Remember_Logger::info(
+			'Confidential profile printed',
+			array(
+				'member_id' => $member_id,
+				'topics'    => $topics,
+				'user_id'   => get_current_user_id(),
+			)
+		);
+
+		wp_send_json_success( array( 'sections' => $sections ) );
 	}
 
 	/**

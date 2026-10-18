@@ -39,6 +39,9 @@ $remember_default_print_mode = $remember_can_print_confidential
 	: ( $remember_can_print_event ? 'event' : 'denied' );
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-fields.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-questions.php';
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-sensitive-profile.php';
+// A confidential print loads health and emergency and is logged before the print dialog opens.
+$remember_print_sensitive = ! empty( Remember_Sensitive_Profile::print_topics() );
 ?>
 <div
 	class="remember-member-detail"
@@ -46,6 +49,12 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remem
 	data-print-display-name="<?php echo esc_attr( $remember_print_name ); ?>"
 	data-print-can-confidential="<?php echo $remember_can_print_confidential ? '1' : '0'; ?>"
 	data-print-can-event="<?php echo $remember_can_print_event ? '1' : '0'; ?>"
+	data-print-sensitive="<?php echo $remember_print_sensitive ? '1' : '0'; ?>"
+	data-member-id="<?php echo esc_attr( (string) (int) $view_member_id ); ?>"
+	<?php if ( $remember_print_sensitive ) : ?>
+	data-print-nonce="<?php echo esc_attr( wp_create_nonce( Remember_Sensitive_Profile::NONCE ) ); ?>"
+	data-print-error="<?php esc_attr_e( 'The confidential print could not be logged, so it was not opened. Reload the page and try again.', 'remember' ); ?>"
+	<?php endif; ?>
 >
 <?php
 /*
@@ -250,7 +259,6 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remem
 
 	<?php
 	// Health and emergency load only when staff open them; Remember_Sensitive_Profile logs each open.
-	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-sensitive-profile.php';
 	$remember_show_emergency = Remember_Sensitive_Profile::can_open( 'emergency' );
 	$remember_show_health    = Remember_Sensitive_Profile::can_open( 'health' );
 	// Emergency and health are capability-gated, so the row can hold one, two, or
