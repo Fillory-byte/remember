@@ -37,6 +37,8 @@ $subtotal_disclaimer = Remember_Billing_Messaging::get_subtotal_disclaimer();
 // Handle form submission
 $submission_success = false;
 $submission_error = '';
+// True when the member can correct the error, so the form is shown again with what they entered.
+$keep_form = false;
 
 if ( isset( $_POST['remember_apply_action'] ) && check_admin_referer( 'remember_apply_action', 'remember_apply_nonce' ) ) {
 	if ( ! Remember_Member::is_vetted_member( $member_row ) ) {
@@ -59,14 +61,17 @@ if ( isset( $_POST['remember_apply_action'] ) && check_admin_referer( 'remember_
 		$existing = $application_model->get_existing_application( $event_id, $member_id, $event_role_id );
 		if ( $existing ) {
 			$submission_error = __( 'You have already applied for this event and role.', 'remember' );
+			$keep_form        = true;
 		} else {
 			$survey_error = Remember_Surveys::validate_apply( $event_id, $event_role_id );
 			if ( $survey_error ) {
 				$submission_error = $survey_error;
+				$keep_form        = true;
 			} else {
 			$agreement_error = Remember_Agreements::validate_apply_acceptances( $event_id );
 			if ( $agreement_error ) {
 				$submission_error = $agreement_error;
+				$keep_form        = true;
 			} else {
 				$currency_error = Remember_Profile_Audit::validate_application_confirmation(
 					isset( $_POST['remember_profile_currency_confirm'] ) ? wp_unslash( $_POST['remember_profile_currency_confirm'] ) : '',
@@ -74,6 +79,7 @@ if ( isset( $_POST['remember_apply_action'] ) && check_admin_referer( 'remember_
 				);
 				if ( $currency_error ) {
 					$submission_error = $currency_error;
+					$keep_form        = true;
 				} else {
 			$data = array(
 				'event_id'      => $event_id,
@@ -144,6 +150,7 @@ if ( isset( $_POST['remember_apply_action'] ) && check_admin_referer( 'remember_
 				$submission_success = true;
 			} else {
 				$submission_error = __( 'Failed to submit application. Please try again.', 'remember' );
+				$keep_form        = true;
 			}
 				}
 			}
@@ -152,6 +159,7 @@ if ( isset( $_POST['remember_apply_action'] ) && check_admin_referer( 'remember_
 		}
 	} else {
 		$submission_error = __( 'Please select an event and role.', 'remember' );
+		$keep_form        = true;
 	}
 	}
 }
@@ -178,6 +186,28 @@ if ( ! $selected_event ) {
 	}
 }
 $registration_block = $selected_event ? Remember_Event::registration_block_reason( $selected_event ) : '';
+
+// After a correctable error, hand the posted role and add-ons to the script and pre-render the survey answers.
+$restore             = array(
+	'roleId' => 0,
+	'addons' => array(),
+);
+$restore_survey_html = '';
+if ( $keep_form && $selected_event ) {
+	$restore['roleId'] = isset( $_POST['event_role_id'] ) ? absint( $_POST['event_role_id'] ) : 0;
+	if ( isset( $_POST['event_addons'] ) && is_array( $_POST['event_addons'] ) ) {
+		foreach ( wp_unslash( $_POST['event_addons'] ) as $merchandise_id => $addon_data ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- each value is cast with absint().
+			$merchandise_id = absint( $merchandise_id );
+			if ( $merchandise_id > 0 && is_array( $addon_data ) && ! empty( $addon_data['selected'] ) ) {
+				$restore['addons'][ $merchandise_id ] = max( 1, isset( $addon_data['quantity'] ) ? absint( $addon_data['quantity'] ) : 1 );
+			}
+		}
+	}
+	if ( $restore['roleId'] > 0 ) {
+		$restore_survey_html = Remember_Surveys::render_apply_html( (int) $event_id, $restore['roleId'], true );
+	}
+}
+$restore['addons'] = (object) $restore['addons'];
 ?>
 
 <?php if ( $submission_success ) : ?>
@@ -188,7 +218,7 @@ $registration_block = $selected_event ? Remember_Event::registration_block_reaso
 			<?php esc_html_e( 'Return to Dashboard', 'remember' ); ?>
 		</a></p>
 	</div>
-<?php elseif ( ! empty( $submission_error ) ) : ?>
+<?php elseif ( ! empty( $submission_error ) && ! $keep_form ) : ?>
 	<div class="remember-notice remember-error">
 		<p><?php echo esc_html( $submission_error ); ?></p>
 	</div>
@@ -206,6 +236,11 @@ $registration_block = $selected_event ? Remember_Event::registration_block_reaso
 	</div>
 <?php else : ?>
 	<div class="remember-apply-form">
+		<?php if ( ! empty( $submission_error ) ) : ?>
+			<div class="remember-notice remember-error">
+				<p><?php echo esc_html( $submission_error ); ?></p>
+			</div>
+		<?php endif; ?>
 		<h2><?php esc_html_e( 'Apply for Event', 'remember' ); ?></h2>
 
 		<?php if ( $selected_event ) : ?>
@@ -276,8 +311,8 @@ $registration_block = $selected_event ? Remember_Event::registration_block_reaso
 				</div>
 			</div>
 
-			<div id="remember-event-survey" class="remember-form-group" hidden>
-				<div id="remember-event-survey-fields"></div>
+			<div id="remember-event-survey" class="remember-form-group"<?php echo '' === $restore_survey_html ? ' hidden' : ''; ?>>
+				<div id="remember-event-survey-fields"><?php echo $restore_survey_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in Remember_Surveys::render_fields(). ?></div>
 			</div>
 
 			<div class="remember-form-group">
@@ -313,6 +348,8 @@ $registration_block = $selected_event ? Remember_Event::registration_block_reaso
 		var $agreementsContainer = $('#remember-event-agreements');
 		var $surveyWrap = $('#remember-event-survey');
 		var $surveyFields = $('#remember-event-survey-fields');
+		var restore = <?php echo wp_json_encode( $restore ); ?>;
+		var pendingAddons = restore.addons || {};
 
 		function currentEventId() {
 			var fromSelect = $eventSelect.val();
@@ -405,6 +442,7 @@ $registration_block = $selected_event ? Remember_Event::registration_block_reaso
 							$roleSelect.append($('<option>', { value: String(role.event_role_id) }).text(role.role_name || ''));
 						});
 						$roleSelect.prop('disabled', false);
+						restoreRole();
 					} else {
 						$roleSelect.html('<option value=""><?php esc_html_e( 'No roles available. You may not have any event roles assigned, or this event has no roles matching your assigned roles.', 'remember' ); ?></option>').prop('disabled', true);
 					}
@@ -413,6 +451,25 @@ $registration_block = $selected_event ? Remember_Event::registration_block_reaso
 					$roleSelect.html('<option value=""><?php esc_html_e( 'Error loading roles', 'remember' ); ?></option>').prop('disabled', true);
 				}
 			});
+		}
+
+		// Re-select the role from a failed submit once. The survey for it is already rendered with the posted answers.
+		function restoreRole() {
+			var roleId = restore.roleId ? String(restore.roleId) : '';
+			restore.roleId = 0;
+			if (!roleId) {
+				return;
+			}
+			var offered = $roleSelect.find('option').filter(function() {
+				return this.value === roleId;
+			}).length > 0;
+			if (!offered) {
+				pendingAddons = {};
+				loadEventSurvey('', '');
+				return;
+			}
+			$roleSelect.val(roleId);
+			loadEventAddons(currentEventId(), roleId);
 		}
 
 		function renderAddons(addons) {
@@ -472,6 +529,14 @@ $registration_block = $selected_event ? Remember_Event::registration_block_reaso
 				if (maxQty > 0) {
 					$qty.attr('max', maxQty);
 				}
+				if (pendingAddons[id]) {
+					var keptQty = parseInt(pendingAddons[id], 10) || 1;
+					if (maxQty > 0 && keptQty > maxQty) {
+						keptQty = maxQty;
+					}
+					$label.find('.remember-addon-toggle').prop('checked', true);
+					$qty.val(keptQty).prop('disabled', false);
+				}
 				$item.append($('<label>').text(<?php echo wp_json_encode( __( 'Quantity', 'remember' ) ); ?> + ' ').append($qty));
 				if (maxQty > 0) {
 					$item.append($('<span>', {
@@ -511,9 +576,11 @@ $registration_block = $selected_event ? Remember_Event::registration_block_reaso
 					} else {
 						$addonsContainer.html('<p class="remember-form-help"><?php esc_html_e( 'No add-ons are available for this role.', 'remember' ); ?></p>');
 					}
+					pendingAddons = {};
 				},
 				error: function() {
 					$addonsContainer.html('<p class="remember-form-help"><?php esc_html_e( 'Error loading add-ons.', 'remember' ); ?></p>');
+					pendingAddons = {};
 				}
 			});
 		}

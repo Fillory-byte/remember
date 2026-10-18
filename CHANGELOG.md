@@ -5,6 +5,7 @@ All notable changes to reMember are listed here. The current plugin version is i
 ## 2.2.3
 
 - **Fix:** A follow-up survey that is missing a required answer keeps everything else the member entered instead of clearing the form. Required text, choice, and paragraph questions are also checked by the browser before the form is sent. Thanks to Forrest (PR #89).
+- **Fix:** An application that fails a check the member can fix, such as an incomplete survey, a missing agreement, or the profile confirmation, shows the form again under the error. The chosen role, add-ons and quantities, and survey answers are kept. Agreements and the profile confirmation are left for the member to complete again.
 
 ## 2.2.2
 

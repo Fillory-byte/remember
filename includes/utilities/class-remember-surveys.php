@@ -315,11 +315,12 @@ class Remember_Surveys {
 	/**
 	 * Markup for the apply form, or an empty string when this role has no application survey.
 	 *
-	 * @param int $event_id      Event.
-	 * @param int $event_role_id Event role.
+	 * @param int  $event_id      Event.
+	 * @param int  $event_role_id Event role.
+	 * @param bool $use_posted    Fill the fields from the posted answers. The caller must have checked the nonce.
 	 * @return string
 	 */
-	public static function render_apply_html( $event_id, $event_role_id = 0 ) {
+	public static function render_apply_html( $event_id, $event_role_id = 0, $use_posted = false ) {
 		if ( ! self::role_belongs_to_event( $event_id, $event_role_id ) ) {
 			return '';
 		}
@@ -331,7 +332,7 @@ class Remember_Surveys {
 		if ( empty( $questions ) ) {
 			return '';
 		}
-		return self::render_fields( $survey, $questions, false );
+		return self::render_fields( $survey, $questions, false, null, $use_posted ? self::posted_answers_map( $questions ) : null );
 	}
 
 	/**
