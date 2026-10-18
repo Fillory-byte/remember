@@ -2,6 +2,10 @@
 
 All notable changes to reMember are listed here. The current plugin version is in `remember.php` (`REMEMBER_VERSION`) and [GitHub Releases](https://github.com/ctucker1984/remember/releases).
 
+## 2.2.3
+
+- **Fix:** A follow-up survey that is missing a required answer keeps everything else the member entered instead of clearing the form. Required text, choice, and paragraph questions are also checked by the browser before the form is sent. Thanks to Forrest (PR #89).
+
 ## 2.2.2
 
 - **Fix:** The Events list on a phone is a compact card like Members: name and location on the first line, dates, status, type, and actions on the next.

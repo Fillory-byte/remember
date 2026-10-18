@@ -1188,11 +1188,6 @@ class Remember_Surveys {
 	}
 
 	/**
-	 * @param object $question Question.
-	 * @param mixed  $raw      Posted value.
-	 * @return string
-	 */
-	/**
 	 * Build a qid => stored-value map from the posted answers, in the same format
 	 * render_input() reads, so a failed submit can be shown back to the member.
 	 *
@@ -1211,6 +1206,11 @@ class Remember_Surveys {
 		return $out;
 	}
 
+	/**
+	 * @param object $question Question.
+	 * @param mixed  $raw      Posted value.
+	 * @return string
+	 */
 	private static function sanitize_answer( $question, $raw ) {
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-profile-questions.php';
 		if ( 'multiselect' === $question->field_type ) {
