@@ -431,6 +431,12 @@ function remember_render_private_invite_fields( $event = null ) {
 	}
 	$selected_lookup = array_fill_keys( $selected, true );
 	$candidates      = Remember_Event_Invites::invite_candidates();
+	// Staff who may read member records also see each invitee's real name under the
+	// public display name (same rule as the member list).
+	$can_see_real_names = current_user_can( 'remember_read_members' );
+	if ( $can_see_real_names ) {
+		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-import-export.php';
+	}
 	$status_labels   = array(
 		'pending_vetting' => __( 'Pending Vetting', 'remember' ),
 		'unvetted'        => __( 'Unvetted', 'remember' ),
@@ -474,11 +480,32 @@ function remember_render_private_invite_fields( $event = null ) {
 						$status    = isset( $candidate->status ) ? (string) $candidate->status : '';
 						$label     = isset( $status_labels[ $status ] ) ? $status_labels[ $status ] : $status;
 						$name      = isset( $candidate->display_name ) && '' !== $candidate->display_name ? $candidate->display_name : $candidate->user_email;
-						$search    = strtolower( $name . ' ' . $candidate->user_email . ' ' . $label );
+						$real_name = '';
+						if ( $can_see_real_names ) {
+							$real_name = trim(
+								Remember_Import_Export::member_list_legal_name_line(
+									(object) array(
+										'legal_first_name' => isset( $candidate->legal_first_name ) ? $candidate->legal_first_name : '',
+										'legal_last_name'  => isset( $candidate->legal_last_name ) ? $candidate->legal_last_name : '',
+									),
+									$member_id
+								)
+							);
+							// Don't repeat the display name if the member's real name matches it.
+							if ( '' !== $real_name && 0 === strcasecmp( $real_name, $name ) ) {
+								$real_name = '';
+							}
+						}
+						$search    = strtolower( $name . ' ' . $real_name . ' ' . $candidate->user_email . ' ' . $label );
 						?>
 						<label class="<?php echo $is_on ? 'is-checked' : ''; ?>" data-search="<?php echo esc_attr( $search ); ?>">
 							<input type="checkbox" name="event_invitees[]" value="<?php echo esc_attr( (string) $member_id ); ?>" <?php checked( $is_on ); ?>>
-							<span class="remember-event-invite-name"><?php echo esc_html( $name ); ?></span>
+							<span class="remember-event-invite-names">
+								<span class="remember-event-invite-name"><?php echo esc_html( $name ); ?></span>
+								<?php if ( '' !== $real_name ) : ?>
+									<span class="remember-event-invite-realname"><?php echo esc_html( $real_name ); ?></span>
+								<?php endif; ?>
+							</span>
 							<?php if ( $label ) : ?>
 								<span class="remember-event-invite-meta"><?php echo esc_html( $label ); ?></span>
 							<?php endif; ?>

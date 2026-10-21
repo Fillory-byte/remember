@@ -229,11 +229,14 @@ class Remember_Event_Invites {
 	 */
 	public static function invite_candidates() {
 		global $wpdb;
-		$members_table = $wpdb->prefix . 'remember_members';
+		$members_table  = $wpdb->prefix . 'remember_members';
+		$profiles_table = $wpdb->prefix . 'remember_member_profiles';
 		return $wpdb->get_results(
-			"SELECT m.member_id, m.status, u.display_name, u.user_email
+			"SELECT m.member_id, m.status, u.display_name, u.user_email,
+				p.legal_first_name, p.legal_last_name
 			FROM {$members_table} m
 			INNER JOIN {$wpdb->users} u ON u.ID = m.member_id
+			LEFT JOIN {$profiles_table} p ON p.member_id = m.member_id
 			WHERE (m.status IS NULL OR m.status <> 'merged')
 			ORDER BY u.display_name ASC, u.user_email ASC"
 		);

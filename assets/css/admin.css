@@ -3544,11 +3544,28 @@
 	flex: 0 0 auto;
 }
 
+.remember-event-invite-names {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
 .remember-event-invite-name {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.remember-event-invite-realname {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: #646970;
+	font-size: 11px;
+	line-height: 1.3;
 }
 
 .remember-event-invite-meta {
