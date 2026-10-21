@@ -1542,6 +1542,24 @@
 	font-size: 12px;
 }
 
+/* On phones the fixed-width, absolutely-positioned print menu runs off the edge
+   of the viewport. Drop it in as a full-width block below the Print button so it
+   can never overflow, regardless of where the button sits. */
+@media (max-width: 782px) {
+	.remember-member-detail-header__actions .remember-print-menu {
+		width: 100%;
+	}
+
+	.remember-print-menu__list {
+		position: static;
+		width: 100%;
+		min-width: 0;
+		max-width: none;
+		margin-top: 6px;
+		box-shadow: none;
+	}
+}
+
 .remember-section-heading {
 	display: flex;
 	flex-wrap: wrap;
