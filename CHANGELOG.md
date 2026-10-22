@@ -8,6 +8,7 @@ All notable changes to reMember are listed here. The current plugin version is i
 - **Feature:** In the private-event invite list, staff who can read member records see each member's real name in smaller type under the display name. The vetting status stays as it was, members with no real name on file show only the display name, and the search box matches real names too. Thanks to Forrest (PR #100).
 - **Fix:** Adding or removing a report filter no longer clears the values chosen in the other filters.
 - **Fix:** On phones, the Print menu on a member's profile opens as a full-width list under the Print button instead of running off the left edge of the screen. Thanks to Forrest (PR #99).
+- **Fix:** The Print menu's "Confidential profile" hint now says whether the printout includes emergency contact, health details, or both, matching what that user's print actually contains. Before, it mentioned only emergency contact.
 
 ## 2.2.3
 
