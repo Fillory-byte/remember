@@ -191,8 +191,15 @@ $remember_print_sensitive = ! empty( Remember_Sensitive_Profile::print_topics() 
 										<span class="remember-print-menu__label"><?php esc_html_e( 'Confidential profile', 'remember' ); ?></span>
 										<span class="remember-print-menu__hint">
 											<?php
-											if ( current_user_can( 'remember_access_emergency_contact' ) ) {
+											$remember_print_topics    = Remember_Sensitive_Profile::print_topics();
+											$remember_print_emergency = in_array( 'emergency', $remember_print_topics, true );
+											$remember_print_health    = in_array( 'health', $remember_print_topics, true );
+											if ( $remember_print_emergency && $remember_print_health ) {
+												esc_html_e( 'Staff record, including emergency contact and health details', 'remember' );
+											} elseif ( $remember_print_emergency ) {
 												esc_html_e( 'Staff record, including emergency contact', 'remember' );
+											} elseif ( $remember_print_health ) {
+												esc_html_e( 'Staff record, including health details', 'remember' );
 											} else {
 												esc_html_e( 'Staff record of what you are allowed to see', 'remember' );
 											}
