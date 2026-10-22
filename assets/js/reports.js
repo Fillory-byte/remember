@@ -832,10 +832,12 @@
 			if (!first) {
 				return;
 			}
+			readFiltersFromDom();
 			state.filters.push({ field: first.id, op: defaultOp(first), value: '', value_from: '', value_to: '' });
 			renderFilters();
 		});
 		$('#remember-report-filters').on('click', '.remember-filter-remove', function () {
+			readFiltersFromDom();
 			state.filters.splice(parseInt($(this).attr('data-index'), 10), 1);
 			renderFilters();
 		});
