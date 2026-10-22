@@ -196,7 +196,13 @@ class Remember_Report_Engine {
 			$params  = array_merge( $params, $scope['params'] );
 		}
 
-		foreach ( $filters as $filter ) {
+		$filters = array_values( $filters );
+		$logic   = self::filter_logic_tree( $filters );
+		if ( is_wp_error( $logic ) ) {
+			return $logic;
+		}
+		$clauses = array();
+		foreach ( $filters as $index => $filter ) {
 			$clause_fields = $fields;
 			if ( is_array( $filter ) && isset( $filter['field'] ) && 'answer.value' === (string) $filter['field'] && isset( $fields['answer.value'] ) ) {
 				$shaped = Remember_Report_Catalog::answer_filter_field( $fields['answer.value'], $filters );
@@ -205,13 +211,14 @@ class Remember_Report_Engine {
 				}
 			}
 			$clause = self::filter_clause( $filter, $clause_fields );
-			if ( is_wp_error( $clause ) ) {
-				continue;
+			if ( $clause && ! is_wp_error( $clause ) ) {
+				$clauses[ $index ] = $clause;
 			}
-			if ( $clause ) {
-				$where[] = $clause['sql'];
-				$params  = array_merge( $params, $clause['params'] );
-			}
+		}
+		$filter_where = $logic ? self::logic_sql( $logic, $clauses ) : null;
+		if ( $filter_where ) {
+			$where[] = $filter_where['sql'];
+			$params  = array_merge( $params, $filter_where['params'] );
 		}
 
 		$where_sql = ' WHERE ' . implode( ' AND ', $where );
@@ -519,6 +526,179 @@ class Remember_Report_Engine {
 			);
 		}
 		return array( 'sql' => '', 'params' => array() );
+	}
+
+	/**
+	 * Check a definition's filter grouping without running it.
+	 *
+	 * @param array $definition Report definition.
+	 * @return true|\WP_Error
+	 */
+	public static function validate_filter_logic( $definition ) {
+		if ( ! is_array( $definition ) ) {
+			return true;
+		}
+		$filters = isset( $definition['filters'] ) && is_array( $definition['filters'] ) ? array_values( $definition['filters'] ) : array();
+		$tree    = self::filter_logic_tree( $filters );
+		return is_wp_error( $tree ) ? $tree : true;
+	}
+
+	/**
+	 * Parse each filter's AND/OR choice and parentheses into a tree of filter positions.
+	 *
+	 * Filters without those settings are all required. AND and OR may not meet in one
+	 * group without parentheses, so the result never depends on which one binds first.
+	 *
+	 * @param array $filters Filters in order.
+	 * @return array|null|\WP_Error Tree, null when there are no filters, or an error.
+	 */
+	private static function filter_logic_tree( $filters ) {
+		if ( empty( $filters ) ) {
+			return null;
+		}
+		$tokens = array();
+		foreach ( array_values( $filters ) as $index => $filter ) {
+			$filter = is_array( $filter ) ? $filter : array();
+			if ( $index > 0 ) {
+				$join     = isset( $filter['join'] ) && 'or' === strtolower( (string) $filter['join'] ) ? 'OR' : 'AND';
+				$tokens[] = array( 'type' => $join, 'filter' => $index );
+			}
+			$open = isset( $filter['open'] ) ? min( 3, absint( $filter['open'] ) ) : 0;
+			for ( $i = 0; $i < $open; $i++ ) {
+				$tokens[] = array( 'type' => '(', 'filter' => $index );
+			}
+			$tokens[] = array( 'type' => 'leaf', 'filter' => $index );
+			$close    = isset( $filter['close'] ) ? min( 3, absint( $filter['close'] ) ) : 0;
+			for ( $i = 0; $i < $close; $i++ ) {
+				$tokens[] = array( 'type' => ')', 'filter' => $index );
+			}
+		}
+		$pos  = 0;
+		$tree = self::parse_logic_expr( $tokens, $pos, 0 );
+		if ( is_wp_error( $tree ) ) {
+			return $tree;
+		}
+		if ( $pos < count( $tokens ) ) {
+			return new WP_Error(
+				'filter_logic',
+				/* translators: %d: filter position, counting from 1 at the top */
+				sprintf( __( 'Filter %d closes a group that was never opened. Remove a ) or add a ( to an earlier filter.', 'remember' ), $tokens[ $pos ]['filter'] + 1 )
+			);
+		}
+		return $tree;
+	}
+
+	/**
+	 * One group: terms joined by a single kind of operator.
+	 *
+	 * @param array $tokens Tokens with type and filter position.
+	 * @param int   $pos    Read position, advanced in place.
+	 * @param int   $depth  Parenthesis depth.
+	 * @return array|\WP_Error
+	 */
+	private static function parse_logic_expr( $tokens, &$pos, $depth ) {
+		if ( $depth > 20 ) {
+			return new WP_Error( 'filter_logic', __( 'Filters are nested too deeply.', 'remember' ) );
+		}
+		$first = self::parse_logic_term( $tokens, $pos, $depth );
+		if ( is_wp_error( $first ) ) {
+			return $first;
+		}
+		$items = array( $first );
+		$op    = '';
+		while ( $pos < count( $tokens ) && in_array( $tokens[ $pos ]['type'], array( 'AND', 'OR' ), true ) ) {
+			if ( '' !== $op && $op !== $tokens[ $pos ]['type'] ) {
+				return new WP_Error(
+					'filter_logic',
+					/* translators: %d: filter position, counting from 1 at the top */
+					sprintf( __( 'AND and OR meet at filter %d without parentheses. Add ( and ) to show which filters belong together.', 'remember' ), $tokens[ $pos ]['filter'] + 1 )
+				);
+			}
+			$op = $tokens[ $pos ]['type'];
+			++$pos;
+			$item = self::parse_logic_term( $tokens, $pos, $depth );
+			if ( is_wp_error( $item ) ) {
+				return $item;
+			}
+			$items[] = $item;
+		}
+		if ( 1 === count( $items ) ) {
+			return $first;
+		}
+		return array(
+			'op'    => $op,
+			'items' => $items,
+		);
+	}
+
+	/**
+	 * A filter or a parenthesized group.
+	 *
+	 * @param array $tokens Tokens with type and filter position.
+	 * @param int   $pos    Read position, advanced in place.
+	 * @param int   $depth  Parenthesis depth.
+	 * @return array|\WP_Error
+	 */
+	private static function parse_logic_term( $tokens, &$pos, $depth ) {
+		$token = isset( $tokens[ $pos ] ) ? $tokens[ $pos ] : null;
+		if ( $token && '(' === $token['type'] ) {
+			++$pos;
+			$node = self::parse_logic_expr( $tokens, $pos, $depth + 1 );
+			if ( is_wp_error( $node ) ) {
+				return $node;
+			}
+			if ( ! isset( $tokens[ $pos ] ) || ')' !== $tokens[ $pos ]['type'] ) {
+				return new WP_Error(
+					'filter_logic',
+					/* translators: %d: filter position, counting from 1 at the top */
+					sprintf( __( 'Filter %d opens a group that is never closed. Add a ) to a later filter or remove the (.', 'remember' ), $token['filter'] + 1 )
+				);
+			}
+			++$pos;
+			return $node;
+		}
+		if ( ! $token || 'leaf' !== $token['type'] ) {
+			return new WP_Error( 'filter_logic', __( 'The filter grouping could not be read.', 'remember' ) );
+		}
+		++$pos;
+		return array( 'leaf' => $token['filter'] );
+	}
+
+	/**
+	 * SQL for a logic tree. Filters left incomplete drop out of their group.
+	 *
+	 * @param array $node    Tree node.
+	 * @param array $clauses Filter SQL by position.
+	 * @return array{sql:string,params:array}|null
+	 */
+	private static function logic_sql( $node, $clauses ) {
+		if ( isset( $node['leaf'] ) ) {
+			if ( empty( $clauses[ $node['leaf'] ] ) ) {
+				return null;
+			}
+			return array(
+				'sql'    => '( ' . $clauses[ $node['leaf'] ]['sql'] . ' )',
+				'params' => $clauses[ $node['leaf'] ]['params'],
+			);
+		}
+		$parts  = array();
+		$params = array();
+		foreach ( $node['items'] as $item ) {
+			$part = self::logic_sql( $item, $clauses );
+			if ( ! $part ) {
+				continue;
+			}
+			$parts[] = $part['sql'];
+			$params  = array_merge( $params, $part['params'] );
+		}
+		if ( ! $parts ) {
+			return null;
+		}
+		$glue = 'OR' === $node['op'] ? ' OR ' : ' AND ';
+		return array(
+			'sql'    => 1 === count( $parts ) ? $parts[0] : '( ' . implode( $glue, $parts ) . ' )',
+			'params' => $params,
+		);
 	}
 
 	/**

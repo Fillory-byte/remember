@@ -100,6 +100,10 @@ if ( ! defined( 'WPINC' ) ) {
 					<p class="remember-reports-add">
 						<button type="button" class="button" id="remember-report-add-filter"><?php esc_html_e( 'Add filter', 'remember' ); ?></button>
 					</p>
+					<div class="remember-reports-filter-logic" id="remember-report-filter-logic" hidden>
+						<p class="remember-reports-filter-preview" id="remember-report-filter-preview"></p>
+						<p class="description"><?php esc_html_e( 'Choose AND or OR between filters. Use ( and ) to group filters, and add them wherever AND and OR appear together.', 'remember' ); ?></p>
+					</div>
 				</div>
 
 				<div class="remember-reports-section remember-reports-sort">

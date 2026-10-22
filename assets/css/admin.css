@@ -3239,6 +3239,44 @@
 	margin: 0;
 }
 
+.remember-reports-filter-logic {
+	margin: 16px 0 0;
+}
+
+.remember-reports-filter-preview {
+	margin: 0;
+	padding: 8px 12px;
+	border-left: 4px solid #2271b1;
+	background: #f6f7f7;
+	overflow-wrap: anywhere;
+}
+
+.remember-reports-filter-preview.is-invalid {
+	border-left-color: #d63638;
+}
+
+.remember-reports-filter-logic .description {
+	margin: 6px 0 0;
+	max-width: 52em;
+}
+
+.remember-reports-criteria .remember-reports-field.remember-filter-paren {
+	flex: 0 0 auto;
+}
+
+.remember-reports-field.remember-filter-paren select {
+	min-width: 64px;
+}
+
+.remember-filter-join {
+	margin: 0 0 12px;
+}
+
+.remember-filter-join select {
+	min-height: 28px;
+	font-weight: 600;
+}
+
 .remember-reports-columns-grid {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) 240px;

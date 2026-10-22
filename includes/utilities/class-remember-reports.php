@@ -136,7 +136,12 @@ class Remember_Reports {
 	public static function ajax_save() {
 		self::require_ajax();
 		require_once plugin_dir_path( __FILE__ ) . '../models/class-saved-report.php';
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-report-engine.php';
 		$definition = self::definition_from_request();
+		$logic      = Remember_Report_Engine::validate_filter_logic( $definition );
+		if ( is_wp_error( $logic ) ) {
+			wp_send_json_error( array( 'message' => $logic->get_error_message() ), 400 );
+		}
 		$name       = isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '';
 		$subject    = isset( $definition['subject'] ) ? sanitize_key( $definition['subject'] ) : '';
 		$report_id  = isset( $_POST['report_id'] ) ? absint( wp_unslash( $_POST['report_id'] ) ) : 0;

@@ -90,7 +90,10 @@
 					op: f.op,
 					value: f.value,
 					value_from: f.value_from,
-					value_to: f.value_to
+					value_to: f.value_to,
+					join: f.join === 'or' ? 'or' : 'and',
+					open: parenCount(f.open),
+					close: parenCount(f.close)
 				};
 			}),
 			group_by: state.group_by.slice(),
@@ -388,6 +391,12 @@
 	function renderFilters() {
 		var $box = $('#remember-report-filters');
 		$box.empty();
+		if (state.filters.length < 2) {
+			state.filters.forEach(function (filter) {
+				filter.open = 0;
+				filter.close = 0;
+			});
+		}
 		state.filters.forEach(function (filter, index) {
 			var field = shapeForFilter(fieldById(filter.field) || fields()[0], index);
 			if (!field) {
@@ -400,19 +409,169 @@
 			if (!filter.op || !ops.some(function (op) { return op.id === filter.op; })) {
 				filter.op = defaultOp(field);
 			}
+			var grouped = state.filters.length > 1;
+			if (index > 0) {
+				var $join = $('<select/>').attr('data-index', index).attr('aria-label', t('joinLabel', 'Combine with the filter above'));
+				$join.html(optionList([
+					{ id: 'and', label: t('joinAnd', 'AND') },
+					{ id: 'or', label: t('joinOr', 'OR') }
+				], filter.join === 'or' ? 'or' : 'and', false));
+				$box.append($('<div class="remember-filter-join"/>').append($join));
+			}
 			var $row = $('<div class="remember-reports-criteria remember-filter-row"/>');
 			var $field = $('<select class="remember-filter-field"/>').attr('data-index', index);
 			$field.html(fieldOptions(filter.field, false));
 			var $op = $('<select class="remember-filter-op"/>').attr('data-index', index);
 			$op.html(optionList(ops, filter.op, false));
+			if (grouped) {
+				$row.append(parenControl('open', '(', filter.open, index));
+			}
 			$row.append(
 				labeled(t('fieldLabel', 'Field'), $field),
 				labeled(t('operatorLabel', 'Operator'), $op),
-				labeled(t('valueLabel', 'Value'), valueControl(filter, field, index)),
-				$('<button type="button" class="button-link remember-filter-remove"/>').text(t('remove', 'Remove')).attr('data-index', index)
+				labeled(t('valueLabel', 'Value'), valueControl(filter, field, index))
 			);
+			if (grouped) {
+				$row.append(parenControl('close', ')', filter.close, index));
+			}
+			$row.append($('<button type="button" class="button-link remember-filter-remove"/>').text(t('remove', 'Remove')).attr('data-index', index));
 			$box.append($row);
 		});
+		renderFilterLogic();
+	}
+
+	function parenCount(value) {
+		var n = parseInt(value, 10) || 0;
+		return Math.max(0, Math.min(3, n));
+	}
+
+	function parenControl(kind, symbol, count, index) {
+		var items = [{ id: '0', label: '—' }];
+		var i;
+		for (i = 1; i <= 3; i++) {
+			items.push({ id: String(i), label: new Array(i + 1).join(symbol) });
+		}
+		var $sel = $('<select/>').addClass('remember-filter-' + kind).attr('data-index', index);
+		$sel.html(optionList(items, String(parenCount(count)), false));
+		var label = kind === 'open' ? t('openGroup', 'Group (') : t('closeGroup', 'Group )');
+		return labeled(label, $sel).addClass('remember-filter-paren');
+	}
+
+	function filterSummary(filter, index) {
+		var field = shapeForFilter(fieldById(filter.field), index);
+		if (!field) {
+			return '…';
+		}
+		var opLabel = filter.op;
+		operatorsFor(field).forEach(function (op) {
+			if (op.id === filter.op) {
+				opLabel = op.label;
+			}
+		});
+		var text = field.label + ' ' + opLabel;
+		if (filter.op === 'empty' || filter.op === 'not_empty') {
+			return text;
+		}
+		if (filter.op === 'between') {
+			return text + ' ' + (filter.value_from || '…') + ' – ' + (filter.value_to || '…');
+		}
+		var values = Array.isArray(filter.value) ? filter.value : (filter.value === '' || filter.value === undefined || filter.value === null ? [] : [String(filter.value)]);
+		if (hasChoices(field)) {
+			var labels = {};
+			choiceItems(field).forEach(function (opt) {
+				labels[opt.id] = opt.label;
+			});
+			values = values.map(function (value) {
+				return labels[value] || value;
+			});
+		}
+		return text + ' ' + (values.length ? values.join(', ') : '…');
+	}
+
+	function filterTokens() {
+		var tokens = [];
+		state.filters.forEach(function (filter, index) {
+			var i;
+			if (index > 0) {
+				tokens.push({ type: filter.join === 'or' ? 'OR' : 'AND', filter: index });
+			}
+			for (i = 0; i < parenCount(filter.open); i++) {
+				tokens.push({ type: '(', filter: index });
+			}
+			tokens.push({ type: 'leaf', filter: index });
+			for (i = 0; i < parenCount(filter.close); i++) {
+				tokens.push({ type: ')', filter: index });
+			}
+		});
+		return tokens;
+	}
+
+	function filterLogicError(tokens) {
+		var pos = 0;
+		function expr() {
+			var err = term();
+			var op = '';
+			while (!err && pos < tokens.length && (tokens[pos].type === 'AND' || tokens[pos].type === 'OR')) {
+				if (op && op !== tokens[pos].type) {
+					return t('logicMixed', 'AND and OR meet at filter %d without parentheses. Add ( and ) to show which filters belong together.').replace('%d', tokens[pos].filter + 1);
+				}
+				op = tokens[pos].type;
+				pos++;
+				err = term();
+			}
+			return err;
+		}
+		function term() {
+			var token = tokens[pos];
+			if (token && token.type === '(') {
+				pos++;
+				var err = expr();
+				if (err) {
+					return err;
+				}
+				if (!tokens[pos] || tokens[pos].type !== ')') {
+					return t('logicOpen', 'Filter %d opens a group that is never closed. Add a ) to a later filter or remove the (.').replace('%d', token.filter + 1);
+				}
+				pos++;
+				return '';
+			}
+			pos++;
+			return '';
+		}
+		var err = expr();
+		if (!err && pos < tokens.length) {
+			err = t('logicClose', 'Filter %d closes a group that was never opened. Remove a ) or add a ( to an earlier filter.').replace('%d', tokens[pos].filter + 1);
+		}
+		return err;
+	}
+
+	function renderFilterLogic() {
+		var $wrap = $('#remember-report-filter-logic');
+		var $preview = $('#remember-report-filter-preview');
+		if (state.filters.length < 2) {
+			$wrap.prop('hidden', true);
+			return;
+		}
+		$wrap.prop('hidden', false);
+		var tokens = filterTokens();
+		var err = filterLogicError(tokens);
+		if (err) {
+			$preview.addClass('is-invalid').text(err);
+			return;
+		}
+		var text = tokens.map(function (token) {
+			if (token.type === 'leaf') {
+				return filterSummary(state.filters[token.filter], token.filter);
+			}
+			if (token.type === 'AND') {
+				return t('joinAnd', 'AND');
+			}
+			if (token.type === 'OR') {
+				return t('joinOr', 'OR');
+			}
+			return token.type;
+		}).join(' ').replace(/\( /g, '(').replace(/ \)/g, ')');
+		$preview.removeClass('is-invalid').text(t('logicPreview', 'Rows must match: %s').replace('%s', text));
 	}
 
 	function valueControl(filter, field, index) {
@@ -629,6 +788,14 @@
 			} else {
 				filter.value = $val.val() || '';
 			}
+			var $join = $('#remember-report-filters .remember-filter-join select[data-index="' + index + '"]');
+			if ($join.length) {
+				filter.join = $join.val() === 'or' ? 'or' : 'and';
+			}
+			if ($row.find('.remember-filter-open').length) {
+				filter.open = parenCount($row.find('.remember-filter-open').val());
+				filter.close = parenCount($row.find('.remember-filter-close').val());
+			}
 		});
 		state.name = $('#remember-report-name').val() || '';
 		state.sort.field = $('#remember-report-sort-field').val() || '';
@@ -832,12 +999,18 @@
 			if (!first) {
 				return;
 			}
-			state.filters.push({ field: first.id, op: defaultOp(first), value: '', value_from: '', value_to: '' });
+			readFiltersFromDom();
+			state.filters.push({ field: first.id, op: defaultOp(first), value: '', value_from: '', value_to: '', join: 'and', open: 0, close: 0 });
 			renderFilters();
 		});
 		$('#remember-report-filters').on('click', '.remember-filter-remove', function () {
+			readFiltersFromDom();
 			state.filters.splice(parseInt($(this).attr('data-index'), 10), 1);
 			renderFilters();
+		});
+		$('#remember-report-filters').on('change input', '.remember-filter-join select, .remember-filter-open, .remember-filter-close, .remember-filter-val, .remember-filter-from, .remember-filter-to', function () {
+			readFiltersFromDom();
+			renderFilterLogic();
 		});
 		$('#remember-report-filters').on('change', '.remember-filter-field, .remember-filter-op', function () {
 			readFiltersFromDom();
