@@ -5,7 +5,9 @@ All notable changes to reMember are listed here. The current plugin version is i
 ## 2.2.4
 
 - **Feature:** Report filters can be combined with AND or OR, and grouped with parentheses. Each filter after the first has an AND/OR choice, and once there are two or more filters, each one can open or close a group. A line under the filters spells out the result, such as "Rows must match: (Status is vetted OR Status is in_vetting) AND City is Portland". Reports saved before this keep requiring every filter. AND and OR need parentheses where they meet, so the result never depends on which one binds first. A group that is never closed, or closed without being opened, is pointed out by filter number before the report runs or saves. The event limit and access rules always apply on top of the filters.
+- **Feature:** In the private-event invite list, staff who can read member records see each member's real name in smaller type under the display name. The vetting status stays as it was, members with no real name on file show only the display name, and the search box matches real names too. Thanks to Forrest (PR #100).
 - **Fix:** Adding or removing a report filter no longer clears the values chosen in the other filters.
+- **Fix:** On phones, the Print menu on a member's profile opens as a full-width list under the Print button instead of running off the left edge of the screen. Thanks to Forrest (PR #99).
 
 ## 2.2.3
 
