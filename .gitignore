@@ -10,6 +10,9 @@
 
 # GitHub Actions / workflows (kept locally if present; not tracked)
 .github/*
+!.github/workflows/
+.github/workflows/*
+!.github/workflows/commit-attribution.yml
 
 # Built release artifacts
 dist/

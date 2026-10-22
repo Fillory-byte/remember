@@ -1,0 +1,32 @@
+# Fail a pull request when any of its commits credits Claude as a co-author.
+# GitHub lists every commit co-author among the repository's contributors, and
+# removing one later means rewriting master, so the line has to stop at review.
+
+name: Commit attribution
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  no-claude-coauthor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check commit messages for Claude co-author lines
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          found="$(gh api "repos/$REPO/pulls/$PR/commits" --paginate \
+            --jq '.[] | select(.commit.message | test("(^|\\n)\\s*co-authored-by:[^\\n]*(claude|anthropic)"; "i")) | .sha[0:7] + " " + (.commit.message | split("\n") | map(select(test("\\S"))) | .[0] // "")')"
+          if [ -n "$found" ]; then
+            echo "::error::Remove the Co-Authored-By line that credits Claude from these commits, then push again (git commit --amend, or git rebase -i for older commits)."
+            echo "$found"
+            exit 1
+          fi
+          echo "No Claude co-author lines found."
