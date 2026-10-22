@@ -253,6 +253,19 @@ class Remember_Admin {
 							'operatorLabel'=> __( 'Operator', 'remember' ),
 							'valueLabel'   => __( 'Value', 'remember' ),
 							'selectValue'  => __( 'Select value', 'remember' ),
+							'joinLabel'    => __( 'Combine with the filter above', 'remember' ),
+							'joinAnd'      => __( 'AND', 'remember' ),
+							'joinOr'       => __( 'OR', 'remember' ),
+							'openGroup'    => __( 'Group (', 'remember' ),
+							'closeGroup'   => __( 'Group )', 'remember' ),
+							/* translators: %s: the filters written out, such as (Status is vetted OR Status is in_vetting) AND City is Portland */
+							'logicPreview' => __( 'Rows must match: %s', 'remember' ),
+							/* translators: %d: filter position, counting from 1 at the top */
+							'logicMixed'   => __( 'AND and OR meet at filter %d without parentheses. Add ( and ) to show which filters belong together.', 'remember' ),
+							/* translators: %d: filter position, counting from 1 at the top */
+							'logicOpen'    => __( 'Filter %d opens a group that is never closed. Add a ) to a later filter or remove the (.', 'remember' ),
+							/* translators: %d: filter position, counting from 1 at the top */
+							'logicClose'   => __( 'Filter %d closes a group that was never opened. Remove a ) or add a ( to an earlier filter.', 'remember' ),
 							'calcLabel'    => __( 'Calculation', 'remember' ),
 							'allEvents'    => __( 'All events', 'remember' ),
 							'eventHintAll' => __( 'Saved reports stay global. Choose an event to limit this run; it is not saved with the report.', 'remember' ),

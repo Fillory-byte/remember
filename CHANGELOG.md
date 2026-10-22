@@ -4,6 +4,7 @@ All notable changes to reMember are listed here. The current plugin version is i
 
 ## 2.2.4
 
+- **Feature:** Report filters can be combined with AND or OR, and grouped with parentheses. Each filter after the first has an AND/OR choice, and once there are two or more filters, each one can open or close a group. A line under the filters spells out the result, such as "Rows must match: (Status is vetted OR Status is in_vetting) AND City is Portland". Reports saved before this keep requiring every filter. AND and OR need parentheses where they meet, so the result never depends on which one binds first. A group that is never closed, or closed without being opened, is pointed out by filter number before the report runs or saves. The event limit and access rules always apply on top of the filters.
 - **Fix:** Adding or removing a report filter no longer clears the values chosen in the other filters.
 
 ## 2.2.3
