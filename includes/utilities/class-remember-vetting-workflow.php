@@ -55,6 +55,29 @@ class Remember_Vetting_Workflow {
 	}
 
 	/**
+	 * Whether this member may submit event applications.
+	 *
+	 * Vetted members always may. With first-application vetting, members who
+	 * have not been vetted yet may too: their first application opens the case,
+	 * and staff cannot accept it until the member is vetted.
+	 *
+	 * @param object|null $member Row from Remember_Member::get().
+	 * @return bool
+	 */
+	public static function member_can_apply( $member ) {
+		require_once plugin_dir_path( __FILE__ ) . '../models/class-member.php';
+
+		if ( Remember_Member::is_vetted_member( $member ) ) {
+			return true;
+		}
+
+		return self::should_vet_on_first_application()
+			&& $member
+			&& isset( $member->status )
+			&& in_array( $member->status, array( 'unvetted', 'in_vetting' ), true );
+	}
+
+	/**
 	 * Check if a member has any applications.
 	 *
 	 * @param int $member_id Member ID.

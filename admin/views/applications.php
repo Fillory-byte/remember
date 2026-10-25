@@ -122,6 +122,15 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 			$application = $application_model->get( $application_id );
 			if ( ! $application ) {
 				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Application not found.', 'remember' ) . '</p></div>';
+			} elseif ( ! Remember_Member::is_vetted_member( $member_model->get( $application->member_id ) ) ) {
+				Remember_Logger::warning(
+					'Application not accepted: member is not vetted',
+					array(
+						'application_id' => $application_id,
+						'member_id'      => (int) $application->member_id,
+					)
+				);
+				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'This member is not vetted yet. Finish their vetting case before accepting this application.', 'remember' ) . '</p></div>';
 			} else {
 				global $wpdb;
 				$event_role = $wpdb->get_row(
