@@ -62,7 +62,7 @@ class Remember_Vetting_Workflow {
 	 */
 	public static function member_has_applications( $member_id ) {
 		global $wpdb;
-		$count = $wpdb->get_var( $wpdb->prepare(
+		$count = (int) $wpdb->get_var( $wpdb->prepare(
 			"SELECT COUNT(*) FROM {$wpdb->prefix}remember_event_applications WHERE member_id = %d",
 			$member_id
 		) );
@@ -72,16 +72,13 @@ class Remember_Vetting_Workflow {
 	/**
 	 * Check if this is the member's first application.
 	 *
+	 * Call before the new application is saved.
+	 *
 	 * @param int $member_id Member ID.
 	 * @return bool
 	 */
 	public static function is_first_application( $member_id ) {
-		global $wpdb;
-		$count = $wpdb->get_var( $wpdb->prepare(
-			"SELECT COUNT(*) FROM {$wpdb->prefix}remember_event_applications WHERE member_id = %d",
-			$member_id
-		) );
-		return $count === 0; // This will be the first one after it's created
+		return ! self::member_has_applications( $member_id );
 	}
 
 	/**
