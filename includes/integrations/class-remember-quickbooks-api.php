@@ -613,15 +613,19 @@ class Remember_QuickBooks_API {
 	 * @return array|WP_Error Invoice data or error.
 	 */
 	public static function get_invoice( $invoice_id ) {
-		$response = self::api_request( 'GET', 'invoice/' . $invoice_id );
+		$response = self::api_request( 'GET', 'invoice/' . rawurlencode( trim( (string) $invoice_id ) ) );
 
 		if ( is_wp_error( $response ) ) {
 			return $response;
 		}
 
-		return isset( $response['QueryResponse']['Invoice'][0] ) 
-			? $response['QueryResponse']['Invoice'][0] 
-			: $response['Invoice'];
+		if ( isset( $response['QueryResponse']['Invoice'][0] ) ) {
+			return $response['QueryResponse']['Invoice'][0];
+		}
+		if ( isset( $response['Invoice'] ) && is_array( $response['Invoice'] ) ) {
+			return $response['Invoice'];
+		}
+		return new WP_Error( 'qb_invoice_unreadable', __( 'QuickBooks did not return the invoice.', 'remember' ) );
 	}
 
 	/**
