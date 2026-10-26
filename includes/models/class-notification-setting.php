@@ -271,7 +271,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 		$templates = array(
 			'application_received' => __( "Hello,\n\nA new application has been received from {member_name}.\n\nApplication ID: {application_id}\nEvent: {event_name}\nDate: {date}\n\nPlease review the application in the admin panel.", 'remember' ),
 			
-			'vetting_assigned' => __( "Hello,\n\nYou have been assigned as the primary vetter for a vetting case.\n\nMember: {member_name}\nVetting Case ID: {vetting_id}\nDate: {date}\n\nPlease review the case and begin the vetting process.", 'remember' ),
+			'vetting_assigned' => __( "Hello,\n\n{vetter_name} has been assigned as the primary vetter for a vetting case.\n\nMember: {member_name}\nVetting Case ID: {vetting_id}\nDate: {date}\n\nOpen the case:\n{vetting_url}", 'remember' ),
 
 			'vetting_case_waiting' => __( "Hello,\n\nA new vetting case is waiting for a vetter.\n\nMember: {member_name}\nVetting Case ID: {vetting_id}\nDate: {date}\n\nOpen the case and assign a primary vetter:\n{vetting_url}", 'remember' ),
 			

@@ -2228,6 +2228,11 @@ $im_platforms = Remember_Im_Platforms::get_all();
 												<p class="description" style="margin-top: 5px; font-size: 12px;">
 													<?php esc_html_e( 'Available variables: {member_name}, {event_name}, {application_id}, {vetting_id}, {amount}, {date}, {ticket_url}, {profile_url}', 'remember' ); ?>
 												</p>
+												<?php if ( in_array( $notification->notification_type, array( 'vetting_assigned', 'vetting_scheduled', 'vetting_completed', 'vetting_collaborator_invited' ), true ) ) : ?>
+													<p class="description" style="margin-top: 5px; font-size: 12px;">
+														<?php esc_html_e( 'This email also accepts {vetter_name} (the primary vetter) and {vetting_url} (a link to the case).', 'remember' ); ?>
+													</p>
+												<?php endif; ?>
 											</td>
 										</tr>
 									</table>

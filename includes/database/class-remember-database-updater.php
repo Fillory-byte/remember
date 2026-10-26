@@ -1835,6 +1835,15 @@ class Remember_Database_Updater {
 			}
 		}
 
+		// Update to 2.4.1 (Vetting Case Assigned email names the assigned vetter).
+		if ( version_compare( get_option( 'remember_db_version', '0.0.0' ), '2.4.1', '<' ) ) {
+			Remember_Logger::info( 'Updating database schema', array( 'from' => get_option( 'remember_db_version', '0.0.0' ), 'to' => '2.4.1' ) );
+			if ( self::reset_unedited_vetting_assigned_body() ) {
+				update_option( 'remember_db_version', '2.4.1' );
+				Remember_Logger::info( 'Database schema updated successfully', array( 'version' => '2.4.1' ) );
+			}
+		}
+
 		// Always re-ensure health catalogs (idempotent). Catches sites that stalled mid-migration
 		// or activated before catalog seed rows were added.
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-seeder.php';
@@ -1848,5 +1857,48 @@ class Remember_Database_Updater {
 			'update_schema: exit',
 			array( 'remember_db_version' => get_option( 'remember_db_version', '0.0.0' ) )
 		);
+	}
+
+	/**
+	 * Clear a saved Vetting Case Assigned body that still matches the old default.
+	 *
+	 * The old default told every recipient "You have been assigned", even when
+	 * the whole vetting team gets the email. A cleared body falls back to the
+	 * shipped default. Bodies an admin edited are kept.
+	 *
+	 * @return bool False only when the database update fails.
+	 */
+	private static function reset_unedited_vetting_assigned_body() {
+		global $wpdb;
+		$table = $wpdb->prefix . 'remember_notification_settings';
+		$row   = $wpdb->get_row( $wpdb->prepare( "SELECT setting_id, body_template FROM {$table} WHERE notification_type = %s", 'vetting_assigned' ) );
+		if ( ! $row || '' === trim( (string) $row->body_template ) ) {
+			return true;
+		}
+
+		$normalize = static function ( $text ) {
+			$text = html_entity_decode( wp_strip_all_tags( (string) $text ), ENT_QUOTES, 'UTF-8' );
+			return trim( preg_replace( '/\s+/u', ' ', $text ) );
+		};
+		$old_default = "Hello,\n\nYou have been assigned as the primary vetter for a vetting case.\n\nMember: {member_name}\nVetting Case ID: {vetting_id}\nDate: {date}\n\nPlease review the case and begin the vetting process.";
+		if ( $normalize( $row->body_template ) !== $normalize( $old_default ) ) {
+			Remember_Logger::info( 'Kept edited Vetting Case Assigned email body', array( 'setting_id' => (int) $row->setting_id ) );
+			return true;
+		}
+
+		$updated = $wpdb->update(
+			$table,
+			array(
+				'body_template' => '',
+				'updated_at'    => current_time( 'mysql' ),
+			),
+			array( 'setting_id' => (int) $row->setting_id )
+		);
+		if ( false === $updated ) {
+			Remember_Logger::error( 'Failed to reset Vetting Case Assigned email body', array( 'error' => $wpdb->last_error ) );
+			return false;
+		}
+		Remember_Logger::info( 'Reset Vetting Case Assigned email body to the new default', array( 'setting_id' => (int) $row->setting_id ) );
+		return true;
 	}
 }

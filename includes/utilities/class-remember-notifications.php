@@ -307,7 +307,11 @@ class Remember_Notifications {
 			return;
 		}
 
-		$extra = array( 'vetting_id' => $vetting_id );
+		$vetter = ! empty( $case->primary_vetter_id ) ? get_userdata( (int) $case->primary_vetter_id ) : false;
+		$extra  = array(
+			'vetting_id'  => $vetting_id,
+			'vetter_name' => $vetter ? $vetter->display_name : '',
+		);
 		if ( 'vetting_scheduled' === $type && ! empty( $case->scheduled_at ) ) {
 			$extra['date'] = date_i18n(
 				get_option( 'date_format' ) . ' ' . get_option( 'time_format' ),
