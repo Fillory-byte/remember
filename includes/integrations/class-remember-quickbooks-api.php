@@ -391,10 +391,15 @@ class Remember_QuickBooks_API {
 					)
 				);
 			}
-			$data['Id']         = $customer_data['qb_customer_id'];
-			$data['SyncToken']  = isset( $existing['SyncToken'] ) ? (string) $existing['SyncToken'] : '0';
-			$endpoint           = 'customer';
-			$method               = 'POST';
+			// A full update blanks every writable field left out, wiping terms, notes and the like set in QBO.
+			$data['sparse']    = true;
+			$data['Id']        = $customer_data['qb_customer_id'];
+			$data['SyncToken'] = isset( $existing['SyncToken'] ) ? (string) $existing['SyncToken'] : '0';
+			if ( isset( $data['ShipAddr'] ) && ! self::ship_address_follows_billing( $existing ) ) {
+				unset( $data['ShipAddr'] );
+			}
+			$endpoint = 'customer';
+			$method   = 'POST';
 		} else {
 			$endpoint = 'customer';
 			$method   = 'POST';
@@ -408,6 +413,29 @@ class Remember_QuickBooks_API {
 		}
 
 		return isset( $response['Customer'] ) ? $response['Customer'] : $response;
+	}
+
+	/**
+	 * Whether a customer's shipping address is empty or still mirrors the billing address.
+	 *
+	 * @param array $customer Customer entity from QBO.
+	 * @return bool True when reMember may keep the shipping address in step with billing.
+	 */
+	private static function ship_address_follows_billing( $customer ) {
+		$fields = array( 'Line1', 'Line2', 'City', 'CountrySubDivisionCode', 'PostalCode', 'Country' );
+		$pick   = static function ( $addr ) use ( $fields ) {
+			$out = array();
+			foreach ( $fields as $field ) {
+				$out[ $field ] = is_array( $addr ) && isset( $addr[ $field ] ) ? strtolower( trim( (string) $addr[ $field ] ) ) : '';
+			}
+			return $out;
+		};
+
+		$ship = $pick( $customer['ShipAddr'] ?? null );
+		if ( '' === implode( '', $ship ) ) {
+			return true;
+		}
+		return $ship === $pick( $customer['BillAddr'] ?? null );
 	}
 
 	/**
