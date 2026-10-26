@@ -105,6 +105,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'application_received'          => __( 'Application Received', 'remember' ),
 			'vetting_assigned'              => __( 'Vetting Assigned', 'remember' ),
 			'vetting_case_waiting'          => __( 'Vetting Case Waiting', 'remember' ),
+			'vetting_case_failed'           => __( 'Vetting Case Not Opened (Admin)', 'remember' ),
 			'vetting_scheduled'             => __( 'Vetting Scheduled', 'remember' ),
 			'vetting_completed'             => __( 'Vetting Completed', 'remember' ),
 			'member_vetted'                 => __( 'Member Vetted', 'remember' ),
@@ -141,6 +142,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'application_received'          => __( 'Sent when a new application is received.', 'remember' ),
 			'vetting_assigned'              => __( 'Sent when a vetter is assigned to a vetting case.', 'remember' ),
 			'vetting_case_waiting'          => __( 'Sent to everyone with the Vetting role when a vetting case opens automatically with no primary vetter.', 'remember' ),
+			'vetting_case_failed'           => __( 'Sent to reMember System Administrators when a vetting case could not be opened automatically, so one can be opened by hand.', 'remember' ),
 			'vetting_scheduled'             => __( 'Sent when a vetting case is scheduled.', 'remember' ),
 			'vetting_completed'             => __( 'Sent when a vetting case is completed.', 'remember' ),
 			'member_vetted'                 => __( 'Sent to the member when their vetting case is accepted.', 'remember' ),
@@ -176,6 +178,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 		$vetting = array(
 			'vetting_assigned',
 			'vetting_case_waiting',
+			'vetting_case_failed',
 			'vetting_scheduled',
 			'vetting_completed',
 			'vetting_collaborator_invited',
@@ -221,6 +224,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'application_received'          => __( 'New Application Received - {member_name}', 'remember' ),
 			'vetting_assigned'              => __( 'Vetting Case Assigned - {member_name}', 'remember' ),
 			'vetting_case_waiting'          => __( 'New Vetting Case Waiting - {member_name}', 'remember' ),
+			'vetting_case_failed'           => __( 'Vetting case could not be opened - {member_name}', 'remember' ),
 			'vetting_scheduled'             => __( 'Vetting Case Scheduled - {member_name}', 'remember' ),
 			'vetting_completed'             => __( 'Vetting Case Completed - {member_name}', 'remember' ),
 			'member_vetted'                 => __( 'Welcome! You\'ve Been Vetted - {member_name}', 'remember' ),
@@ -274,6 +278,8 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'vetting_assigned' => __( "Hello,\n\n{vetter_name} has been assigned as the primary vetter for a vetting case.\n\nMember: {member_name}\nVetting Case ID: {vetting_id}\nDate: {date}\n\nOpen the case:\n{vetting_url}", 'remember' ),
 
 			'vetting_case_waiting' => __( "Hello,\n\nA new vetting case is waiting for a vetter.\n\nMember: {member_name}\nVetting Case ID: {vetting_id}\nDate: {date}\n\nOpen the case and assign a primary vetter:\n{vetting_url}", 'remember' ),
+
+			'vetting_case_failed' => __( "Hello,\n\nreMember could not open a vetting case automatically for {member_name}. The member is not in the vetting queue until a case is opened.\n\nMember: {member_name}\nEmail: {member_email}\nDate: {date}\n\nOpen a vetting case for this member:\n{vetting_url}\n\nWhen logging is turned on (Settings, Logging), the reason is in the reMember log.", 'remember' ),
 			
 			'vetting_scheduled' => __( "Hello,\n\nThe vetting case for {member_name} has been scheduled.\n\nVetting Case ID: {vetting_id}\nScheduled Date: {date}\n\nPlease prepare for the scheduled vetting session.", 'remember' ),
 			

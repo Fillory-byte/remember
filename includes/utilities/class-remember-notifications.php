@@ -424,6 +424,65 @@ class Remember_Notifications {
 	}
 
 	/**
+	 * Email System Administrators that a vetting case could not be opened automatically.
+	 *
+	 * The database error stays in the log; the email links to the Create
+	 * Vetting Case form with this member already selected.
+	 *
+	 * @param int $member_id Member / WordPress user ID.
+	 * @return void
+	 */
+	public static function notify_vetting_case_failed( $member_id ) {
+		$member_id = absint( $member_id );
+		if ( $member_id < 1 ) {
+			return;
+		}
+
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
+		$emails = self::admin_emails();
+		if ( empty( $emails ) ) {
+			Remember_Logger::error(
+				'Vetting case failure had no admin email recipients',
+				array( 'member_id' => $member_id )
+			);
+			return;
+		}
+
+		$context = self::context_for_member(
+			$member_id,
+			array(
+				'vetting_id'  => '',
+				'vetting_url' => admin_url( 'admin.php?page=remember-vetting&member_id=' . $member_id ),
+			)
+		);
+		$sent = 0;
+		foreach ( $emails as $email ) {
+			$result = self::send( 'vetting_case_failed', $context, $email );
+			if ( true === $result ) {
+				++$sent;
+			} elseif ( is_wp_error( $result ) ) {
+				Remember_Logger::error(
+					'Vetting case failure admin email failed',
+					array(
+						'member_id' => $member_id,
+						'to'        => $email,
+						'error'     => $result->get_error_message(),
+					)
+				);
+			}
+		}
+		if ( $sent > 0 ) {
+			Remember_Logger::info(
+				'Vetting case failure emailed to admins',
+				array(
+					'member_id' => $member_id,
+					'sent'      => $sent,
+				)
+			);
+		}
+	}
+
+	/**
 	 * Email the member the vetting decision (accepted or rejected).
 	 *
 	 * @param int    $member_id  Member / WordPress user ID.

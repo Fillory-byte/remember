@@ -235,13 +235,16 @@ class Remember_Vetting_Workflow {
 		}
 
 		if ( ! $vetting_id ) {
-			Remember_Logger::warning(
+			Remember_Logger::error(
 				'Vetting case not created',
 				array(
-					'member_id' => $member_id,
-					'db_error'  => $vetting_model->get_last_error(),
+					'member_id'  => $member_id,
+					'assignment' => $assignment,
+					'db_error'   => $vetting_model->get_last_error(),
 				)
 			);
+			require_once plugin_dir_path( __FILE__ ) . 'class-remember-notifications.php';
+			Remember_Notifications::notify_vetting_case_failed( $member_id );
 			return false;
 		}
 

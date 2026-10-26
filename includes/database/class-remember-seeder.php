@@ -618,6 +618,7 @@ class Remember_Seeder {
 			'application_received',
 			'vetting_assigned',
 			'vetting_case_waiting',
+			'vetting_case_failed',
 			'vetting_scheduled',
 			'vetting_completed',
 			'member_vetted',
