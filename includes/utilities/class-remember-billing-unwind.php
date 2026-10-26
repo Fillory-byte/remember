@@ -377,9 +377,10 @@ class Remember_Billing_Unwind {
 			$label = __( 'Xero', 'remember' );
 		} else {
 			$steps[] = sprintf(
-				/* translators: %s: amount */
-				__( 'In QuickBooks, create a Refund Receipt for this customer for %s. If they paid through QuickBooks Payments, the Refund Receipt can send the money back; otherwise return it the way they paid (Stripe, bank transfer, cheque).', 'remember' ),
-				$money( $received )
+				/* translators: 1: amount, 2: QuickBooks invoice number */
+				__( 'In QuickBooks, create a Refund Receipt for this customer for %1$s, and put "Invoice %2$s" in its memo so reMember can match it to this invoice. If they paid through QuickBooks Payments, the Refund Receipt can send the money back; otherwise return it the way they paid (Stripe, bank transfer, cheque).', 'remember' ),
+				$money( $received ),
+				$invoice
 			);
 			if ( $balance > 0.001 ) {
 				$steps[] = sprintf(

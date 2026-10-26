@@ -832,7 +832,7 @@ class Remember_QuickBooks_Sync {
 			return $row->quickbooks_product_id;
 		}
 
-		$qb_items = Remember_QuickBooks_API::query_items( "SELECT * FROM Item WHERE Name = '" . esc_sql( $fallback_name ) . "'" );
+		$qb_items = Remember_QuickBooks_API::query_items( 'Name = ' . Remember_QuickBooks_API::qb_quote( $fallback_name ) );
 
 		if ( ! is_wp_error( $qb_items ) && ! empty( $qb_items ) ) {
 			$qb_product    = $qb_items[0];

@@ -283,6 +283,48 @@ class Remember_QuickBooks_API {
 	}
 
 	/**
+	 * Quote a value as a string literal for the QuickBooks query language.
+	 *
+	 * QBO escapes with a backslash; doubled quotes are a parse error and esc_sql() mangles "%".
+	 *
+	 * @param string $value Raw value.
+	 * @return string Quoted literal.
+	 */
+	public static function qb_quote( $value ) {
+		return "'" . str_replace( array( '\\', "'" ), array( '\\\\', "\\'" ), (string) $value ) . "'";
+	}
+
+	/**
+	 * Run a query and return every matching row across pages (QBO returns 100 rows by default).
+	 *
+	 * @param string $entity Entity name, e.g. Payment, RefundReceipt, CreditMemo, Item.
+	 * @param string $where  Optional WHERE clause without the keyword; quote values with qb_quote().
+	 * @return array<int, array<string, mixed>>|WP_Error
+	 */
+	private static function query_all( $entity, $where = '' ) {
+		$page_size = 1000;
+		$start     = 1;
+		$rows      = array();
+
+		for ( $page = 0; $page < 50; $page++ ) {
+			$query    = 'SELECT * FROM ' . $entity . ( '' !== $where ? ' WHERE ' . $where : '' ) . ' STARTPOSITION ' . $start . ' MAXRESULTS ' . $page_size;
+			$response = self::api_request( 'GET', 'query?query=' . rawurlencode( $query ) );
+			if ( is_wp_error( $response ) ) {
+				return $response;
+			}
+			$raw  = isset( $response['QueryResponse'][ $entity ] ) ? $response['QueryResponse'][ $entity ] : array();
+			$list = isset( $raw['Id'] ) ? array( $raw ) : ( is_array( $raw ) ? array_values( $raw ) : array() );
+			$rows = array_merge( $rows, $list );
+			if ( count( $list ) < $page_size ) {
+				break;
+			}
+			$start += $page_size;
+		}
+
+		return $rows;
+	}
+
+	/**
 	 * Fetch a single Customer by Id (includes current SyncToken).
 	 *
 	 * @param string $customer_id QuickBooks Customer Id.
@@ -311,9 +353,13 @@ class Remember_QuickBooks_API {
 		if ( '' === $email || ! is_email( $email ) ) {
 			return null;
 		}
-		$escaped = str_replace( "'", "''", $email );
-		$query     = "SELECT * FROM Customer WHERE PrimaryEmailAddr = '" . $escaped . "'";
-		$response  = self::api_request( 'GET', 'query?query=' . rawurlencode( $query ) );
+		// QBO fails an exact email match containing an apostrophe ("Invalid ID") but accepts LIKE;
+		// the exact comparison below keeps the result precise either way.
+		$apostrophe = strrpos( $email, "'" );
+		$condition  = false === $apostrophe
+			? 'PrimaryEmailAddr = ' . self::qb_quote( $email )
+			: 'PrimaryEmailAddr LIKE ' . self::qb_quote( '%' . substr( $email, $apostrophe + 1 ) );
+		$response   = self::api_request( 'GET', 'query?query=' . rawurlencode( 'SELECT * FROM Customer WHERE ' . $condition ) );
 		if ( is_wp_error( $response ) ) {
 			return null;
 		}
@@ -662,38 +708,24 @@ class Remember_QuickBooks_API {
 			return new WP_Error( 'invalid_invoice_id', __( 'Invalid QuickBooks invoice ID.', 'remember' ) );
 		}
 
-		// First, pull a reasonably-scoped set of payments from QBO. We can't reliably filter on
-		// Line.LinkedTxn in the SQL WHERE clause across all environments, so we:
-		// 1) Optionally narrow by CustomerRef when a customer_id is available.
-		// 2) Filter by LinkedTxn.TxnId = invoice_id in PHP.
+		// QBO can't filter on Line.LinkedTxn in a query, so pull the customer's payments and match
+		// LinkedTxn.TxnId in PHP. Always scope to one customer; never scan the whole company.
 		$customer_id = $customer_id ? trim( (string) $customer_id ) : '';
-		$where_parts = array();
-		if ( '' !== $customer_id ) {
-			$where_parts[] = "CustomerRef = '" . $customer_id . "'";
+		if ( '' === $customer_id ) {
+			$invoice = self::get_invoice( $invoice_id );
+			if ( is_wp_error( $invoice ) ) {
+				return $invoice;
+			}
+			$customer_id = isset( $invoice['CustomerRef']['value'] ) ? (string) $invoice['CustomerRef']['value'] : '';
+			if ( '' === $customer_id ) {
+				return new WP_Error( 'qb_invoice_no_customer', __( 'QuickBooks invoice has no customer.', 'remember' ) );
+			}
 		}
 
-		$query = 'SELECT * FROM Payment';
-		if ( ! empty( $where_parts ) ) {
-			$query .= ' WHERE ' . implode( ' AND ', $where_parts );
+		$payments = self::query_all( 'Payment', 'CustomerRef = ' . self::qb_quote( $customer_id ) );
+		if ( is_wp_error( $payments ) ) {
+			return $payments;
 		}
-
-		$response = self::api_request( 'GET', 'query?query=' . rawurlencode( $query ) );
-
-		if ( is_wp_error( $response ) ) {
-			return $response;
-		}
-
-		if ( ! isset( $response['QueryResponse']['Payment'] ) ) {
-			return array();
-		}
-
-		$raw = $response['QueryResponse']['Payment'];
-		if ( ! is_array( $raw ) ) {
-			return array();
-		}
-
-		// Normalize single Payment → list of one.
-		$payments = isset( $raw['Id'] ) ? array( $raw ) : $raw;
 
 		$matches = array();
 		foreach ( $payments as $payment ) {
@@ -927,12 +959,12 @@ class Remember_QuickBooks_API {
 	 *
 	 * @param string      $invoice_id  Invoice entity Id.
 	 * @param string|null $customer_id QuickBooks Customer Id.
-	 * @return array<int, string>
+	 * @return array<int, string>|WP_Error
 	 */
 	private static function collect_qb_payment_ids_for_invoice( $invoice_id, $customer_id ) {
 		$payments = self::get_invoice_payment( $invoice_id, $customer_id );
-		if ( is_wp_error( $payments ) || ! is_array( $payments ) ) {
-			return array();
+		if ( is_wp_error( $payments ) ) {
+			return $payments;
 		}
 		$ids = array();
 		foreach ( $payments as $p ) {
@@ -1147,7 +1179,11 @@ class Remember_QuickBooks_API {
 			$customer_id_resolved = (string) $invoice['CustomerRef']['value'];
 		}
 
+		// Any failed lookup fails the whole call: a partial list would be saved as the real ledger.
 		$qb_payment_ids = self::collect_qb_payment_ids_for_invoice( $invoice_id, $customer_id_resolved );
+		if ( is_wp_error( $qb_payment_ids ) ) {
+			return $qb_payment_ids;
+		}
 
 		// 1) Invoice → LinkedTxn → RefundReceipt (reliable when QBO links the refund on the invoice).
 		if ( ! empty( $invoice['LinkedTxn'] ) ) {
@@ -1169,7 +1205,10 @@ class Remember_QuickBooks_API {
 						continue;
 					}
 					$rr = self::get_refund_receipt( $rid );
-					if ( is_wp_error( $rr ) || ! is_array( $rr ) ) {
+					if ( is_wp_error( $rr ) ) {
+						return $rr;
+					}
+					if ( ! is_array( $rr ) ) {
 						continue;
 					}
 					$seen[ $rid ] = true;
@@ -1181,57 +1220,49 @@ class Remember_QuickBooks_API {
 			}
 		}
 
-		// 2) RefundReceipt WHERE CustomerRef — match line/document links to this invoice.
+		// 2) RefundReceipt WHERE CustomerRef — match line/document links, or a memo naming this invoice.
 		$refund_query_list = array();
+		$doc_number        = isset( $invoice['DocNumber'] ) ? (string) $invoice['DocNumber'] : '';
 		if ( '' !== $customer_id_resolved ) {
-			$query    = "SELECT * FROM RefundReceipt WHERE CustomerRef = '" . esc_sql( $customer_id_resolved ) . "'";
-			$response = self::api_request( 'GET', 'query?query=' . rawurlencode( $query ) );
-			if ( ! is_wp_error( $response ) && isset( $response['QueryResponse']['RefundReceipt'] ) ) {
-				$raw  = $response['QueryResponse']['RefundReceipt'];
-				$list = isset( $raw['Id'] ) ? array( $raw ) : ( is_array( $raw ) ? $raw : array() );
-				$refund_query_list = $list;
-				foreach ( $list as $r ) {
-					if ( ! is_array( $r ) || empty( $r['Id'] ) ) {
-						continue;
-					}
-					$rid = (string) $r['Id'];
-					if ( isset( $seen[ $rid ] ) ) {
-						continue;
-					}
-					$full = self::get_refund_receipt( $rid );
-					$rr   = is_wp_error( $full ) ? $r : $full;
-					$row  = self::summarize_refund_for_invoice( $rr, $invoice_id, $qb_payment_ids );
-					if ( null !== $row ) {
-						$seen[ $rid ] = true;
-						$out[]        = $row;
-					}
+			$list = self::query_all( 'RefundReceipt', 'CustomerRef = ' . self::qb_quote( $customer_id_resolved ) );
+			if ( is_wp_error( $list ) ) {
+				return $list;
+			}
+			$refund_query_list = $list;
+			foreach ( $list as $rr ) {
+				if ( ! is_array( $rr ) || empty( $rr['Id'] ) ) {
+					continue;
+				}
+				$rid = (string) $rr['Id'];
+				if ( isset( $seen[ $rid ] ) ) {
+					continue;
+				}
+				$row = self::summarize_refund_for_invoice( $rr, $invoice_id, $qb_payment_ids );
+				if ( null === $row && self::memo_names_invoice( $rr, $doc_number ) ) {
+					$row = self::summarize_refund_receipt_row( $rr );
+				}
+				if ( null !== $row ) {
+					$seen[ $rid ] = true;
+					$out[]        = $row;
 				}
 			}
 		}
 
-		// 3) Single RefundReceipt for this customer and no parseable LinkedTxn — attribute to this invoice (typical one-invoice customers).
-		if ( empty( $out ) && 1 === count( $refund_query_list ) ) {
-			$r = $refund_query_list[0];
-			if ( is_array( $r ) && ! empty( $r['Id'] ) ) {
-				$rid = (string) $r['Id'];
-				if ( ! isset( $seen[ $rid ] ) ) {
-					$full = self::get_refund_receipt( $rid );
-					$rr   = is_wp_error( $full ) ? $r : $full;
-					$row  = self::summarize_refund_receipt_row( $rr );
-					if ( null !== $row ) {
-						$out[] = $row;
-					}
-				}
+		// 3) A lone unlinked RefundReceipt can only belong to this invoice when the customer has no other.
+		if ( empty( $out ) && 1 === count( $refund_query_list ) && self::customer_invoice_count( $customer_id_resolved ) === 1 ) {
+			$row = self::summarize_refund_receipt_row( $refund_query_list[0] );
+			if ( null !== $row ) {
+				$out[] = $row;
 			}
 		}
 
 		// 4) Credit memos applied to this invoice reduce Amount Due (ledger credit).
 		if ( '' !== $customer_id_resolved ) {
-			$cm_query = "SELECT * FROM CreditMemo WHERE CustomerRef = '" . esc_sql( $customer_id_resolved ) . "'";
-			$cm_resp  = self::api_request( 'GET', 'query?query=' . rawurlencode( $cm_query ) );
-			if ( ! is_wp_error( $cm_resp ) && isset( $cm_resp['QueryResponse']['CreditMemo'] ) ) {
-				$raw  = $cm_resp['QueryResponse']['CreditMemo'];
-				$list = isset( $raw['Id'] ) ? array( $raw ) : ( is_array( $raw ) ? $raw : array() );
+			$list = self::query_all( 'CreditMemo', 'CustomerRef = ' . self::qb_quote( $customer_id_resolved ) );
+			if ( is_wp_error( $list ) ) {
+				return $list;
+			}
+			if ( ! empty( $list ) ) {
 				foreach ( $list as $memo ) {
 					$row = self::summarize_credit_memo_for_invoice( $memo, $invoice_id );
 					if ( null === $row ) {
@@ -1274,6 +1305,42 @@ class Remember_QuickBooks_API {
 		);
 
 		return $out;
+	}
+
+	/**
+	 * Whether a refund receipt's memo or message names this invoice, e.g. "Invoice 1047".
+	 *
+	 * QBO refund receipts made in the UI carry no link to the invoice they refund.
+	 *
+	 * @param array  $refund     RefundReceipt payload.
+	 * @param string $doc_number Invoice DocNumber.
+	 * @return bool
+	 */
+	private static function memo_names_invoice( $refund, $doc_number ) {
+		if ( '' === $doc_number ) {
+			return false;
+		}
+		$text    = ( $refund['PrivateNote'] ?? '' ) . ' ' . ( $refund['CustomerMemo']['value'] ?? '' );
+		$pattern = '/\binv(?:oice)?\.?\s*(?:no\.?|number)?\s*#?\s*' . preg_quote( $doc_number, '/' ) . '(?![\w-])/i';
+		return 1 === preg_match( $pattern, $text );
+	}
+
+	/**
+	 * Number of invoices a customer has (0 on lookup failure, which disables guessing).
+	 *
+	 * @param string $customer_id QuickBooks Customer Id.
+	 * @return int
+	 */
+	private static function customer_invoice_count( $customer_id ) {
+		if ( '' === (string) $customer_id ) {
+			return 0;
+		}
+		$query    = 'SELECT COUNT(*) FROM Invoice WHERE CustomerRef = ' . self::qb_quote( $customer_id );
+		$response = self::api_request( 'GET', 'query?query=' . rawurlencode( $query ) );
+		if ( is_wp_error( $response ) ) {
+			return 0;
+		}
+		return isset( $response['QueryResponse']['totalCount'] ) ? (int) $response['QueryResponse']['totalCount'] : 0;
 	}
 
 	/**
@@ -1347,27 +1414,6 @@ class Remember_QuickBooks_API {
 	}
 
 	/**
-	 * Normalize QueryResponse Item payload to a list of item arrays.
-	 *
-	 * @param array $response Decoded API response.
-	 * @return array<int, array<string, mixed>>
-	 */
-	private static function normalize_item_query_response( $response ) {
-		if ( ! isset( $response['QueryResponse']['Item'] ) ) {
-			return array();
-		}
-		$raw = $response['QueryResponse']['Item'];
-		if ( ! is_array( $raw ) ) {
-			return array();
-		}
-		// Single item is returned as one associative array with an "Id" key, not 0..n.
-		if ( isset( $raw['Id'] ) ) {
-			return array( $raw );
-		}
-		return $raw;
-	}
-
-	/**
 	 * Remove QuickBooks Category rows (folder/grouping only; not invoice line items).
 	 *
 	 * @param array $items List of Item entities.
@@ -1397,19 +1443,16 @@ class Remember_QuickBooks_API {
 	}
 
 	/**
-	 * Query items/products.
+	 * Query items/products, across all pages.
 	 *
-	 * @param string $query SQL-like query.
+	 * @param string $where Optional WHERE clause without the keyword; quote values with qb_quote().
 	 * @return array|WP_Error Items or error.
 	 */
-	public static function query_items( $query = "SELECT * FROM Item" ) {
-		$response = self::api_request( 'GET', 'query?query=' . urlencode( $query ) );
-
-		if ( is_wp_error( $response ) ) {
-			return $response;
+	public static function query_items( $where = '' ) {
+		$items = self::query_all( 'Item', $where );
+		if ( is_wp_error( $items ) ) {
+			return $items;
 		}
-
-		$items = self::normalize_item_query_response( $response );
 		return self::exclude_category_items( $items );
 	}
 
