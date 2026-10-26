@@ -1470,4 +1470,30 @@ class Remember_QuickBooks_API {
 
 		return isset( $response['CompanyInfo'] ) ? $response['CompanyInfo'] : array();
 	}
+
+	/**
+	 * Whether an API error means the stored authorization is no longer usable (reconnect required),
+	 * as opposed to QuickBooks being temporarily unreachable.
+	 *
+	 * @param WP_Error $error Error from an API call.
+	 * @return bool
+	 */
+	public static function error_requires_reconnect( $error ) {
+		if ( ! is_wp_error( $error ) ) {
+			return false;
+		}
+		if ( in_array( $error->get_error_code(), array( 'no_token', 'no_refresh_token', 'no_company_id' ), true ) ) {
+			return true;
+		}
+		if ( 'qb_refresh_error' === $error->get_error_code() ) {
+			// OAuth errors (invalid_grant etc.) carry an "error" field; outages return no usable body.
+			$data = $error->get_error_data();
+			return is_array( $data ) && ! empty( $data['error'] );
+		}
+		if ( 'qb_api_error' === $error->get_error_code() ) {
+			$data = $error->get_error_data();
+			return is_array( $data ) && isset( $data['status'] ) && in_array( (int) $data['status'], array( 401, 403 ), true );
+		}
+		return false;
+	}
 }

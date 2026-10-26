@@ -1266,6 +1266,44 @@ class Remember_Admin {
 			exit;
 		}
 
+		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-logger.php';
+
+		$returned_realm = '';
+		if ( ! empty( $_GET['realmId'] ) ) {
+			$returned_realm = sanitize_text_field( wp_unslash( $_GET['realmId'] ) );
+		} elseif ( ! empty( $_GET['realmid'] ) ) {
+			$returned_realm = sanitize_text_field( wp_unslash( $_GET['realmid'] ) );
+		}
+
+		// Stored invoice and customer IDs are only meaningful in the company they were created in.
+		$linked_realm = isset( $settings['realm_id'] ) ? (string) $settings['realm_id'] : '';
+		if ( '' !== $linked_realm && '' !== $returned_realm && $linked_realm !== $returned_realm ) {
+			delete_transient( 'remember_qb_oauth_env_' . $uid );
+			Remember_Logger::warning(
+				'QuickBooks reconnect refused: a different company was authorized',
+				array(
+					'linked_realm_id'   => $linked_realm,
+					'returned_realm_id' => $returned_realm,
+					'user_id'           => $uid,
+				)
+			);
+			set_transient(
+				$notice,
+				array(
+					'type'    => 'error',
+					'message' => sprintf(
+						/* translators: 1: QuickBooks company ID that was just authorized, 2: QuickBooks company ID reMember is linked to */
+						__( 'You signed in to a different QuickBooks company (ID %1$s) from the one reMember is linked to (ID %2$s), so nothing was changed and the existing connection is still in use. Reconnect and choose the same company, or check that the Environment setting matches it. To move reMember to a different company on purpose, click Disconnect QuickBooks first, then Connect. Invoices and customers already linked will still point to the old company.', 'remember' ),
+						$returned_realm,
+						$linked_realm
+					),
+				),
+				120
+			);
+			wp_safe_redirect( $redirect );
+			exit;
+		}
+
 		$redirect_uri = Remember_QuickBooks_OAuth::get_redirect_uri();
 		$token_data   = Remember_QuickBooks_OAuth::exchange_code_for_token(
 			$code,
@@ -1287,14 +1325,7 @@ class Remember_Admin {
 			$expires_in = 3600;
 		}
 		$settings['expires_at'] = time() + $expires_in;
-
-		if ( ! empty( $_GET['realmId'] ) ) {
-			$settings['realm_id'] = sanitize_text_field( wp_unslash( $_GET['realmId'] ) );
-		} elseif ( ! empty( $_GET['realmid'] ) ) {
-			$settings['realm_id'] = sanitize_text_field( wp_unslash( $_GET['realmid'] ) );
-		} else {
-			$settings['realm_id'] = '';
-		}
+		$settings['realm_id']   = $returned_realm;
 
 		$pending_env = get_transient( 'remember_qb_oauth_env_' . $uid );
 		if ( $pending_env && in_array( $pending_env, array( 'sandbox', 'production' ), true ) ) {
@@ -1315,6 +1346,16 @@ class Remember_Admin {
 			array( 'processor_type' => 'quickbooks' ),
 			array( '%d' ),
 			array( '%s' )
+		);
+
+		Remember_Logger::info(
+			'QuickBooks connected',
+			array(
+				'realm_id'    => $settings['realm_id'],
+				'environment' => isset( $settings['environment'] ) ? $settings['environment'] : 'sandbox',
+				'reconnect'   => '' !== $linked_realm,
+				'user_id'     => $uid,
+			)
 		);
 
 		set_transient( $notice, array( 'type' => 'success', 'message' => __( 'QuickBooks connected successfully!', 'remember' ) ), 60 );

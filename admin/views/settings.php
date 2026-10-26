@@ -1396,13 +1396,21 @@ $im_platforms = Remember_Im_Platforms::get_all();
 			<?php
 			$qb_settings = Remember_QuickBooks_OAuth::get_settings();
 			$is_connected = $qb_settings && ! empty( $qb_settings['access_token'] ) && ! empty( $qb_settings['realm_id'] );
-			$company_info = array();
+			$company_info     = array();
+			$qb_status_error  = null;
+			$qb_needs_reauth  = false;
 			if ( $is_connected ) {
 				$company_info_result = Remember_QuickBooks_API::get_company_info();
-				if ( ! is_wp_error( $company_info_result ) ) {
+				if ( is_wp_error( $company_info_result ) ) {
+					$qb_status_error = $company_info_result;
+					$qb_needs_reauth = Remember_QuickBooks_API::error_requires_reconnect( $company_info_result );
+				} else {
 					$company_info = $company_info_result;
 				}
 			}
+			$qb_environment_label = ( isset( $qb_settings['environment'] ) && 'production' === $qb_settings['environment'] )
+				? __( 'Production', 'remember' )
+				: __( 'Sandbox', 'remember' );
 			?>
 			
 			<h2><?php esc_html_e( 'QuickBooks Online Integration', 'remember' ); ?></h2>
@@ -1411,19 +1419,48 @@ $im_platforms = Remember_Im_Platforms::get_all();
 			</p>
 			
 			<!-- Connection Status -->
-			<?php if ( $is_connected ) : ?>
+			<?php if ( $is_connected && $qb_status_error ) : ?>
+				<div style="padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; margin-bottom: 20px;">
+					<p style="margin: 0; color: #664d03;">
+						<strong>
+							<?php
+							if ( $qb_needs_reauth ) {
+								esc_html_e( 'Connection expired', 'remember' );
+							} else {
+								esc_html_e( 'QuickBooks could not be reached', 'remember' );
+							}
+							?>
+						</strong>
+					</p>
+					<p style="margin: 8px 0 0;">
+						<?php echo esc_html( wp_strip_all_tags( $qb_status_error->get_error_message() ) ); ?>
+						<?php
+						if ( $qb_needs_reauth ) {
+							esc_html_e( ' Use Reconnect QuickBooks below and choose the same company. You do not need to disconnect first.', 'remember' );
+						} else {
+							esc_html_e( ' The saved connection was kept. Reload this page to try again; reconnect only if this keeps happening.', 'remember' );
+						}
+						?>
+					</p>
+					<p style="margin: 5px 0 0; font-size: 13px;">
+						<?php esc_html_e( 'Company ID:', 'remember' ); ?>
+						<code><?php echo esc_html( $qb_settings['realm_id'] ); ?></code>
+						&middot; <?php echo esc_html( $qb_environment_label ); ?>
+					</p>
+				</div>
+			<?php elseif ( $is_connected ) : ?>
 				<div style="padding: 15px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; margin-bottom: 20px;">
 					<p style="margin: 0; color: #155724;">
 						<strong><?php esc_html_e( 'Connected', 'remember' ); ?></strong>
 						<?php if ( ! empty( $company_info['CompanyName'] ) ) : ?>
-							- <?php echo esc_html( $company_info['CompanyName'] ); ?>
+							&mdash; <?php echo esc_html( $company_info['CompanyName'] ); ?>
 						<?php endif; ?>
 					</p>
-					<?php if ( ! empty( $company_info['CompanyInfo']['CompanyName'] ) ) : ?>
-						<p style="margin: 5px 0 0 0; font-size: 13px;">
-							<?php esc_html_e( 'Company:', 'remember' ); ?> <?php echo esc_html( $company_info['CompanyInfo']['CompanyName'] ); ?>
-						</p>
-					<?php endif; ?>
+					<p style="margin: 5px 0 0; font-size: 13px;">
+						<?php esc_html_e( 'Company ID:', 'remember' ); ?>
+						<code><?php echo esc_html( $qb_settings['realm_id'] ); ?></code>
+						&middot; <?php echo esc_html( $qb_environment_label ); ?>
+					</p>
 				</div>
 			<?php else : ?>
 				<div style="padding: 15px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; margin-bottom: 20px;">
@@ -1508,21 +1545,35 @@ $im_platforms = Remember_Im_Platforms::get_all();
 			
 			<!-- Connect/Disconnect -->
 			<?php if ( ! empty( $qb_settings['client_id'] ) && ! empty( $qb_settings['client_secret'] ) ) : ?>
-				<?php if ( $is_connected ) : ?>
-					<form method="post" action="" style="margin-bottom: 30px;">
-						<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
-						<input type="hidden" name="remember_settings_action" value="disconnect_qb">
-						<?php submit_button( __( 'Disconnect QuickBooks', 'remember' ), 'secondary' ); ?>
-					</form>
-				<?php else : ?>
-					<form method="post" action="" class="remember-qb-connect-form" style="margin-bottom: 1em;">
+				<div style="margin-bottom: 30px;">
+					<form method="post" action="" class="remember-qb-connect-form" style="display: inline-block; margin: 0 8px 8px 0;">
 						<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 						<input type="hidden" name="remember_settings_action" value="start_qb_oauth" />
 						<input type="hidden" name="qb_environment_oauth" id="remember_qb_oauth_environment_field" value="<?php echo esc_attr( isset( $qb_settings['environment'] ) ? $qb_settings['environment'] : 'sandbox' ); ?>" />
-						<?php submit_button( __( 'Connect to QuickBooks', 'remember' ), 'primary large', 'submit', false ); ?>
+						<?php
+						submit_button(
+							$is_connected ? __( 'Reconnect QuickBooks', 'remember' ) : __( 'Connect to QuickBooks', 'remember' ),
+							$qb_needs_reauth || ! $is_connected ? 'primary large' : 'secondary',
+							'submit',
+							false
+						);
+						?>
 					</form>
-					<p class="description">
-						<?php esc_html_e( 'Uses the Environment selected above (Sandbox or Production). Authorize the matching company type in Intuit—sandbox tokens only work with the sandbox API host.', 'remember' ); ?>
+					<?php if ( $is_connected ) : ?>
+						<form method="post" action="" style="display: inline-block; margin: 0 0 8px;">
+							<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
+							<input type="hidden" name="remember_settings_action" value="disconnect_qb">
+							<?php submit_button( __( 'Disconnect QuickBooks', 'remember' ), 'secondary', 'submit', false ); ?>
+						</form>
+					<?php endif; ?>
+					<p class="description" style="margin-top: 8px;">
+						<?php
+						if ( $is_connected ) {
+							esc_html_e( 'Reconnect signs in to QuickBooks again and replaces the stored tokens; choose the same company, or the reconnect is refused. Disconnect clears the connection and saved credentials entirely.', 'remember' );
+						} else {
+							esc_html_e( 'Uses the Environment selected above (Sandbox or Production). Authorize the matching company type in Intuit—sandbox tokens only work with the sandbox API host.', 'remember' );
+						}
+						?>
 					</p>
 					<script>
 					(function() {
@@ -1534,7 +1585,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						}
 					})();
 					</script>
-				<?php endif; ?>
+				</div>
 			<?php endif; ?>
 			
 			<!-- Sync Settings -->
