@@ -115,13 +115,13 @@ if ( isset( $_POST['remember_settings_action'] ) && 'sync_xero_payments' === $_P
 // Handle QuickBooks disconnect
 if ( isset( $_POST['remember_settings_action'] ) && 'disconnect_qb' === $_POST['remember_settings_action'] && check_admin_referer( 'remember_settings_action', 'remember_settings_nonce' ) ) {
 	$settings = Remember_QuickBooks_OAuth::get_settings();
-	if ( $settings && ! empty( $settings['access_token'] ) ) {
-		Remember_QuickBooks_OAuth::revoke_token(
-			$settings['access_token'],
-			$settings['client_id'],
-			$settings['client_secret']
-		);
+	if ( $settings && ! empty( $settings['client_id'] ) && ! empty( $settings['client_secret'] ) ) {
+		$revoke = ! empty( $settings['refresh_token'] ) ? $settings['refresh_token'] : ( ! empty( $settings['access_token'] ) ? $settings['access_token'] : '' );
+		if ( '' !== $revoke ) {
+			Remember_QuickBooks_OAuth::revoke_token( $revoke, $settings['client_id'], $settings['client_secret'] );
+		}
 	}
+	Remember_Logger::info( 'QuickBooks disconnected', array( 'user_id' => get_current_user_id() ) );
 	
 	// Clear settings
 	Remember_QuickBooks_OAuth::save_settings( array() );

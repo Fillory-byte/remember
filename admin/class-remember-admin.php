@@ -1219,15 +1219,13 @@ class Remember_Admin {
 				exit;
 			}
 
-			$env = isset( $_POST['qb_environment_oauth'] ) ? sanitize_text_field( wp_unslash( $_POST['qb_environment_oauth'] ) ) : 'sandbox';
-			if ( ! in_array( $env, array( 'sandbox', 'production' ), true ) ) {
-				$env = 'sandbox';
-			}
-			set_transient( 'remember_qb_oauth_env_' . get_current_user_id(), $env, 30 * MINUTE_IN_SECONDS );
+			$env     = isset( $_POST['qb_environment_oauth'] ) ? sanitize_text_field( wp_unslash( $_POST['qb_environment_oauth'] ) ) : 'sandbox';
+			$pending = Remember_QuickBooks_OAuth::create_pending_oauth( $env );
 
 			$auth_url = Remember_QuickBooks_OAuth::get_authorization_url(
 				$qb['client_id'],
-				Remember_QuickBooks_OAuth::get_redirect_uri()
+				Remember_QuickBooks_OAuth::get_redirect_uri(),
+				$pending['state']
 			);
 			wp_redirect( $auth_url ); // phpcs:ignore WordPress.Security.SafeRedirect.wp_redirect_wp_redirect -- External Intuit URL.
 			exit;
@@ -1237,7 +1235,7 @@ class Remember_Admin {
 		if ( ! isset( $_GET['page'] ) || 'remember-settings' !== $_GET['page'] ) {
 			return;
 		}
-		if ( ! isset( $_GET['qb_oauth_callback'], $_GET['code'] ) ) {
+		if ( ! isset( $_GET['qb_oauth_callback'] ) || ( ! isset( $_GET['code'] ) && ! isset( $_GET['error'] ) ) ) {
 			return;
 		}
 		if ( ! current_user_can( 'remember_access_settings' ) ) {
@@ -1245,28 +1243,67 @@ class Remember_Admin {
 		}
 
 		require_once plugin_dir_path( __FILE__ ) . '../includes/integrations/class-remember-quickbooks-oauth.php';
+		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-logger.php';
 
-		$code  = sanitize_text_field( wp_unslash( $_GET['code'] ) );
-		$state = isset( $_GET['state'] ) ? sanitize_text_field( wp_unslash( $_GET['state'] ) ) : '';
-
-		$uid     = get_current_user_id();
-		$notice  = 'remember_qb_oauth_notice_' . $uid;
+		$uid      = get_current_user_id();
+		$notice   = 'remember_qb_oauth_notice_' . $uid;
 		$redirect = admin_url( 'admin.php?page=remember-settings#quickbooks' );
 
-		if ( ! wp_verify_nonce( $state, 'remember_qb_oauth' ) ) {
-			set_transient( $notice, array( 'type' => 'error', 'message' => __( 'Invalid OAuth state. Please try again.', 'remember' ) ), 60 );
-			wp_safe_redirect( $redirect );
-			exit;
+		if ( ! empty( $_GET['error'] ) ) {
+			$error       = sanitize_text_field( wp_unslash( $_GET['error'] ) );
+			$description = isset( $_GET['error_description'] ) ? sanitize_text_field( wp_unslash( $_GET['error_description'] ) ) : '';
+			$this->finish_qb_oauth_error(
+				'access_denied' === $error
+					? __( 'QuickBooks sign-in was cancelled or access was not granted. Nothing was changed.', 'remember' )
+					: sprintf(
+						/* translators: %s: error reported by Intuit */
+						__( 'QuickBooks sign-in failed: %s. Nothing was changed.', 'remember' ),
+						'' !== $description ? $description : $error
+					),
+				$redirect,
+				'QuickBooks sign-in returned an error',
+				array(
+					'error'   => $error,
+					'user_id' => $uid,
+				)
+			);
+		}
+
+		$code    = isset( $_GET['code'] ) ? sanitize_text_field( wp_unslash( $_GET['code'] ) ) : '';
+		$state   = isset( $_GET['state'] ) ? sanitize_text_field( wp_unslash( $_GET['state'] ) ) : '';
+		$pending = Remember_QuickBooks_OAuth::get_pending_oauth();
+
+		if ( ! $pending || '' === $state || ! hash_equals( (string) $pending['state'], $state ) ) {
+			$this->finish_qb_oauth_error(
+				__( 'This QuickBooks sign-in could not be verified. It may have expired, been started in another tab, or been reloaded. Nothing was changed; click Connect or Reconnect QuickBooks again.', 'remember' ),
+				$redirect,
+				'QuickBooks sign-in state did not match',
+				array(
+					'has_pending' => (bool) $pending,
+					'user_id'     => $uid,
+				)
+			);
+		}
+
+		// The state is single-use: consume it before any further work.
+		Remember_QuickBooks_OAuth::clear_pending_oauth();
+
+		if ( '' === $code ) {
+			$this->finish_qb_oauth_error(
+				__( 'QuickBooks did not return an authorization code. Nothing was changed; please try again.', 'remember' ),
+				$redirect,
+				'QuickBooks sign-in returned no authorization code',
+				array( 'user_id' => $uid )
+			);
 		}
 
 		$settings = Remember_QuickBooks_OAuth::get_settings();
 		if ( ! $settings || empty( $settings['client_id'] ) || empty( $settings['client_secret'] ) ) {
-			set_transient( $notice, array( 'type' => 'error', 'message' => __( 'QuickBooks credentials not configured. Please enter Client ID and Client Secret first.', 'remember' ) ), 60 );
-			wp_safe_redirect( $redirect );
-			exit;
+			$this->finish_qb_oauth_error(
+				__( 'QuickBooks credentials not configured. Please enter Client ID and Client Secret first.', 'remember' ),
+				$redirect
+			);
 		}
-
-		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-logger.php';
 
 		$returned_realm = '';
 		if ( ! empty( $_GET['realmId'] ) ) {
@@ -1275,11 +1312,26 @@ class Remember_Admin {
 			$returned_realm = sanitize_text_field( wp_unslash( $_GET['realmid'] ) );
 		}
 
+		if ( '' === $returned_realm ) {
+			$this->finish_qb_oauth_error(
+				__( 'QuickBooks did not say which company was authorized, so nothing was changed. Please try again.', 'remember' ),
+				$redirect,
+				'QuickBooks sign-in returned no company ID',
+				array( 'user_id' => $uid )
+			);
+		}
+
 		// Stored invoice and customer IDs are only meaningful in the company they were created in.
 		$linked_realm = isset( $settings['realm_id'] ) ? (string) $settings['realm_id'] : '';
-		if ( '' !== $linked_realm && '' !== $returned_realm && $linked_realm !== $returned_realm ) {
-			delete_transient( 'remember_qb_oauth_env_' . $uid );
-			Remember_Logger::warning(
+		if ( '' !== $linked_realm && $linked_realm !== $returned_realm ) {
+			$this->finish_qb_oauth_error(
+				sprintf(
+					/* translators: 1: QuickBooks company ID that was just authorized, 2: QuickBooks company ID reMember is linked to */
+					__( 'You signed in to a different QuickBooks company (ID %1$s) from the one reMember is linked to (ID %2$s), so nothing was changed and the existing connection is still in use. Reconnect and choose the same company, or check that the Environment setting matches it. To move reMember to a different company on purpose, click Disconnect QuickBooks first, then Connect. Invoices and customers already linked will still point to the old company.', 'remember' ),
+					$returned_realm,
+					$linked_realm
+				),
+				$redirect,
 				'QuickBooks reconnect refused: a different company was authorized',
 				array(
 					'linked_realm_id'   => $linked_realm,
@@ -1287,56 +1339,32 @@ class Remember_Admin {
 					'user_id'           => $uid,
 				)
 			);
-			set_transient(
-				$notice,
-				array(
-					'type'    => 'error',
-					'message' => sprintf(
-						/* translators: 1: QuickBooks company ID that was just authorized, 2: QuickBooks company ID reMember is linked to */
-						__( 'You signed in to a different QuickBooks company (ID %1$s) from the one reMember is linked to (ID %2$s), so nothing was changed and the existing connection is still in use. Reconnect and choose the same company, or check that the Environment setting matches it. To move reMember to a different company on purpose, click Disconnect QuickBooks first, then Connect. Invoices and customers already linked will still point to the old company.', 'remember' ),
-						$returned_realm,
-						$linked_realm
-					),
-				),
-				120
-			);
-			wp_safe_redirect( $redirect );
-			exit;
 		}
 
-		$redirect_uri = Remember_QuickBooks_OAuth::get_redirect_uri();
-		$token_data   = Remember_QuickBooks_OAuth::exchange_code_for_token(
+		$token_data = Remember_QuickBooks_OAuth::exchange_code_for_token(
 			$code,
 			$settings['client_id'],
 			$settings['client_secret'],
-			$redirect_uri
+			Remember_QuickBooks_OAuth::get_redirect_uri()
 		);
 
 		if ( is_wp_error( $token_data ) ) {
-			set_transient( $notice, array( 'type' => 'error', 'message' => wp_strip_all_tags( $token_data->get_error_message() ) ), 60 );
-			wp_safe_redirect( $redirect );
-			exit;
+			$this->finish_qb_oauth_error( wp_strip_all_tags( $token_data->get_error_message() ), $redirect );
 		}
 
-		$settings['access_token']  = isset( $token_data['access_token'] ) ? $token_data['access_token'] : '';
-		$settings['refresh_token'] = isset( $token_data['refresh_token'] ) ? $token_data['refresh_token'] : '';
+		$settings['access_token']  = $token_data['access_token'];
+		$settings['refresh_token'] = $token_data['refresh_token'];
 		$expires_in                = isset( $token_data['expires_in'] ) ? (int) $token_data['expires_in'] : 3600;
 		if ( $expires_in < 60 ) {
 			$expires_in = 3600;
 		}
-		$settings['expires_at'] = time() + $expires_in;
-		$settings['realm_id']   = $returned_realm;
-
-		$pending_env = get_transient( 'remember_qb_oauth_env_' . $uid );
-		if ( $pending_env && in_array( $pending_env, array( 'sandbox', 'production' ), true ) ) {
-			$settings['environment'] = $pending_env;
-		}
-		delete_transient( 'remember_qb_oauth_env_' . $uid );
+		$settings['expires_at']  = time() + $expires_in;
+		$settings['realm_id']    = $returned_realm;
+		$settings['environment'] = $pending['environment'];
 
 		if ( ! Remember_QuickBooks_OAuth::save_settings( $settings ) ) {
-			set_transient( $notice, array( 'type' => 'error', 'message' => __( 'Failed to save QuickBooks connection.', 'remember' ) ), 60 );
-			wp_safe_redirect( $redirect );
-			exit;
+			Remember_Logger::error( 'QuickBooks connection could not be saved', array( 'realm_id' => $returned_realm ) );
+			$this->finish_qb_oauth_error( __( 'Failed to save QuickBooks connection.', 'remember' ), $redirect );
 		}
 
 		global $wpdb;
@@ -1547,6 +1575,31 @@ class Remember_Admin {
 	private function finish_xero_oauth_error( $message, $redirect ) {
 		Remember_Xero_OAuth::set_last_oauth_result( 'error', $message );
 		Remember_Xero_OAuth::clear_pending_oauth();
+		wp_safe_redirect( $redirect );
+		exit;
+	}
+
+	/**
+	 * End a QuickBooks sign-in attempt with an error notice for the settings tab.
+	 *
+	 * @param string $message     Message shown to the admin.
+	 * @param string $redirect    Settings URL to return to.
+	 * @param string $log_message Warning to log, or '' when the caller already logged the failure.
+	 * @param array  $context     Log context.
+	 */
+	private function finish_qb_oauth_error( $message, $redirect, $log_message = '', $context = array() ) {
+		if ( '' !== $log_message ) {
+			Remember_Logger::warning( $log_message, $context );
+		}
+		Remember_QuickBooks_OAuth::clear_pending_oauth();
+		set_transient(
+			'remember_qb_oauth_notice_' . get_current_user_id(),
+			array(
+				'type'    => 'error',
+				'message' => $message,
+			),
+			2 * MINUTE_IN_SECONDS
+		);
 		wp_safe_redirect( $redirect );
 		exit;
 	}
