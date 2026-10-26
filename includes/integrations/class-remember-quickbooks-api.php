@@ -30,11 +30,12 @@ class Remember_QuickBooks_API {
 	const QB_API_BASE = 'https://sandbox-quickbooks.api.intuit.com/v3/company/';
 
 	/**
-	 * Minor version for v3 API requests (Intuit recommends always sending this).
+	 * Minor version for v3 API requests. Since August 2025 Intuit ignores values below 75 and
+	 * answers them as 75, so this is the effective floor.
 	 *
-	 * @link https://developer.intuit.com/app/developer/qbo/docs/learn/rest-api-features#minor-versions
+	 * @link https://developer.intuit.com/app/developer/qbo/docs/learn/explore-the-quickbooks-online-api/minor-versions
 	 */
-	const QB_MINOR_VERSION = 73;
+	const QB_MINOR_VERSION = 75;
 
 	/**
 	 * Get API base URL (sandbox or production).
