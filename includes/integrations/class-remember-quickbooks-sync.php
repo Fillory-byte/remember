@@ -364,7 +364,7 @@ class Remember_QuickBooks_Sync {
 			if ( ! is_wp_error( $product_id ) ) {
 				$line_items[] = array(
 					'product_id'  => $product_id,
-					'quantity'    => intval( $item->quantity ),
+					'quantity'    => max( 1, intval( $item->quantity ) ),
 					'amount'      => floatval( $item->total_cost ),
 					'description' => $item->merchandise_name,
 				);
@@ -384,6 +384,13 @@ class Remember_QuickBooks_Sync {
 		$invoice_data = array(
 			'customer_id' => $qb_customer_id,
 			'line_items'  => $line_items,
+			'memo'        => sprintf(
+				/* translators: 1: event name, 2: application ID */
+				__( '%1$s - Application #%2$d', 'remember' ),
+				$event && ! empty( $event->event_name ) ? $event->event_name : __( 'Event', 'remember' ),
+				absint( $application_id )
+			),
+			'bill_email'  => isset( $sync_result['PrimaryEmailAddr']['Address'] ) ? (string) $sync_result['PrimaryEmailAddr']['Address'] : '',
 		);
 
 		$invoice_result = Remember_QuickBooks_API::create_invoice( $invoice_data );
@@ -433,6 +440,20 @@ class Remember_QuickBooks_Sync {
 			'invoice_id'        => $invoice_result['Id'],
 			'qb_customer_id'    => $qb_customer_id,
 		) );
+
+		$payment_row = $payment_model->get_by_application( $application_id );
+		if ( $payment_row && ! empty( $payment_row->quickbooks_invoice_id ) ) {
+			$synced = self::sync_payment_status( $payment_row->payment_id );
+			if ( is_wp_error( $synced ) ) {
+				Remember_Logger::warning(
+					'QuickBooks invoice created but the follow-up payment sync failed',
+					array(
+						'application_id' => $application_id,
+						'error'          => $synced->get_error_message(),
+					)
+				);
+			}
+		}
 
 		return $invoice_result;
 	}

@@ -487,21 +487,41 @@ class Remember_QuickBooks_API {
 			'Line' => array(),
 		);
 
-		// Add line items
+		if ( ! empty( $invoice_data['memo'] ) ) {
+			$data['CustomerMemo'] = array( 'value' => substr( (string) $invoice_data['memo'], 0, 1000 ) );
+		}
+		// QBO does not copy the customer's email onto API-created invoices; its reminders need one.
+		if ( ! empty( $invoice_data['bill_email'] ) && is_email( $invoice_data['bill_email'] ) ) {
+			$data['BillEmail'] = array( 'Address' => (string) $invoice_data['bill_email'] );
+		}
+
 		foreach ( $invoice_data['line_items'] as $item ) {
+			$amount      = round( floatval( $item['amount'] ), 2 );
+			$qty         = max( 1, intval( $item['quantity'] ?? 1 ) );
+			$description = ! empty( $item['description'] ) ? (string) $item['description'] : '';
+
+			// QBO rejects a line whose Amount is not Qty x UnitPrice, so fall back to one unit at the total.
+			$unit_price = round( $amount / $qty, 2 );
+			if ( abs( $unit_price * $qty - $amount ) > 0.001 ) {
+				$description = trim( sprintf( '%d x %s', $qty, $description ) );
+				$qty         = 1;
+				$unit_price  = $amount;
+			}
+
 			$line_item = array(
-				'Amount'      => $item['amount'],
-				'DetailType'  => 'SalesItemLineDetail',
+				'Amount'              => $amount,
+				'DetailType'          => 'SalesItemLineDetail',
 				'SalesItemLineDetail' => array(
-					'ItemRef' => array(
+					'ItemRef'   => array(
 						'value' => $item['product_id'],
 					),
-					'Qty'     => $item['quantity'],
+					'Qty'       => $qty,
+					'UnitPrice' => $unit_price,
 				),
 			);
 
-			if ( ! empty( $item['description'] ) ) {
-				$line_item['Description'] = $item['description'];
+			if ( '' !== $description ) {
+				$line_item['Description'] = $description;
 			}
 
 			$data['Line'][] = $line_item;
