@@ -2260,6 +2260,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 			$log_file_exists        = file_exists( $log_file_path );
 			$log_file_size          = $log_file_exists ? size_format( filesize( $log_file_path ) ) : '0 B';
 			$wp_debug_log_enabled   = defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG;
+			$wp_debug_log_path      = $wp_debug_log_enabled ? Remember_Logger::get_wp_debug_log_path() : '';
 			$public_debug_log       = WP_CONTENT_DIR . '/debug.log';
 			$public_debug_log_exists = file_exists( $public_debug_log );
 			?>
@@ -2278,7 +2279,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 							<option value="DEBUG" <?php selected( $current_log_level, 'DEBUG' ); ?>><?php esc_html_e( 'Debug (all messages)', 'remember' ); ?></option>
 						</select>
 						<p class="description">
-							<?php esc_html_e( 'Select the minimum log level to record. Lower levels include higher levels (e.g., WARNING includes ERROR).', 'remember' ); ?>
+							<?php esc_html_e( 'Select the minimum log level to record. Lower levels include higher levels (e.g., WARNING includes ERROR). Debug also records activation timing and sync diagnostics. reMember keeps its own log and does not need WP_DEBUG_LOG.', 'remember' ); ?>
 						</p>
 					</td>
 				</tr>
@@ -2286,7 +2287,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 					<th scope="row"><?php esc_html_e( 'Log File Information', 'remember' ); ?></th>
 					<td>
 						<p>
-							<strong><?php esc_html_e( 'Log File Path:', 'remember' ); ?></strong><br>
+							<strong><?php esc_html_e( 'reMember Log File:', 'remember' ); ?></strong><br>
 							<code><?php echo esc_html( $log_file_path ); ?></code>
 						</p>
 						<p>
@@ -2297,10 +2298,13 @@ $im_platforms = Remember_Im_Platforms::get_all();
 								<span style="color: orange;"><?php esc_html_e( 'File does not exist yet', 'remember' ); ?></span>
 							<?php endif; ?>
 						</p>
-						<?php if ( ! $wp_debug_log_enabled ) : ?>
-							<p style="color: red;">
-								<strong><?php esc_html_e( 'Warning:', 'remember' ); ?></strong> 
-								<?php esc_html_e( 'WP_DEBUG_LOG is not enabled in wp-config.php. Logging will not work until this is enabled.', 'remember' ); ?>
+						<p class="description">
+							<?php esc_html_e( 'When the file reaches 5 MB it is renamed to remember.log.1, replacing the older copy, and a new file is started.', 'remember' ); ?>
+						</p>
+						<?php if ( $wp_debug_log_enabled ) : ?>
+							<p>
+								<strong><?php esc_html_e( 'WordPress Debug Log (PHP errors):', 'remember' ); ?></strong><br>
+								<code><?php echo esc_html( $wp_debug_log_path ); ?></code>
 							</p>
 						<?php endif; ?>
 						<?php if ( $public_debug_log_exists ) : ?>
@@ -2309,7 +2313,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 							</p>
 						<?php endif; ?>
 						<p class="description">
-							<?php esc_html_e( 'Logging still requires WP_DEBUG_LOG in wp-config.php. On nginx, also deny HTTP access to debug.log if you keep a copy under wp-content.', 'remember' ); ?>
+							<?php esc_html_e( 'WP_DEBUG_LOG in wp-config.php only controls the WordPress debug log. On nginx, also deny HTTP access to debug.log if you keep a copy under wp-content.', 'remember' ); ?>
 						</p>
 					</td>
 				</tr>
