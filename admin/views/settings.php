@@ -328,6 +328,11 @@ if ( isset( $_POST['remember_settings_action'] ) && check_admin_referer( 'rememb
 			$options['vetting_workflow'] = sanitize_text_field( $_POST['vetting_workflow'] );
 		}
 
+		if ( isset( $_POST['vetting_assignment'] ) ) {
+			$assignment = sanitize_key( wp_unslash( $_POST['vetting_assignment'] ) );
+			$options['vetting_assignment'] = in_array( $assignment, array( 'rotate', 'least_busy' ), true ) ? $assignment : 'team';
+		}
+
 		if ( isset( $_POST['vetting_notify_targets'] ) ) {
 			$targets = sanitize_text_field( wp_unslash( $_POST['vetting_notify_targets'] ) );
 			$options['vetting_notify_targets'] = ( 'assigned' === $targets ) ? 'assigned' : 'team';
@@ -780,7 +785,32 @@ $im_platforms = Remember_Im_Platforms::get_all();
 							</option>
 						</select>
 						<p class="description">
-							<?php esc_html_e( 'When should vetting be triggered? "On Member Join" creates a vetting case immediately when a member is created. "On First Event Application" delays vetting until the member applies for their first event.', 'remember' ); ?>
+							<?php esc_html_e( 'When should vetting be triggered? "On Member Join" creates a vetting case immediately when a member is created. "On First Event Application" lets members who are not vetted yet apply for events, and opens their vetting case with their first application. Staff can accept the application once vetting is complete.', 'remember' ); ?>
+						</p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">
+						<label for="vetting_assignment"><?php esc_html_e( 'Automatic case assignment', 'remember' ); ?></label>
+					</th>
+					<td>
+						<select id="vetting_assignment" name="vetting_assignment" class="regular-text">
+							<?php
+							require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-vetting-workflow.php';
+							$vetting_assignment = Remember_Vetting_Workflow::get_assignment_mode();
+							?>
+							<option value="team" <?php selected( $vetting_assignment, 'team' ); ?>>
+								<?php esc_html_e( 'Leave unassigned and email the vetting team', 'remember' ); ?>
+							</option>
+							<option value="rotate" <?php selected( $vetting_assignment, 'rotate' ); ?>>
+								<?php esc_html_e( 'Rotate through the vetting team', 'remember' ); ?>
+							</option>
+							<option value="least_busy" <?php selected( $vetting_assignment, 'least_busy' ); ?>>
+								<?php esc_html_e( 'Assign to the least busy vetter', 'remember' ); ?>
+							</option>
+						</select>
+						<p class="description">
+							<?php esc_html_e( 'Who gets a vetting case that opens automatically. The vetting team is everyone with the Vetting role. Unassigned cases email the whole team that a case is waiting, so anyone can assign a primary vetter. Rotation makes each new case go to the next team member in turn as primary vetter. Least busy gives the case to the team member who is primary vetter on the fewest cases that are not completed; a tie goes to whoever is next in the rotation. Assigned vetters get the Vetting Assigned email.', 'remember' ); ?>
 						</p>
 					</td>
 				</tr>

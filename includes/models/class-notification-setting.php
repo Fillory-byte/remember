@@ -104,6 +104,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 		$labels = array(
 			'application_received'          => __( 'Application Received', 'remember' ),
 			'vetting_assigned'              => __( 'Vetting Assigned', 'remember' ),
+			'vetting_case_waiting'          => __( 'Vetting Case Waiting', 'remember' ),
 			'vetting_scheduled'             => __( 'Vetting Scheduled', 'remember' ),
 			'vetting_completed'             => __( 'Vetting Completed', 'remember' ),
 			'member_vetted'                 => __( 'Member Vetted', 'remember' ),
@@ -139,6 +140,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 		$descriptions = array(
 			'application_received'          => __( 'Sent when a new application is received.', 'remember' ),
 			'vetting_assigned'              => __( 'Sent when a vetter is assigned to a vetting case.', 'remember' ),
+			'vetting_case_waiting'          => __( 'Sent to everyone with the Vetting role when a vetting case opens automatically with no primary vetter.', 'remember' ),
 			'vetting_scheduled'             => __( 'Sent when a vetting case is scheduled.', 'remember' ),
 			'vetting_completed'             => __( 'Sent when a vetting case is completed.', 'remember' ),
 			'member_vetted'                 => __( 'Sent to the member when their vetting case is accepted.', 'remember' ),
@@ -173,6 +175,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 	public static function get_type_category( $type ) {
 		$vetting = array(
 			'vetting_assigned',
+			'vetting_case_waiting',
 			'vetting_scheduled',
 			'vetting_completed',
 			'vetting_collaborator_invited',
@@ -217,6 +220,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 		$templates = array(
 			'application_received'          => __( 'New Application Received - {member_name}', 'remember' ),
 			'vetting_assigned'              => __( 'Vetting Case Assigned - {member_name}', 'remember' ),
+			'vetting_case_waiting'          => __( 'New Vetting Case Waiting - {member_name}', 'remember' ),
 			'vetting_scheduled'             => __( 'Vetting Case Scheduled - {member_name}', 'remember' ),
 			'vetting_completed'             => __( 'Vetting Case Completed - {member_name}', 'remember' ),
 			'member_vetted'                 => __( 'Welcome! You\'ve Been Vetted - {member_name}', 'remember' ),
@@ -268,6 +272,8 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'application_received' => __( "Hello,\n\nA new application has been received from {member_name}.\n\nApplication ID: {application_id}\nEvent: {event_name}\nDate: {date}\n\nPlease review the application in the admin panel.", 'remember' ),
 			
 			'vetting_assigned' => __( "Hello,\n\nYou have been assigned as the primary vetter for a vetting case.\n\nMember: {member_name}\nVetting Case ID: {vetting_id}\nDate: {date}\n\nPlease review the case and begin the vetting process.", 'remember' ),
+
+			'vetting_case_waiting' => __( "Hello,\n\nA new vetting case is waiting for a vetter.\n\nMember: {member_name}\nVetting Case ID: {vetting_id}\nDate: {date}\n\nOpen the case and assign a primary vetter:\n{vetting_url}", 'remember' ),
 			
 			'vetting_scheduled' => __( "Hello,\n\nThe vetting case for {member_name} has been scheduled.\n\nVetting Case ID: {vetting_id}\nScheduled Date: {date}\n\nPlease prepare for the scheduled vetting session.", 'remember' ),
 			

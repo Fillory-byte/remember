@@ -209,17 +209,8 @@ class Remember_Notifications {
 	 * @return string[]
 	 */
 	public static function vetting_team_emails() {
-		global $wpdb;
-		$ids = $wpdb->get_col(
-			$wpdb->prepare(
-				"SELECT DISTINCT mr.member_id
-				FROM {$wpdb->prefix}remember_member_roles mr
-				INNER JOIN {$wpdb->prefix}remember_roles r ON r.role_id = mr.role_id
-				WHERE r.role_name = %s",
-				'Vetting'
-			)
-		);
-		return self::emails_for_user_ids( $ids );
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-vetting-workflow.php';
+		return self::emails_for_user_ids( Remember_Vetting_Workflow::vetting_team_ids() );
 	}
 
 	/**
@@ -277,13 +268,16 @@ class Remember_Notifications {
 	/**
 	 * Email staff about a vetting case, using the recipient setting.
 	 *
-	 * @param string $type       vetting_assigned, vetting_scheduled, vetting_completed, or vetting_collaborator_invited.
+	 * A waiting case has nobody assigned, so it always goes to the whole vetting team.
+	 *
+	 * @param string $type       vetting_assigned, vetting_case_waiting, vetting_scheduled, vetting_completed, or vetting_collaborator_invited.
 	 * @param int    $vetting_id Vetting case ID.
 	 * @return void
 	 */
 	public static function notify_vetting_staff( $type, $vetting_id ) {
 		$allowed = array(
 			'vetting_assigned',
+			'vetting_case_waiting',
 			'vetting_scheduled',
 			'vetting_completed',
 			'vetting_collaborator_invited',
@@ -299,7 +293,7 @@ class Remember_Notifications {
 			return;
 		}
 
-		$emails = self::vetting_case_recipient_emails( $vetting_id );
+		$emails = 'vetting_case_waiting' === $type ? self::vetting_team_emails() : self::vetting_case_recipient_emails( $vetting_id );
 		if ( empty( $emails ) ) {
 			require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
 			Remember_Logger::warning(
