@@ -569,25 +569,19 @@ class Remember_QuickBooks_API {
 	/**
 	 * Whether a QuickBooks invoice entity has been voided.
 	 *
-	 * Voided invoices still GET successfully; TotalAmt is zeroed and PrivateNote often says "Voided".
+	 * Voided invoices still GET successfully. QBO has no status field for this: voiding zeroes the
+	 * amounts and puts "Voided" at the start of PrivateNote, which is the only thing that tells a
+	 * void apart from an invoice edited down to $0.
 	 *
-	 * @param array      $invoice     Invoice payload.
-	 * @param float|null $local_total Local invoice total; used when TotalAmt is 0 after a void.
+	 * @param array $invoice Invoice payload.
 	 * @return bool
 	 */
-	public static function is_invoice_voided( $invoice, $local_total = null ) {
+	public static function is_invoice_voided( $invoice ) {
 		if ( ! is_array( $invoice ) ) {
 			return false;
 		}
-		$note = isset( $invoice['PrivateNote'] ) ? strtolower( (string) $invoice['PrivateNote'] ) : '';
-		if ( false !== strpos( $note, 'voided' ) ) {
-			return true;
-		}
-		$total = floatval( $invoice['TotalAmt'] ?? 0 );
-		if ( $total <= 0.001 && null !== $local_total && floatval( $local_total ) > 0.001 ) {
-			return true;
-		}
-		return false;
+		$note = isset( $invoice['PrivateNote'] ) ? ltrim( (string) $invoice['PrivateNote'] ) : '';
+		return 0 === stripos( $note, 'voided' );
 	}
 
 	/**

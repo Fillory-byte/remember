@@ -251,7 +251,7 @@ class Remember_Billing_Unwind {
 			return $invoice;
 		}
 
-		if ( Remember_QuickBooks_API::is_invoice_voided( $invoice, $payment->total_amount ) ) {
+		if ( Remember_QuickBooks_API::is_invoice_voided( $invoice ) ) {
 			self::mark_cancelled( $payment, 'quickbooks', $billing_action, $reason );
 			return true;
 		}

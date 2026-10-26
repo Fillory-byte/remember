@@ -284,7 +284,7 @@ class Remember_QuickBooks_Sync {
 			$existing_invoice = Remember_QuickBooks_API::get_invoice( $payment->quickbooks_invoice_id );
 			$remote_gone      = is_wp_error( $existing_invoice )
 				? self::is_qb_object_missing_error( $existing_invoice )
-				: Remember_QuickBooks_API::is_invoice_voided( $existing_invoice, $payment->total_amount );
+				: Remember_QuickBooks_API::is_invoice_voided( $existing_invoice );
 
 			if ( $remote_gone ) {
 				Remember_Logger::info(
@@ -490,7 +490,7 @@ class Remember_QuickBooks_Sync {
 			return $invoice;
 		}
 
-		if ( Remember_QuickBooks_API::is_invoice_voided( $invoice, $payment->total_amount ) ) {
+		if ( Remember_QuickBooks_API::is_invoice_voided( $invoice ) ) {
 			Remember_Logger::info(
 				'QuickBooks invoice is voided; marking local invoice cancelled',
 				array(
@@ -556,13 +556,9 @@ class Remember_QuickBooks_Sync {
 			$total_refunded += floatval( $rrow['amount'] ?? 0 );
 		}
 
-		$inv_total   = floatval( $invoice['TotalAmt'] ?? 0 );
 		$inv_balance = floatval( $invoice['Balance'] ?? 0 );
-		if ( $inv_total > 0.001 ) {
-			$total_amt = $inv_total;
-		} else {
-			$total_amt = floatval( $payment->total_amount );
-		}
+		// Voids returned earlier, so a $0 total here is a real $0 invoice (e.g. comped), not a void.
+		$total_amt = isset( $invoice['TotalAmt'] ) ? floatval( $invoice['TotalAmt'] ) : floatval( $payment->total_amount );
 
 		$credit_memo_total = 0;
 		foreach ( $refund_lines as $rrow ) {
