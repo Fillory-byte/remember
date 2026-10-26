@@ -51,7 +51,6 @@ class Remember_QuickBooks_Sync {
 			return new WP_Error( 'user_not_found', __( 'WordPress user not found.', 'remember' ) );
 		}
 
-		// Get member profile
 		global $wpdb;
 		$profile = $wpdb->get_row(
 			$wpdb->prepare(
@@ -60,23 +59,47 @@ class Remember_QuickBooks_Sync {
 			)
 		);
 
-		$first_name = ! empty( $profile->legal_first_name ) ? $profile->legal_first_name : $user->first_name;
-		$last_name  = ! empty( $profile->legal_last_name ) ? $profile->legal_last_name : $user->last_name;
-		$full_name  = trim( $first_name . ' ' . $last_name );
+		// Legal name is the accounting identity (not stage/display name).
+		require_once plugin_dir_path( __FILE__ ) . '../utilities/class-remember-import-export.php';
+		$legal_parts = Remember_Import_Export::member_resolve_legal_name_parts( $profile, $member_id );
+		$first_name  = trim( (string) $legal_parts[0] );
+		$last_name   = trim( (string) $legal_parts[1] );
+		$full_name   = trim( $first_name . ' ' . $last_name );
 		if ( '' === $full_name ) {
-			$full_name = $user->display_name;
+			// Last resort only — never use nickname/display name for the customer.
+			$full_name = sprintf(
+				/* translators: %d: WordPress user ID */
+				__( 'Member #%d', 'remember' ),
+				absint( $member_id )
+			);
 		}
 
-		// Prepare customer data (DisplayName should match how you want the customer listed in QBO).
+		$nickname = trim( (string) get_user_meta( $member_id, 'nickname', true ) );
+		if ( '' === $nickname && ! empty( $user->display_name ) ) {
+			$nickname = trim( (string) $user->display_name );
+		}
+		$notes = sprintf(
+			/* translators: %d: WordPress user ID */
+			__( 'reMember member #%d', 'remember' ),
+			absint( $member_id )
+		);
+		if ( '' !== $nickname ) {
+			$notes .= "\n" . sprintf(
+				/* translators: %s: member nickname / stage name */
+				__( 'Nickname: %s', 'remember' ),
+				$nickname
+			);
+		}
+
 		$customer_data = array(
 			'display_name' => $full_name,
 			'first_name'   => $first_name,
 			'last_name'    => $last_name,
 			'email'        => $user->user_email,
-			'phone'        => ! empty( $profile->cell_phone ) ? $profile->cell_phone : '',
+			'phone'        => ( $profile && ! empty( $profile->cell_phone ) ) ? $profile->cell_phone : '',
+			'notes'        => $notes,
 		);
 
-		// Add address if available
 		if ( $profile && ( ! empty( $profile->address_street ) || ! empty( $profile->address_city ) ) ) {
 			$customer_data['address'] = array(
 				'street'  => $profile->address_street ?? '',
@@ -88,57 +111,150 @@ class Remember_QuickBooks_Sync {
 		}
 
 		// Prefer stored QuickBooks Customer Id; otherwise match by WordPress email (second best).
-		$qb_customer_id = get_user_meta( $member_id, 'remember_qb_customer_id', true );
-		if ( ! $qb_customer_id ) {
-			$by_email = Remember_QuickBooks_API::find_customer_by_primary_email( $user->user_email );
-			if ( is_array( $by_email ) && ! empty( $by_email['Id'] ) ) {
-				$qb_customer_id = $by_email['Id'];
-				update_user_meta( $member_id, 'remember_qb_customer_id', $qb_customer_id );
-				update_user_meta( $member_id, 'remember_qb_sync_token', isset( $by_email['SyncToken'] ) ? $by_email['SyncToken'] : '' );
+		$qb_customer_id = (string) get_user_meta( $member_id, 'remember_qb_customer_id', true );
+		if ( '' !== $qb_customer_id ) {
+			// Only a lookup that says the customer is gone (other company, wrong sandbox) drops
+			// the link; any other error keeps it so the member is never moved to another customer.
+			// QBO answers an unknown customer Id with fault 2010 rather than "object not found".
+			$linked  = Remember_QuickBooks_API::get_customer( $qb_customer_id );
+			$missing = is_wp_error( $linked )
+				&& ( self::is_qb_object_missing_error( $linked ) || in_array( '2010', self::qb_fault_codes( $linked ), true ) );
+			if ( is_wp_error( $linked ) && ! $missing ) {
+				Remember_Logger::error(
+					'Failed to sync member to QuickBooks customer',
+					array(
+						'member_id'      => $member_id,
+						'qb_customer_id' => $qb_customer_id,
+						'error'          => $linked->get_error_message(),
+					)
+				);
+				return $linked;
+			}
+			if ( $missing ) {
+				Remember_Logger::warning(
+					'Clearing QuickBooks customer link (customer missing)',
+					array(
+						'member_id'      => $member_id,
+						'qb_customer_id' => $qb_customer_id,
+					)
+				);
+				delete_user_meta( $member_id, 'remember_qb_customer_id' );
+				delete_user_meta( $member_id, 'remember_qb_sync_token' );
+				$qb_customer_id = '';
 			}
 		}
-
-		if ( $qb_customer_id ) {
+		if ( '' === $qb_customer_id ) {
+			$qb_customer_id = self::link_customer_by_email( $member_id, $user->user_email );
+		}
+		if ( '' !== $qb_customer_id ) {
 			$customer_data['qb_customer_id'] = $qb_customer_id;
 		}
 
-		$result = Remember_QuickBooks_API::create_customer( $customer_data );
-
-		// Stale or invalid local Id (deleted in QBO, wrong sandbox, etc.): clear link and retry once.
-		if ( is_wp_error( $result ) && $qb_customer_id ) {
-			delete_user_meta( $member_id, 'remember_qb_customer_id' );
-			delete_user_meta( $member_id, 'remember_qb_sync_token' );
-			unset( $customer_data['qb_customer_id'] );
-
-			$by_email = Remember_QuickBooks_API::find_customer_by_primary_email( $user->user_email );
-			if ( is_array( $by_email ) && ! empty( $by_email['Id'] ) ) {
-				$customer_data['qb_customer_id'] = $by_email['Id'];
-				update_user_meta( $member_id, 'remember_qb_customer_id', $by_email['Id'] );
-				update_user_meta( $member_id, 'remember_qb_sync_token', isset( $by_email['SyncToken'] ) ? $by_email['SyncToken'] : '' );
-				$result = Remember_QuickBooks_API::create_customer( $customer_data );
-			} else {
-				$result = Remember_QuickBooks_API::create_customer( $customer_data );
-			}
-		}
+		$result = self::save_customer( $customer_data, $user->user_email );
 
 		if ( is_wp_error( $result ) ) {
-			Remember_Logger::error( 'Failed to sync member to QuickBooks customer', array(
-				'member_id' => $member_id,
-				'error'     => $result->get_error_message(),
-			) );
+			Remember_Logger::error(
+				'Failed to sync member to QuickBooks customer',
+				array(
+					'member_id'      => $member_id,
+					'qb_customer_id' => $qb_customer_id,
+					'error'          => $result->get_error_message(),
+				)
+			);
 			return $result;
 		}
 
-		// Store QB customer ID and sync token
 		update_user_meta( $member_id, 'remember_qb_customer_id', $result['Id'] );
 		update_user_meta( $member_id, 'remember_qb_sync_token', isset( $result['SyncToken'] ) ? $result['SyncToken'] : '' );
 
-		Remember_Logger::info( 'Member synced to QuickBooks customer', array(
-			'member_id'      => $member_id,
-			'qb_customer_id' => $result['Id'],
-		) );
+		Remember_Logger::info(
+			'Member synced to QuickBooks customer',
+			array(
+				'member_id'      => $member_id,
+				'qb_customer_id' => $result['Id'],
+			)
+		);
 
 		return $result;
+	}
+
+	/**
+	 * Link a member to an existing QuickBooks customer with the same primary email.
+	 *
+	 * @param int    $member_id Member ID.
+	 * @param string $email     Member email.
+	 * @return string Customer Id, or '' when none matches.
+	 */
+	private static function link_customer_by_email( $member_id, $email ) {
+		$match = Remember_QuickBooks_API::find_customer_by_primary_email( $email );
+		if ( ! is_array( $match ) || empty( $match['Id'] ) ) {
+			return '';
+		}
+		update_user_meta( $member_id, 'remember_qb_customer_id', (string) $match['Id'] );
+		update_user_meta( $member_id, 'remember_qb_sync_token', isset( $match['SyncToken'] ) ? $match['SyncToken'] : '' );
+		Remember_Logger::info(
+			'Linked member to existing QuickBooks customer by email',
+			array(
+				'member_id'      => $member_id,
+				'qb_customer_id' => (string) $match['Id'],
+			)
+		);
+		return (string) $match['Id'];
+	}
+
+	/**
+	 * Create or update the customer, retrying with the email appended when the name is taken.
+	 *
+	 * QBO display names must be unique across customers, vendors and employees, inactive included.
+	 *
+	 * @param array  $customer_data Data for Remember_QuickBooks_API::create_customer().
+	 * @param string $email         Member email, used to make the name unique.
+	 * @return array|WP_Error Customer entity or error.
+	 */
+	private static function save_customer( $customer_data, $email ) {
+		$result = Remember_QuickBooks_API::create_customer( $customer_data );
+		if ( ! is_wp_error( $result ) || ! self::is_qb_duplicate_name_error( $result ) || '' === trim( (string) $email ) ) {
+			return $result;
+		}
+
+		Remember_Logger::info(
+			'QuickBooks customer name already in use; retrying with email added',
+			array( 'qb_customer_id' => $customer_data['qb_customer_id'] ?? '' )
+		);
+		$customer_data['display_name'] = $customer_data['display_name'] . ' (' . $email . ')';
+		return Remember_QuickBooks_API::create_customer( $customer_data );
+	}
+
+	/**
+	 * Whether a QBO error is the duplicate display name fault (code 6240).
+	 *
+	 * @param WP_Error $error Error.
+	 * @return bool
+	 */
+	private static function is_qb_duplicate_name_error( $error ) {
+		if ( ! is_wp_error( $error ) ) {
+			return false;
+		}
+		return in_array( '6240', self::qb_fault_codes( $error ), true )
+			|| false !== stripos( $error->get_error_message(), 'duplicate name' );
+	}
+
+	/**
+	 * Intuit Fault error codes carried on a WP_Error from the QuickBooks API.
+	 *
+	 * @param WP_Error $error Error.
+	 * @return string[]
+	 */
+	private static function qb_fault_codes( $error ) {
+		$data   = $error->get_error_data();
+		$faults = ( is_array( $data ) && isset( $data['body']['Fault']['Error'] ) && is_array( $data['body']['Fault']['Error'] ) ) ? $data['body']['Fault']['Error'] : array();
+		$codes  = array();
+		foreach ( $faults as $fault ) {
+			if ( isset( $fault['code'] ) ) {
+				$codes[] = (string) $fault['code'];
+			}
+		}
+		return $codes;
 	}
 
 	/**
@@ -167,7 +283,7 @@ class Remember_QuickBooks_Sync {
 		if ( $payment && ! empty( $payment->quickbooks_invoice_id ) ) {
 			$existing_invoice = Remember_QuickBooks_API::get_invoice( $payment->quickbooks_invoice_id );
 			$remote_gone      = is_wp_error( $existing_invoice )
-				? self::is_qb_invoice_missing_error( $existing_invoice )
+				? self::is_qb_object_missing_error( $existing_invoice )
 				: Remember_QuickBooks_API::is_invoice_voided( $existing_invoice, $payment->total_amount );
 
 			if ( $remote_gone ) {
@@ -339,7 +455,7 @@ class Remember_QuickBooks_Sync {
 		$invoice = Remember_QuickBooks_API::get_invoice( $payment->quickbooks_invoice_id );
 
 		if ( is_wp_error( $invoice ) ) {
-			if ( self::is_qb_invoice_missing_error( $invoice ) ) {
+			if ( self::is_qb_object_missing_error( $invoice ) ) {
 				Remember_Logger::info(
 					'QuickBooks invoice no longer exists; marking local invoice cancelled',
 					array(
@@ -624,12 +740,12 @@ class Remember_QuickBooks_Sync {
 	}
 
 	/**
-	 * Whether a QuickBooks API error means the invoice no longer exists (deleted, wrong company, etc.).
+	 * Whether a QuickBooks API error means the invoice or customer no longer exists (deleted, wrong company, etc.).
 	 *
-	 * @param WP_Error $error Error from Remember_QuickBooks_API::get_invoice().
+	 * @param WP_Error $error Error from a QuickBooks API lookup.
 	 * @return bool
 	 */
-	private static function is_qb_invoice_missing_error( $error ) {
+	private static function is_qb_object_missing_error( $error ) {
 		if ( ! is_wp_error( $error ) ) {
 			return false;
 		}

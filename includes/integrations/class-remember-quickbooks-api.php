@@ -317,11 +317,13 @@ class Remember_QuickBooks_API {
 		if ( is_wp_error( $response ) ) {
 			return null;
 		}
-		$rows = self::normalize_customer_query_response( $response );
-		if ( empty( $rows ) ) {
-			return null;
+		foreach ( self::normalize_customer_query_response( $response ) as $row ) {
+			$found = isset( $row['PrimaryEmailAddr']['Address'] ) ? (string) $row['PrimaryEmailAddr']['Address'] : '';
+			if ( 0 === strcasecmp( trim( $found ), $email ) ) {
+				return $row;
+			}
 		}
-		return $rows[0];
+		return null;
 	}
 
 	/**
@@ -343,6 +345,11 @@ class Remember_QuickBooks_API {
 
 		if ( ! empty( $customer_data['phone'] ) ) {
 			$data['PrimaryPhone'] = array( 'FreeFormNumber' => $customer_data['phone'] );
+		}
+
+		// Notes belong to the bookkeeper once the customer exists, so they are only set on create.
+		if ( empty( $customer_data['qb_customer_id'] ) && ! empty( $customer_data['notes'] ) ) {
+			$data['Notes'] = $customer_data['notes'];
 		}
 
 		if ( ! empty( $customer_data['address'] ) ) {
