@@ -74,6 +74,32 @@ if ( $can_edit && isset( $_POST['remember_survey_action'] ) && check_admin_refer
 				admin_url( 'admin.php' )
 			);
 		}
+	} elseif ( 'copy' === $action ) {
+		$result = Remember_Surveys::copy_survey(
+			isset( $_POST['survey_id'] ) ? absint( $_POST['survey_id'] ) : 0,
+			isset( $_POST['target_event_id'] ) ? absint( $_POST['target_event_id'] ) : 0
+		);
+		if ( is_wp_error( $result ) ) {
+			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( $result->get_error_message() ) . '</p></div>';
+		} else {
+			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Survey copied. You are now editing the copy; the original was not changed.', 'remember' ) . '</p></div>';
+			if ( ! empty( $result['notes'] ) ) {
+				echo '<div class="notice notice-info is-dismissible"><ul style="list-style: disc; margin-left: 1.5em;">';
+				foreach ( $result['notes'] as $note ) {
+					echo '<li>' . esc_html( $note ) . '</li>';
+				}
+				echo '</ul></div>';
+			}
+			$_GET['survey_id'] = (int) $result['survey_id'];
+			unset( $_GET['copy_survey'], $_GET['new'], $_GET['edit'] );
+			$GLOBALS['remember_survey_saved_url'] = add_query_arg(
+				array(
+					'page'      => 'remember-surveys',
+					'survey_id' => (int) $result['survey_id'],
+				),
+				admin_url( 'admin.php' )
+			);
+		}
 	} elseif ( 'save_question' === $action ) {
 		$result = Remember_Surveys::save_question_from_admin( $event_id );
 		if ( is_wp_error( $result ) ) {
@@ -95,8 +121,61 @@ if ( ! is_array( $events ) ) {
 	$events = array();
 }
 
-$is_new    = ! empty( $_GET['new'] );
-$active_id = isset( $_GET['survey_id'] ) ? absint( $_GET['survey_id'] ) : 0;
+if ( $can_edit && isset( $_GET['dismiss_merge_notice'] ) && isset( $_GET['_wpnonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'remember_survey_merge_notice_dismiss' ) ) {
+	delete_option( 'remember_survey_merge_notice' );
+	Remember_Logger::info( 'Dismissed merged surveys notice', array( 'user_id' => get_current_user_id() ) );
+}
+
+$merge_notice = $can_edit ? get_option( 'remember_survey_merge_notice', array() ) : array();
+if ( is_array( $merge_notice ) && $merge_notice ) {
+	$event_names = array();
+	foreach ( $events as $ev ) {
+		$event_names[ (int) $ev->event_id ] = (string) $ev->event_name;
+	}
+	$dismiss_url = wp_nonce_url(
+		add_query_arg(
+			array(
+				'page'                 => 'remember-surveys',
+				'dismiss_merge_notice' => 1,
+			),
+			admin_url( 'admin.php' )
+		),
+		'remember_survey_merge_notice_dismiss'
+	);
+	echo '<div class="notice notice-warning"><p><strong>' . esc_html__( 'Application surveys were merged', 'remember' ) . '</strong></p>';
+	echo '<p>' . esc_html__( 'Roles are now chosen per question, so each event has one survey on the application. Where an event had several, their questions and answers were moved into one survey. Each merged survey\'s instructions were added to the end of the kept survey\'s instructions, under its old title. Every applicant now sees the kept survey\'s title and all of the instructions, so check the wording.', 'remember' ) . '</p>';
+	echo '<ul style="list-style: disc; margin-left: 1.5em;">';
+	foreach ( $merge_notice as $entry ) {
+		$entry_event = isset( $entry['event_id'] ) ? (int) $entry['event_id'] : 0;
+		$entry_id    = isset( $entry['survey_id'] ) ? (int) $entry['survey_id'] : 0;
+		$titles      = array();
+		foreach ( isset( $entry['merged'] ) ? (array) $entry['merged'] : array() as $gone ) {
+			$titles[] = isset( $gone['title'] ) && '' !== (string) $gone['title'] ? (string) $gone['title'] : __( '(untitled)', 'remember' );
+		}
+		$edit_url = add_query_arg(
+			array(
+				'page'      => 'remember-surveys',
+				'survey_id' => $entry_id,
+			),
+			admin_url( 'admin.php' )
+		);
+		echo '<li>' . esc_html(
+			sprintf(
+				/* translators: 1: event name, 2: kept survey title, 3: comma-separated titles of the surveys merged into it */
+				__( '%1$s: kept "%2$s" and merged in %3$s.', 'remember' ),
+				isset( $event_names[ $entry_event ] ) ? $event_names[ $entry_event ] : sprintf( /* translators: %d: event ID */ __( 'Event #%d', 'remember' ), $entry_event ),
+				isset( $entry['title'] ) ? (string) $entry['title'] : '',
+				'"' . implode( '", "', $titles ) . '"'
+			)
+		) . ' <a href="' . esc_url( $edit_url ) . '">' . esc_html__( 'Edit survey', 'remember' ) . '</a></li>';
+	}
+	echo '</ul>';
+	echo '<p><a href="' . esc_url( $dismiss_url ) . '">' . esc_html__( 'Dismiss this notice', 'remember' ) . '</a></p></div>';
+}
+
+$copy_source = ( $can_edit && isset( $_GET['copy_survey'] ) ) ? Remember_Surveys::get( absint( $_GET['copy_survey'] ) ) : null;
+$is_new      = ! $copy_source && ! empty( $_GET['new'] );
+$active_id   = ( ! $copy_source && isset( $_GET['survey_id'] ) ) ? absint( $_GET['survey_id'] ) : 0;
 $active    = $active_id > 0 ? Remember_Surveys::get( $active_id ) : null;
 if ( $active ) {
 	$event_id = (int) $active->event_id;
@@ -142,6 +221,8 @@ function remember_survey_question_form( $survey, $placement, $question ) {
 	$when_values = $when_rule ? $when_rule['values'] : array();
 	$sort_order = $is_edit ? (int) $question->sort_order : 0;
 	$self_key   = $is_edit ? (string) $question->field_key : '';
+	$role_options   = $survey ? Remember_Surveys::roles_for_event( $survey->event_id ) : array();
+	$question_roles = $is_edit ? Remember_Surveys::question_role_ids( $question->question_id ) : array();
 	$gate_meta   = array();
 	foreach ( $questions as $candidate ) {
 		if ( ! in_array( $candidate->field_type, array( 'select', 'multiselect', 'boolean' ), true ) ) {
@@ -171,6 +252,29 @@ function remember_survey_question_form( $survey, $placement, $question ) {
 			<td>
 				<input type="text" class="large-text" name="label" id="label" value="<?php echo esc_attr( $label ); ?>" placeholder="<?php esc_attr_e( 'What sort of ice cream do you like?', 'remember' ); ?>">
 				<p class="description"><?php esc_html_e( 'This is what members see on the survey.', 'remember' ); ?></p>
+			</td>
+		</tr>
+		<tr>
+			<th scope="row"><?php esc_html_e( 'Who answers this', 'remember' ); ?></th>
+			<td>
+				<fieldset class="remember-survey-roles">
+					<legend class="screen-reader-text"><?php esc_html_e( 'Who answers this', 'remember' ); ?></legend>
+					<?php foreach ( $role_options as $role ) : ?>
+						<label>
+							<input type="checkbox" name="event_role_ids[]" value="<?php echo esc_attr( (string) $role->event_role_id ); ?>" <?php checked( in_array( (int) $role->event_role_id, $question_roles, true ) ); ?>>
+							<?php echo esc_html( $role->role_name ); ?>
+						</label>
+					<?php endforeach; ?>
+				</fieldset>
+				<p class="description">
+					<?php
+					echo esc_html(
+						empty( $role_options )
+							? __( 'This event has no roles yet, so every participant answers this question.', 'remember' )
+							: __( 'Leave every role unticked to ask everyone. Tick roles to ask only members who apply for, or were accepted for, those roles.', 'remember' )
+					);
+					?>
+				</p>
 			</td>
 		</tr>
 		<tr>
@@ -296,30 +400,20 @@ function remember_survey_header_form( $survey, $event_id, $events ) {
 		$timing         = isset( $_POST['survey_timing'] ) ? sanitize_key( wp_unslash( $_POST['survey_timing'] ) ) : 'after';
 		$on_application = ! empty( $_POST['on_application'] );
 		$event_id       = isset( $_POST['event_id'] ) ? absint( $_POST['event_id'] ) : $event_id;
-		$posted_roles   = isset( $_POST['event_role_ids'] ) ? wp_unslash( $_POST['event_role_ids'] ) : array();
-		$event_role_ids = array();
-		foreach ( is_array( $posted_roles ) ? $posted_roles : array() as $posted_role ) {
-			$posted_role = absint( $posted_role );
-			if ( $posted_role > 0 ) {
-				$event_role_ids[] = $posted_role;
-			}
-		}
 	} else {
 		$title          = $survey ? (string) $survey->title : '';
 		$instructions   = ( $survey && isset( $survey->instructions ) ) ? (string) $survey->instructions : '';
 		$timing         = ( $survey && 'before' === $survey->timing ) ? 'before' : 'after';
 		$on_application = $survey && Remember_Surveys::PLACEMENT_APPLICATION === $survey->placement;
-		$event_role_ids = $survey ? Remember_Surveys::role_ids_for_survey( $survey->survey_id ) : array();
 	}
 	$survey_id = $survey ? (int) $survey->survey_id : 0;
-	$role_options = Remember_Surveys::roles_for_event( $event_id );
 	$action    = array( 'page' => 'remember-surveys' );
 	if ( $survey_id > 0 ) {
 		$action['survey_id'] = $survey_id;
 	} else {
 		$action['new'] = 1;
 	}
-	$audience = Remember_Surveys::audience_editor_payload();
+	$application_surveys = Remember_Surveys::application_survey_ids_by_event();
 	?>
 	<form method="post" class="remember-survey-masthead" action="<?php echo esc_url( add_query_arg( $action, admin_url( 'admin.php' ) ) ); ?>">
 		<?php wp_nonce_field( 'remember_survey_admin', 'remember_survey_nonce' ); ?>
@@ -349,18 +443,7 @@ function remember_survey_header_form( $survey, $event_id, $events ) {
 					</select>
 				<?php endif; ?>
 			</p>
-			<p>
-				<span class="remember-survey-roles-label" id="survey_roles_label"><?php esc_html_e( 'Roles', 'remember' ); ?></span>
-				<span class="remember-survey-roles" id="remember-survey-roles" role="group" aria-labelledby="survey_roles_label" data-selected="<?php echo esc_attr( implode( ',', $event_role_ids ) ); ?>">
-					<?php foreach ( $role_options as $role ) : ?>
-						<label>
-							<input type="checkbox" name="event_role_ids[]" value="<?php echo esc_attr( (string) $role->event_role_id ); ?>" <?php checked( in_array( (int) $role->event_role_id, $event_role_ids, true ) ); ?>>
-							<?php echo esc_html( $role->role_name ); ?>
-						</label>
-					<?php endforeach; ?>
-				</span>
-				<span class="description"><?php esc_html_e( 'Leave every role unchecked to include everyone on this event. Check the roles this survey is for.', 'remember' ); ?></span>
-			</p>
+			<p class="description"><?php esc_html_e( 'Choose which roles answer each question when you add it.', 'remember' ); ?></p>
 			</div>
 		</div>
 		<p class="remember-survey-instructions-field">
@@ -373,7 +456,7 @@ function remember_survey_header_form( $survey, $event_id, $events ) {
 					<input type="checkbox" name="on_application" id="survey_on_application" value="1" <?php checked( $on_application ); ?>>
 					<?php esc_html_e( 'Show on the event application', 'remember' ); ?>
 				</label>
-				<span class="description"><?php esc_html_e( 'Off by default. Turn this on to put the survey on the application for the roles checked above, before the agreements. Each role can be on one application survey. A role named here does not also see the survey that has no roles checked. Leave it off to send the survey later to accepted participants in those roles.', 'remember' ); ?></span>
+				<span class="description"><?php esc_html_e( 'Off by default. Turn this on to put the survey on the application, before the agreements. Each event has one survey on the application; applicants see only the questions for the role they apply for. Leave it off to send the survey later to accepted participants.', 'remember' ); ?></span>
 				<span class="description" id="remember-survey-role-taken" hidden></span>
 			</p>
 			<p id="remember-survey-timing" <?php echo $on_application ? 'hidden' : ''; ?>>
@@ -386,7 +469,7 @@ function remember_survey_header_form( $survey, $event_id, $events ) {
 			</p>
 		</div>
 		<?php submit_button( __( 'Save survey', 'remember' ), 'primary', 'submit', false ); ?>
-		<script type="application/json" id="remember-survey-audiences"><?php echo wp_json_encode( $audience ); ?></script>
+		<script type="application/json" id="remember-survey-application-slots"><?php echo wp_json_encode( (object) $application_surveys ); ?></script>
 	</form>
 	<?php
 }
@@ -402,8 +485,14 @@ function remember_survey_question_table( $questions, $event_id, $survey_id ) {
 		echo '<p>' . esc_html__( 'No questions yet.', 'remember' ) . '</p>';
 		return;
 	}
+	$roles_by_question = Remember_Surveys::question_roles_map( wp_list_pluck( $questions, 'question_id' ) );
+	$role_names        = array();
+	foreach ( Remember_Surveys::roles_for_event( $event_id ) as $role ) {
+		$role_names[ (int) $role->event_role_id ] = (string) $role->role_name;
+	}
 	echo '<table class="wp-list-table widefat striped"><thead><tr>';
 	echo '<th>' . esc_html__( 'Question', 'remember' ) . '</th>';
+	echo '<th>' . esc_html__( 'Asked of', 'remember' ) . '</th>';
 	echo '<th>' . esc_html__( 'Short name', 'remember' ) . '</th>';
 	echo '<th>' . esc_html__( 'Type', 'remember' ) . '</th>';
 	echo '<th>' . esc_html__( 'Required', 'remember' ) . '</th>';
@@ -433,7 +522,12 @@ function remember_survey_question_table( $questions, $event_id, $survey_id ) {
 			'remember_survey_question_delete_' . (int) $question->question_id
 		);
 		echo '<tr>';
+		$asked_of = array();
+		foreach ( isset( $roles_by_question[ (int) $question->question_id ] ) ? $roles_by_question[ (int) $question->question_id ] : array() as $role_id ) {
+			$asked_of[] = isset( $role_names[ $role_id ] ) ? $role_names[ $role_id ] : __( '(role removed)', 'remember' );
+		}
 		echo '<td><strong>' . esc_html( $question->label ) . '</strong></td>';
+		echo '<td>' . esc_html( $asked_of ? implode( ', ', $asked_of ) : __( 'All roles', 'remember' ) ) . '</td>';
 		echo '<td><code>' . esc_html( (string) $question->field_key ) . '</code></td><td>';
 		if ( 'select' === $question->field_type ) {
 			esc_html_e( 'Pick one', 'remember' );
@@ -482,9 +576,74 @@ if (window.history && history.replaceState) {
 </script>
 <?php endif; ?>
 <div class="wrap remember-surveys">
-<?php if ( $show_editor ) : ?>
+<?php if ( $copy_source ) : ?>
+	<?php
+	$copy_question_count = count( Remember_Surveys::questions( $copy_source->survey_id ) );
+	$copy_event_name     = '';
+	foreach ( $events as $event ) {
+		if ( (int) $event->event_id === (int) $copy_source->event_id ) {
+			$copy_event_name = (string) $event->event_name;
+			break;
+		}
+	}
+	?>
+	<h1 class="wp-heading-inline"><?php esc_html_e( 'Copy Survey', 'remember' ); ?></h1>
+	<a href="<?php echo esc_url( $list_url ); ?>" class="page-title-action"><?php esc_html_e( '← Back to Surveys', 'remember' ); ?></a>
+	<hr class="wp-header-end">
+	<form method="post" action="<?php echo esc_url( add_query_arg( array( 'page' => 'remember-surveys', 'copy_survey' => (int) $copy_source->survey_id ), admin_url( 'admin.php' ) ) ); ?>">
+		<?php wp_nonce_field( 'remember_survey_admin', 'remember_survey_nonce' ); ?>
+		<input type="hidden" name="remember_survey_action" value="copy">
+		<input type="hidden" name="survey_id" value="<?php echo esc_attr( (string) $copy_source->survey_id ); ?>">
+		<table class="form-table">
+			<tr>
+				<th scope="row"><?php esc_html_e( 'Survey', 'remember' ); ?></th>
+				<td>
+					<strong><?php echo esc_html( $copy_source->title ); ?></strong>
+					<p class="description">
+						<?php
+						echo esc_html(
+							sprintf(
+								/* translators: 1: event name, 2: where the survey appears, 3: number of questions */
+								_n( '%1$s · %2$s · %3$d question', '%1$s · %2$s · %3$d questions', $copy_question_count, 'remember' ),
+								'' !== $copy_event_name ? $copy_event_name : __( '(event removed)', 'remember' ),
+								Remember_Surveys::PLACEMENT_APPLICATION === $copy_source->placement ? __( 'On the application', 'remember' ) : __( 'Follow-up', 'remember' ),
+								$copy_question_count
+							)
+						);
+						?>
+					</p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="remember_copy_target_event"><?php esc_html_e( 'Copy to event', 'remember' ); ?></label></th>
+				<td>
+					<select name="target_event_id" id="remember_copy_target_event" required>
+						<option value=""><?php esc_html_e( '— Choose an event —', 'remember' ); ?></option>
+						<?php foreach ( $events as $event ) : ?>
+							<option value="<?php echo esc_attr( (string) $event->event_id ); ?>">
+								<?php
+								echo esc_html( $event->event_name );
+								if ( (int) $event->event_id === (int) $copy_source->event_id ) {
+									echo ' ' . esc_html__( '(same event)', 'remember' );
+								}
+								?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+					<p class="description"><?php esc_html_e( 'The copy gets the title, instructions and every question, with who answers each one and their "required when" rules. Responses are never copied, and the original survey is not changed.', 'remember' ); ?></p>
+					<p class="description"><?php esc_html_e( 'Roles the chosen event does not have are left off each question; a question left with none is asked of every role. A survey on the application stays on the application unless the chosen event already has one; then the copy becomes a follow-up draft. Follow-up copies always start as drafts.', 'remember' ); ?></p>
+				</td>
+			</tr>
+		</table>
+		<?php submit_button( __( 'Copy survey', 'remember' ), 'primary', 'submit', false ); ?>
+		<a class="button" href="<?php echo esc_url( $list_url ); ?>"><?php esc_html_e( 'Cancel', 'remember' ); ?></a>
+	</form>
+<?php elseif ( $show_editor ) : ?>
 	<h1 class="wp-heading-inline"><?php echo esc_html( $active ? $active->title : __( 'Add Survey', 'remember' ) ); ?></h1>
 	<a href="<?php echo esc_url( $list_url ); ?>" class="page-title-action"><?php esc_html_e( '← Back to Surveys', 'remember' ); ?></a>
+	<?php if ( $active && $can_edit ) : ?>
+		<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'remember-surveys', 'copy_survey' => (int) $active->survey_id ), admin_url( 'admin.php' ) ) ); ?>" class="page-title-action"><?php esc_html_e( 'Copy to an event', 'remember' ); ?></a>
+	<?php endif; ?>
 	<hr class="wp-header-end">
 	<?php if ( $can_edit ) : ?>
 		<?php remember_survey_header_form( $active, $event_id, $events ); ?>
@@ -621,6 +780,7 @@ if (window.history && history.replaceState) {
 						<td class="column-actions" data-label="<?php echo esc_attr__( 'Actions', 'remember' ); ?>">
 							<a href="<?php echo esc_url( $edit_url ); ?>"><?php esc_html_e( 'Edit', 'remember' ); ?></a>
 							<?php if ( $can_edit ) : ?>
+								| <a href="<?php echo esc_url( add_query_arg( array( 'page' => 'remember-surveys', 'copy_survey' => (int) $row->survey_id ), admin_url( 'admin.php' ) ) ); ?>"><?php esc_html_e( 'Copy', 'remember' ); ?></a>
 								| <a href="<?php echo esc_url( $delete_url ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Delete this survey and its questions?', 'remember' ) ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
 								<?php if ( ! $on_application && 'issued' !== $row->status ) : ?>
 									|
@@ -746,80 +906,34 @@ if (window.history && history.replaceState) {
 		var onApplication = document.getElementById('survey_on_application');
 		var timingRow = document.getElementById('remember-survey-timing');
 		var eventField = document.getElementById('survey_event_id');
-		var roleBox = document.getElementById('remember-survey-roles');
 		var takenNote = document.getElementById('remember-survey-role-taken');
-		var audienceNode = document.getElementById('remember-survey-audiences');
-		var audience = { roles: [], slots: [] };
-		if (audienceNode) {
+		var slotsNode = document.getElementById('remember-survey-application-slots');
+		var slots = {};
+		if (slotsNode) {
 			try {
-				audience = JSON.parse(audienceNode.textContent || '{}');
+				slots = JSON.parse(slotsNode.textContent || '{}') || {};
 			} catch (error) {
-				audience = { roles: [], slots: [] };
+				slots = {};
 			}
 		}
 		function surveyId() {
 			var input = document.querySelector('input[name="survey_id"]');
 			return input ? String(input.value || '0') : '0';
 		}
-		function selectedRoleIds() {
-			if (!roleBox) return [];
-			return [].slice.call(roleBox.querySelectorAll('input:checked')).map(function (input) {
-				return String(input.value);
-			});
-		}
-		function fillRoles() {
-			if (!eventField || !roleBox) return;
-			var eventId = String(eventField.value || '0');
-			var current = selectedRoleIds();
-			if (!current.length && roleBox.getAttribute('data-selected')) {
-				current = String(roleBox.getAttribute('data-selected')).split(',').filter(Boolean);
-			}
-			roleBox.innerHTML = '';
-			roleBox.removeAttribute('data-selected');
-			(audience.roles || []).forEach(function (role) {
-				if (String(role.event_id) !== eventId) return;
-				var label = document.createElement('label');
-				var input = document.createElement('input');
-				input.type = 'checkbox';
-				input.name = 'event_role_ids[]';
-				input.value = String(role.event_role_id);
-				input.checked = current.indexOf(String(role.event_role_id)) !== -1;
-				label.appendChild(input);
-				label.appendChild(document.createTextNode(' ' + role.role_name));
-				roleBox.appendChild(label);
-			});
-		}
 		function slotTaken() {
-			if (!eventField || !roleBox) return false;
-			var eventId = String(eventField.value || '0');
-			var picked = selectedRoleIds();
-			var mine = surveyId();
-			var others = (audience.slots || []).filter(function (slot) {
-				return String(slot.event_id) === eventId && String(slot.survey_id) !== mine;
-			});
-			if (!picked.length) {
-				return others.some(function (slot) {
-					return !slot.event_role_ids || !slot.event_role_ids.length;
-				});
-			}
-			return others.some(function (slot) {
-				return (slot.event_role_ids || []).some(function (id) {
-					return picked.indexOf(String(id)) !== -1;
-				});
-			});
+			if (!eventField) return false;
+			var taken = slots[String(eventField.value || '0')];
+			return !!taken && String(taken) !== surveyId();
 		}
 		function syncApplicationSlot() {
 			if (!onApplication) return;
 			var taken = slotTaken();
-			var picked = selectedRoleIds();
 			onApplication.disabled = taken;
 			if (taken) onApplication.checked = false;
 			if (takenNote) {
 				if (taken) {
 					takenNote.hidden = false;
-					takenNote.textContent = picked.length
-						? <?php echo wp_json_encode( __( 'One of these roles already has a survey on the application.', 'remember' ) ); ?>
-						: <?php echo wp_json_encode( __( 'This event already has a survey on the application for every role.', 'remember' ) ); ?>;
+					takenNote.textContent = <?php echo wp_json_encode( Remember_Surveys::application_taken_message() ); ?>;
 				} else {
 					takenNote.hidden = true;
 					takenNote.textContent = '';
@@ -836,12 +950,7 @@ if (window.history && history.replaceState) {
 		if (onApplication && timingRow) {
 			onApplication.addEventListener('change', syncApplicationSlot);
 		}
-		if (eventField) eventField.addEventListener('change', function () {
-			fillRoles();
-			syncApplicationSlot();
-		});
-		if (roleBox) roleBox.addEventListener('change', syncApplicationSlot);
-		fillRoles();
+		if (eventField) eventField.addEventListener('change', syncApplicationSlot);
 		syncApplicationSlot();
 		var whenField = document.getElementById('required_when_field');
 		if (whenField) {

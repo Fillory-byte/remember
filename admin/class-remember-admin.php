@@ -2003,7 +2003,7 @@ class Remember_Admin {
 		}
 
 		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-surveys.php';
-		$html = Remember_Surveys::render_apply_html( $event_id, $event_role_id );
+		$html = Remember_Surveys::render_apply_html( $event_id, $event_role_id, false, get_current_user_id() );
 		wp_send_json_success(
 			array(
 				'html' => $html,

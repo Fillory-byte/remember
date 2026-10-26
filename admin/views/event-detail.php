@@ -364,7 +364,7 @@ $is_multi_day = $viewing_event->start_date !== $viewing_event->end_date;
 		<?php if ( empty( $event_survey_results ) ) : ?>
 			<p class="description"><?php esc_html_e( 'No surveys for this event yet.', 'remember' ); ?></p>
 		<?php else : ?>
-			<p class="description"><?php esc_html_e( 'Percentages are the share of submitted responses. A question that allows several choices can total more than 100%.', 'remember' ); ?></p>
+			<p class="description"><?php esc_html_e( 'Percentages are the share of responses that were asked the question. A question that allows several choices can total more than 100%.', 'remember' ); ?></p>
 			<?php foreach ( $event_survey_results as $result ) : ?>
 				<?php
 				$survey = $result['survey'];
@@ -398,7 +398,23 @@ $is_multi_day = $viewing_event->start_date !== $viewing_event->end_date;
 						<div class="remember-event-survey-results">
 							<?php foreach ( $result['questions'] as $question ) : ?>
 								<div class="remember-event-survey-question">
-									<div class="remember-event-survey-question-label"><?php echo esc_html( $question['label'] ); ?></div>
+									<div class="remember-event-survey-question-label">
+										<?php echo esc_html( $question['label'] ); ?>
+										<?php if ( '' !== $question['roles'] ) : ?>
+											<span class="remember-event-survey-meta">
+												<?php
+												echo esc_html(
+													sprintf(
+														/* translators: 1: role names, 2: number of responses asked this question. */
+														__( 'Asked of %1$s · %2$s asked', 'remember' ),
+														$question['roles'],
+														number_format_i18n( (int) $question['asked'] )
+													)
+												);
+												?>
+											</span>
+										<?php endif; ?>
+									</div>
 									<?php if ( ! empty( $question['choices'] ) ) : ?>
 										<?php foreach ( $question['choices'] as $choice ) : ?>
 											<div class="remember-event-survey-choice">

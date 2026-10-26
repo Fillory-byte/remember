@@ -63,7 +63,7 @@ if ( isset( $_POST['remember_apply_action'] ) && check_admin_referer( 'remember_
 			$submission_error = __( 'You have already applied for this event and role.', 'remember' );
 			$keep_form        = true;
 		} else {
-			$survey_error = Remember_Surveys::validate_apply( $event_id, $event_role_id );
+			$survey_error = Remember_Surveys::validate_apply( $event_id, $event_role_id, $member_id );
 			if ( $survey_error ) {
 				$submission_error = $survey_error;
 				$keep_form        = true;
@@ -204,7 +204,7 @@ if ( $keep_form && $selected_event ) {
 		}
 	}
 	if ( $restore['roleId'] > 0 ) {
-		$restore_survey_html = Remember_Surveys::render_apply_html( (int) $event_id, $restore['roleId'], true );
+		$restore_survey_html = Remember_Surveys::render_apply_html( (int) $event_id, $restore['roleId'], true, $member_id );
 	}
 }
 $restore['addons'] = (object) $restore['addons'];

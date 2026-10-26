@@ -1844,6 +1844,21 @@ class Remember_Database_Updater {
 			}
 		}
 
+		// Update to 2.4.2 (survey roles move from the survey to each question; one application survey per event).
+		if ( version_compare( get_option( 'remember_db_version', '0.0.0' ), '2.4.2', '<' ) ) {
+			Remember_Logger::info( 'Updating database schema', array( 'from' => get_option( 'remember_db_version', '0.0.0' ), 'to' => '2.4.2' ) );
+			require_once plugin_dir_path( __FILE__ ) . 'class-remember-database.php';
+			$db = new Remember_Database();
+			$db->create_survey_question_roles_table();
+			$found = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->prefix . 'remember_survey_question_roles' ) );
+			if ( $found !== $wpdb->prefix . 'remember_survey_question_roles' ) {
+				Remember_Logger::error( 'Failed to add survey question roles table', array( 'error' => $wpdb->last_error ) );
+			} elseif ( self::move_survey_roles_to_questions() ) {
+				update_option( 'remember_db_version', '2.4.2' );
+				Remember_Logger::info( 'Database schema updated successfully', array( 'version' => '2.4.2' ) );
+			}
+		}
+
 		// Always re-ensure health catalogs (idempotent). Catches sites that stalled mid-migration
 		// or activated before catalog seed rows were added.
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-seeder.php';
@@ -1899,6 +1914,195 @@ class Remember_Database_Updater {
 			return false;
 		}
 		Remember_Logger::info( 'Reset Vetting Case Assigned email body to the new default', array( 'setting_id' => (int) $row->setting_id ) );
+		return true;
+	}
+
+	/**
+	 * Give every survey question the roles its survey had, then merge each event's application surveys into one.
+	 *
+	 * The survey kept is the one for every role, or else the oldest. Questions from the others move onto it,
+	 * keeping their roles and answers; a short name that clashes gets a numbered suffix. A member who answered
+	 * two of the merged surveys ends up with one response holding both sets of answers. Runs in one transaction.
+	 *
+	 * @return bool False when the database refused a step; nothing is changed in that case.
+	 */
+	private static function move_survey_roles_to_questions() {
+		global $wpdb;
+		require_once plugin_dir_path( __FILE__ ) . '../utilities/class-remember-profile-questions.php';
+		$surveys   = $wpdb->prefix . 'remember_surveys';
+		$roles     = $wpdb->prefix . 'remember_survey_roles';
+		$questions = $wpdb->prefix . 'remember_survey_questions';
+		$qroles    = $wpdb->prefix . 'remember_survey_question_roles';
+		$responses = $wpdb->prefix . 'remember_survey_responses';
+		$answers   = $wpdb->prefix . 'remember_survey_answers';
+		$has_roles = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $roles ) ) === $roles;
+
+		$failed = static function ( $step ) use ( $wpdb ) {
+			Remember_Logger::error( 'Failed to move survey roles to questions', array( 'step' => $step, 'error' => $wpdb->last_error ) );
+			$wpdb->query( 'ROLLBACK' );
+			return false;
+		};
+
+		$wpdb->query( 'START TRANSACTION' );
+
+		if ( $has_roles ) {
+			$copied = $wpdb->query( "INSERT INTO {$qroles} (question_id, event_role_id) SELECT q.question_id, sr.event_role_id FROM {$questions} q INNER JOIN {$roles} sr ON sr.survey_id = q.survey_id WHERE NOT EXISTS (SELECT 1 FROM {$qroles} x WHERE x.question_id = q.question_id AND x.event_role_id = sr.event_role_id)" );
+			if ( false === $copied ) {
+				return $failed( 'copy_roles' );
+			}
+		}
+
+		$role_count = $has_roles ? "(SELECT COUNT(*) FROM {$roles} sr WHERE sr.survey_id = s.survey_id)" : '0';
+		$rows       = $wpdb->get_results( $wpdb->prepare( "SELECT s.survey_id, s.event_id, s.title, s.instructions, {$role_count} AS role_count FROM {$surveys} s WHERE s.placement = %s ORDER BY s.event_id ASC, s.survey_id ASC", 'application' ) );
+		if ( ! is_array( $rows ) ) {
+			return $failed( 'read_application_surveys' );
+		}
+		$by_event = array();
+		foreach ( $rows as $row ) {
+			$by_event[ (int) $row->event_id ][] = $row;
+		}
+
+		$merged  = 0;
+		$notices = array();
+		foreach ( $by_event as $event_id => $event_surveys ) {
+			if ( count( $event_surveys ) < 2 ) {
+				continue;
+			}
+			usort(
+				$event_surveys,
+				static function ( $a, $b ) {
+					$a_all = 0 === (int) $a->role_count ? 0 : 1;
+					$b_all = 0 === (int) $b->role_count ? 0 : 1;
+					return $a_all !== $b_all ? $a_all - $b_all : (int) $a->survey_id - (int) $b->survey_id;
+				}
+			);
+			$keep              = array_shift( $event_surveys );
+			$keep_id           = (int) $keep->survey_id;
+			$used              = array_flip( (array) $wpdb->get_col( $wpdb->prepare( "SELECT field_key FROM {$questions} WHERE survey_id = %d", $keep_id ) ) );
+			$keep_instructions = trim( (string) $keep->instructions );
+			$merged_away       = array();
+
+			foreach ( $event_surveys as $other ) {
+				$other_id  = (int) $other->survey_id;
+				$other_qs  = $wpdb->get_results( $wpdb->prepare( "SELECT question_id, field_key, required_when_json FROM {$questions} WHERE survey_id = %d", $other_id ) );
+				$renamed   = array();
+				foreach ( (array) $other_qs as $question ) {
+					$key = (string) $question->field_key;
+					if ( '' === $key || ! isset( $used[ $key ] ) ) {
+						$used[ $key ] = true;
+						continue;
+					}
+					$n = 2;
+					do {
+						$new_key = substr( $key, 0, 60 ) . '_' . $n;
+						++$n;
+					} while ( isset( $used[ $new_key ] ) );
+					$used[ $new_key ] = true;
+					$renamed[ $key ]  = $new_key;
+					if ( false === $wpdb->update( $questions, array( 'field_key' => $new_key ), array( 'question_id' => (int) $question->question_id ) ) ) {
+						return $failed( 'rename_field_key' );
+					}
+				}
+				if ( $renamed ) {
+					foreach ( (array) $other_qs as $question ) {
+						$rule = Remember_Profile_Questions::parse_required_when( $question->required_when_json );
+						if ( ! $rule || ! isset( $renamed[ $rule['field_key'] ] ) ) {
+							continue;
+						}
+						$json = Remember_Profile_Questions::encode_required_when( $renamed[ $rule['field_key'] ], $rule['values'] );
+						if ( false === $wpdb->update( $questions, array( 'required_when_json' => $json ), array( 'question_id' => (int) $question->question_id ) ) ) {
+							return $failed( 'rename_required_when' );
+						}
+					}
+				}
+
+				$offset = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM {$questions} WHERE survey_id = %d", $keep_id ) );
+				$low    = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(MIN(sort_order), 0) FROM {$questions} WHERE survey_id = %d", $other_id ) );
+				if ( false === $wpdb->query( $wpdb->prepare( "UPDATE {$questions} SET survey_id = %d, sort_order = sort_order - %d + %d WHERE survey_id = %d", $keep_id, $low, $offset, $other_id ) ) ) {
+					return $failed( 'move_questions' );
+				}
+
+				$other_responses = $wpdb->get_results( $wpdb->prepare( "SELECT response_id, member_id, submitted_at FROM {$responses} WHERE survey_id = %d", $other_id ) );
+				$combined        = 0;
+				foreach ( (array) $other_responses as $response ) {
+					$kept = $wpdb->get_row( $wpdb->prepare( "SELECT response_id, submitted_at FROM {$responses} WHERE survey_id = %d AND member_id = %d", $keep_id, (int) $response->member_id ) );
+					if ( ! $kept ) {
+						if ( false === $wpdb->update( $responses, array( 'survey_id' => $keep_id ), array( 'response_id' => (int) $response->response_id ) ) ) {
+							return $failed( 'move_response' );
+						}
+						continue;
+					}
+					if ( false === $wpdb->update( $answers, array( 'response_id' => (int) $kept->response_id ), array( 'response_id' => (int) $response->response_id ) ) ) {
+						return $failed( 'combine_answers' );
+					}
+					if ( strcmp( (string) $response->submitted_at, (string) $kept->submitted_at ) > 0
+						&& false === $wpdb->update( $responses, array( 'submitted_at' => $response->submitted_at ), array( 'response_id' => (int) $kept->response_id ) ) ) {
+						return $failed( 'combine_response_date' );
+					}
+					if ( false === $wpdb->delete( $responses, array( 'response_id' => (int) $response->response_id ) ) ) {
+						return $failed( 'combine_response' );
+					}
+					++$combined;
+				}
+
+				if ( $has_roles && false === $wpdb->delete( $roles, array( 'survey_id' => $other_id ) ) ) {
+					return $failed( 'delete_survey_roles' );
+				}
+				if ( false === $wpdb->delete( $surveys, array( 'survey_id' => $other_id ) ) ) {
+					return $failed( 'delete_survey' );
+				}
+				++$merged;
+				$other_instructions = trim( (string) $other->instructions );
+				if ( '' !== $other_instructions ) {
+					$heading           = '' !== trim( (string) $other->title ) ? trim( (string) $other->title ) : sprintf( 'Survey #%d', $other_id );
+					$keep_instructions = ltrim( $keep_instructions . "\n\n" . $heading . ":\n" . $other_instructions );
+				}
+				$merged_away[] = array(
+					'survey_id'    => $other_id,
+					'title'        => (string) $other->title,
+					'instructions' => (string) $other->instructions,
+				);
+				Remember_Logger::info(
+					'Merged application survey',
+					array(
+						'event_id'            => (int) $event_id,
+						'survey_id'           => $keep_id,
+						'merged_survey_id'    => $other_id,
+						'merged_title'        => (string) $other->title,
+						'merged_instructions' => (string) $other->instructions,
+						'renamed_keys'        => $renamed,
+						'responses_moved'     => count( (array) $other_responses ) - $combined,
+						'responses_combined'  => $combined,
+					)
+				);
+			}
+
+			if ( $keep_instructions !== trim( (string) $keep->instructions )
+				&& false === $wpdb->update( $surveys, array( 'instructions' => $keep_instructions ), array( 'survey_id' => $keep_id ) ) ) {
+				return $failed( 'append_instructions' );
+			}
+			$notices[] = array(
+				'event_id'  => (int) $event_id,
+				'survey_id' => $keep_id,
+				'title'     => (string) $keep->title,
+				'merged'    => $merged_away,
+			);
+		}
+
+		if ( $has_roles && false === $wpdb->query( "DELETE FROM {$roles}" ) ) {
+			return $failed( 'clear_survey_roles' );
+		}
+		if ( false === $wpdb->query( 'COMMIT' ) ) {
+			return $failed( 'commit' );
+		}
+		if ( $notices ) {
+			$previous = get_option( 'remember_survey_merge_notice', array() );
+			$notices  = array_merge( is_array( $previous ) ? $previous : array(), $notices );
+			if ( ! update_option( 'remember_survey_merge_notice', $notices, false ) ) {
+				Remember_Logger::warning( 'Failed to save the merged surveys notice', array( 'notices' => $notices ) );
+			}
+		}
+		Remember_Logger::info( 'Survey roles moved to questions', array( 'surveys_merged' => $merged ) );
 		return true;
 	}
 }

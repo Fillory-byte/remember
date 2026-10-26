@@ -587,12 +587,14 @@ class Remember_Report_Catalog {
 		if ( 'surveys' === $subject ) {
 			$survey_questions = self::survey_question_catalog();
 			$all_roles        = __( 'All roles', 'remember' );
-			$survey_roles     = $event_roles;
-			if ( ! in_array( $all_roles, $survey_roles, true ) ) {
-				array_unshift( $survey_roles, $all_roles );
+			$question_roles   = $event_roles;
+			if ( ! in_array( $all_roles, $question_roles, true ) ) {
+				array_unshift( $question_roles, $all_roles );
 			}
-			$role_field         = self::csv_list_field( __( 'Role', 'remember' ), 'Survey', "COALESCE(survey_role_names.role_names, '" . esc_sql( $all_roles ) . "')", $survey_roles );
-			$role_field['join'] = 'role';
+			$role_field                  = self::csv_list_field( __( "Member's role", 'remember' ), 'Survey', 'member_role_names.role_names', $event_roles );
+			$role_field['join']          = 'role';
+			$question_role_field         = self::csv_list_field( __( 'Question asked of', 'remember' ), 'Survey', "COALESCE(question_role_names.role_names, '" . esc_sql( $all_roles ) . "')", $question_roles );
+			$question_role_field['join'] = 'question_role';
 			$answer             = self::f( __( 'Answer', 'remember' ), 'Survey', 'string', 'ans.value_text' );
 			$answer['questions'] = $survey_questions['questions'];
 			return array(
@@ -626,6 +628,7 @@ class Remember_Report_Catalog {
 				'user.display_name'      => self::f( __( 'Member', 'remember' ), 'Member', 'string', 'u.display_name', 'user' ),
 				'user.user_email'        => self::f( __( 'Email', 'remember' ), 'Member', 'string', 'u.user_email', 'user' ),
 				'question.label'         => self::f( __( 'Question', 'remember' ), 'Survey', 'enum', 'sq.label', null, false, $survey_questions['options'] ),
+				'question.roles'         => $question_role_field,
 				'answer.value'           => $answer,
 				'response.submitted_at'  => self::f( __( 'Submitted', 'remember' ), 'Survey', 'date', 'resp.submitted_at' ),
 			);

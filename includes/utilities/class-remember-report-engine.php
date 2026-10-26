@@ -371,9 +371,10 @@ class Remember_Report_Engine {
 				'location' => "LEFT JOIN {$p}remember_locations loc ON loc.location_id = e.location_id",
 			),
 			'surveys'      => array(
-				'user'  => "INNER JOIN {$users} u ON u.ID = resp.member_id",
-				'event' => "LEFT JOIN {$p}remember_events e ON e.event_id = sv.event_id",
-				'role'  => "LEFT JOIN (SELECT sr.survey_id, GROUP_CONCAT(r.role_name ORDER BY r.role_name SEPARATOR ', ') AS role_names FROM {$p}remember_survey_roles sr INNER JOIN {$p}remember_event_roles er ON er.event_role_id = sr.event_role_id INNER JOIN {$p}remember_roles r ON r.role_id = er.role_id GROUP BY sr.survey_id) survey_role_names ON survey_role_names.survey_id = sv.survey_id",
+				'user'          => "INNER JOIN {$users} u ON u.ID = resp.member_id",
+				'event'         => "LEFT JOIN {$p}remember_events e ON e.event_id = sv.event_id",
+				'role'          => "LEFT JOIN (SELECT ra.event_id, ra.member_id, GROUP_CONCAT(DISTINCT r.role_name ORDER BY r.role_name SEPARATOR ', ') AS role_names FROM {$p}remember_event_applications ra INNER JOIN {$p}remember_event_roles er ON er.event_role_id = ra.event_role_id INNER JOIN {$p}remember_roles r ON r.role_id = er.role_id WHERE ra.superseded_at IS NULL OR ra.superseded_at = '0000-00-00 00:00:00' GROUP BY ra.event_id, ra.member_id) member_role_names ON member_role_names.event_id = resp.event_id AND member_role_names.member_id = resp.member_id",
+				'question_role' => "LEFT JOIN (SELECT qr.question_id, GROUP_CONCAT(DISTINCT r.role_name ORDER BY r.role_name SEPARATOR ', ') AS role_names FROM {$p}remember_survey_question_roles qr INNER JOIN {$p}remember_event_roles er ON er.event_role_id = qr.event_role_id INNER JOIN {$p}remember_roles r ON r.role_id = er.role_id GROUP BY qr.question_id) question_role_names ON question_role_names.question_id = sq.question_id",
 			),
 		);
 
