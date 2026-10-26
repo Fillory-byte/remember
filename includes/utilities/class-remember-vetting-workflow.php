@@ -55,6 +55,123 @@ class Remember_Vetting_Workflow {
 	}
 
 	/**
+	 * How automatically created vetting cases are assigned.
+	 *
+	 * @return string 'team' (no primary vetter; the vetting team is emailed), 'rotate', or 'least_busy'.
+	 */
+	public static function get_assignment_mode() {
+		$options = get_option( 'remember_options', array() );
+		$mode    = isset( $options['vetting_assignment'] ) ? $options['vetting_assignment'] : 'team';
+		return in_array( $mode, array( 'rotate', 'least_busy' ), true ) ? $mode : 'team';
+	}
+
+	/**
+	 * WordPress user IDs of members who hold the Vetting role, lowest first.
+	 *
+	 * @return int[]
+	 */
+	public static function vetting_team_ids() {
+		global $wpdb;
+		$ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT DISTINCT mr.member_id
+				FROM {$wpdb->prefix}remember_member_roles mr
+				INNER JOIN {$wpdb->prefix}remember_roles r ON r.role_id = mr.role_id
+				WHERE r.role_name = %s",
+				'Vetting'
+			)
+		);
+		$ids = array_values( array_filter( array_map( 'intval', (array) $ids ), 'get_userdata' ) );
+		sort( $ids );
+		return $ids;
+	}
+
+	/**
+	 * Next vetter in the rotation, after the one who got the last automatic case.
+	 *
+	 * @return int User ID, or 0 when nobody holds the Vetting role.
+	 */
+	public static function next_rotation_vetter() {
+		return self::rotation_pick( self::vetting_team_ids() );
+	}
+
+	/**
+	 * Vetter with the fewest open cases as primary vetter.
+	 *
+	 * Ties go to the next tied vetter in the rotation.
+	 *
+	 * @return int User ID, or 0 when nobody holds the Vetting role.
+	 */
+	public static function least_busy_vetter() {
+		$team = self::vetting_team_ids();
+		if ( empty( $team ) ) {
+			return 0;
+		}
+
+		global $wpdb;
+		$placeholders = implode( ',', array_fill( 0, count( $team ), '%d' ) );
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- placeholders built from count.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT primary_vetter_id, COUNT(*) AS open_cases
+				FROM {$wpdb->prefix}remember_vetting
+				WHERE status != 'completed' AND primary_vetter_id IN ($placeholders)
+				GROUP BY primary_vetter_id",
+				$team
+			)
+		);
+
+		$load = array_fill_keys( $team, 0 );
+		foreach ( (array) $rows as $row ) {
+			$load[ (int) $row->primary_vetter_id ] = (int) $row->open_cases;
+		}
+
+		return self::rotation_pick( array_keys( $load, min( $load ), true ) );
+	}
+
+	/**
+	 * First candidate after the vetter who got the last automatic case.
+	 *
+	 * @param int[] $candidates User IDs, lowest first.
+	 * @return int User ID, or 0 when there are no candidates.
+	 */
+	private static function rotation_pick( $candidates ) {
+		if ( empty( $candidates ) ) {
+			return 0;
+		}
+		$last = (int) get_option( 'remember_vetting_rotation_last', 0 );
+		foreach ( $candidates as $user_id ) {
+			if ( $user_id > $last ) {
+				return $user_id;
+			}
+		}
+		return $candidates[0];
+	}
+
+	/**
+	 * Whether this member may submit event applications.
+	 *
+	 * Vetted members always may. With first-application vetting, members who
+	 * have not been vetted yet may too: their first application opens the case,
+	 * and staff cannot accept it until the member is vetted.
+	 *
+	 * @param object|null $member Row from Remember_Member::get().
+	 * @return bool
+	 */
+	public static function member_can_apply( $member ) {
+		require_once plugin_dir_path( __FILE__ ) . '../models/class-member.php';
+
+		if ( Remember_Member::is_vetted_member( $member ) ) {
+			return true;
+		}
+
+		return self::should_vet_on_first_application()
+			&& $member
+			&& isset( $member->status )
+			&& in_array( $member->status, array( 'unvetted', 'in_vetting' ), true );
+	}
+
+	/**
 	 * Check if a member has any applications.
 	 *
 	 * @param int $member_id Member ID.
@@ -62,7 +179,7 @@ class Remember_Vetting_Workflow {
 	 */
 	public static function member_has_applications( $member_id ) {
 		global $wpdb;
-		$count = $wpdb->get_var( $wpdb->prepare(
+		$count = (int) $wpdb->get_var( $wpdb->prepare(
 			"SELECT COUNT(*) FROM {$wpdb->prefix}remember_event_applications WHERE member_id = %d",
 			$member_id
 		) );
@@ -72,16 +189,13 @@ class Remember_Vetting_Workflow {
 	/**
 	 * Check if this is the member's first application.
 	 *
+	 * Call before the new application is saved.
+	 *
 	 * @param int $member_id Member ID.
 	 * @return bool
 	 */
 	public static function is_first_application( $member_id ) {
-		global $wpdb;
-		$count = $wpdb->get_var( $wpdb->prepare(
-			"SELECT COUNT(*) FROM {$wpdb->prefix}remember_event_applications WHERE member_id = %d",
-			$member_id
-		) );
-		return $count === 0; // This will be the first one after it's created
+		return ! self::member_has_applications( $member_id );
 	}
 
 	/**
@@ -95,23 +209,25 @@ class Remember_Vetting_Workflow {
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
 		
 		$vetting_model = new Remember_Vetting();
-		
-		// Get default vetter (first user with vetting capability, or current user, or 0 if none)
-		$vetters = get_users( array(
-			'capability__in' => array( 'remember_create_vetting', 'remember_update_vetting' ),
-			'number' => 1,
-		) );
-		
-		$primary_vetter_id = 0; // Default to no vetter assigned
-		if ( ! empty( $vetters ) ) {
-			$primary_vetter_id = $vetters[0]->ID;
-		} elseif ( get_current_user_id() > 0 ) {
-			$current_user = wp_get_current_user();
-			if ( $current_user->has_cap( 'remember_create_vetting' ) || $current_user->has_cap( 'remember_update_vetting' ) ) {
-				$primary_vetter_id = get_current_user_id();
-			}
+
+		$assignment = self::get_assignment_mode();
+		if ( 'rotate' === $assignment ) {
+			$primary_vetter_id = self::next_rotation_vetter();
+		} elseif ( 'least_busy' === $assignment ) {
+			$primary_vetter_id = self::least_busy_vetter();
+		} else {
+			$primary_vetter_id = 0;
 		}
-		
+		if ( 'team' !== $assignment && $primary_vetter_id < 1 ) {
+			Remember_Logger::warning(
+				'Automatic vetting assignment found nobody with the Vetting role; case left unassigned',
+				array(
+					'member_id'  => $member_id,
+					'assignment' => $assignment,
+				)
+			);
+		}
+
 		// Create vetting case. primary_vetter_id may be 0 when nobody can be assigned.
 		$vetting_id = $vetting_model->create( $member_id, $primary_vetter_id, 'pending' );
 		if ( ! $vetting_id && self::repair_vetting_schema_for_insert( $vetting_model->get_last_error() ) ) {
@@ -119,13 +235,16 @@ class Remember_Vetting_Workflow {
 		}
 
 		if ( ! $vetting_id ) {
-			Remember_Logger::warning(
+			Remember_Logger::error(
 				'Vetting case not created',
 				array(
-					'member_id' => $member_id,
-					'db_error'  => $vetting_model->get_last_error(),
+					'member_id'  => $member_id,
+					'assignment' => $assignment,
+					'db_error'   => $vetting_model->get_last_error(),
 				)
 			);
+			require_once plugin_dir_path( __FILE__ ) . 'class-remember-notifications.php';
+			Remember_Notifications::notify_vetting_case_failed( $member_id );
 			return false;
 		}
 
@@ -149,6 +268,8 @@ class Remember_Vetting_Workflow {
 				if ( $vetter_user ) {
 					$system_note .= sprintf( __( ' with primary vetter %s', 'remember' ), $vetter_user->display_name );
 				}
+			} else {
+				$system_note .= __( ' with no primary vetter; the vetting team was notified', 'remember' );
 			}
 			$note_id = $vetting_model->add_note( $vetting_id, $note_author, $system_note, true );
 			if ( ! $note_id ) {
@@ -162,7 +283,22 @@ class Remember_Vetting_Workflow {
 			}
 		}
 
-		Remember_Logger::info( 'Vetting case created', array( 'member_id' => $member_id, 'vetting_id' => $vetting_id ) );
+		if ( $primary_vetter_id > 0 ) {
+			update_option( 'remember_vetting_rotation_last', $primary_vetter_id, false );
+		}
+
+		Remember_Logger::info(
+			'Vetting case created',
+			array(
+				'member_id'         => $member_id,
+				'vetting_id'        => $vetting_id,
+				'assignment'        => $assignment,
+				'primary_vetter_id' => $primary_vetter_id,
+			)
+		);
+
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-notifications.php';
+		Remember_Notifications::notify_vetting_staff( $primary_vetter_id > 0 ? 'vetting_assigned' : 'vetting_case_waiting', $vetting_id );
 
 		return $vetting_id;
 	}

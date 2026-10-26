@@ -115,13 +115,13 @@ if ( isset( $_POST['remember_settings_action'] ) && 'sync_xero_payments' === $_P
 // Handle QuickBooks disconnect
 if ( isset( $_POST['remember_settings_action'] ) && 'disconnect_qb' === $_POST['remember_settings_action'] && check_admin_referer( 'remember_settings_action', 'remember_settings_nonce' ) ) {
 	$settings = Remember_QuickBooks_OAuth::get_settings();
-	if ( $settings && ! empty( $settings['access_token'] ) ) {
-		Remember_QuickBooks_OAuth::revoke_token(
-			$settings['access_token'],
-			$settings['client_id'],
-			$settings['client_secret']
-		);
+	if ( $settings && ! empty( $settings['client_id'] ) && ! empty( $settings['client_secret'] ) ) {
+		$revoke = ! empty( $settings['refresh_token'] ) ? $settings['refresh_token'] : ( ! empty( $settings['access_token'] ) ? $settings['access_token'] : '' );
+		if ( '' !== $revoke ) {
+			Remember_QuickBooks_OAuth::revoke_token( $revoke, $settings['client_id'], $settings['client_secret'] );
+		}
 	}
+	Remember_Logger::info( 'QuickBooks disconnected', array( 'user_id' => get_current_user_id() ) );
 	
 	// Clear settings
 	Remember_QuickBooks_OAuth::save_settings( array() );
@@ -326,6 +326,11 @@ if ( isset( $_POST['remember_settings_action'] ) && check_admin_referer( 'rememb
 		// Update vetting workflow
 		if ( isset( $_POST['vetting_workflow'] ) ) {
 			$options['vetting_workflow'] = sanitize_text_field( $_POST['vetting_workflow'] );
+		}
+
+		if ( isset( $_POST['vetting_assignment'] ) ) {
+			$assignment = sanitize_key( wp_unslash( $_POST['vetting_assignment'] ) );
+			$options['vetting_assignment'] = in_array( $assignment, array( 'rotate', 'least_busy' ), true ) ? $assignment : 'team';
 		}
 
 		if ( isset( $_POST['vetting_notify_targets'] ) ) {
@@ -780,7 +785,32 @@ $im_platforms = Remember_Im_Platforms::get_all();
 							</option>
 						</select>
 						<p class="description">
-							<?php esc_html_e( 'When should vetting be triggered? "On Member Join" creates a vetting case immediately when a member is created. "On First Event Application" delays vetting until the member applies for their first event.', 'remember' ); ?>
+							<?php esc_html_e( 'When should vetting be triggered? "On Member Join" creates a vetting case immediately when a member is created. "On First Event Application" lets members who are not vetted yet apply for events, and opens their vetting case with their first application. Staff can accept the application once vetting is complete.', 'remember' ); ?>
+						</p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">
+						<label for="vetting_assignment"><?php esc_html_e( 'Automatic case assignment', 'remember' ); ?></label>
+					</th>
+					<td>
+						<select id="vetting_assignment" name="vetting_assignment" class="regular-text">
+							<?php
+							require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-vetting-workflow.php';
+							$vetting_assignment = Remember_Vetting_Workflow::get_assignment_mode();
+							?>
+							<option value="team" <?php selected( $vetting_assignment, 'team' ); ?>>
+								<?php esc_html_e( 'Leave unassigned and email the vetting team', 'remember' ); ?>
+							</option>
+							<option value="rotate" <?php selected( $vetting_assignment, 'rotate' ); ?>>
+								<?php esc_html_e( 'Rotate through the vetting team', 'remember' ); ?>
+							</option>
+							<option value="least_busy" <?php selected( $vetting_assignment, 'least_busy' ); ?>>
+								<?php esc_html_e( 'Assign to the least busy vetter', 'remember' ); ?>
+							</option>
+						</select>
+						<p class="description">
+							<?php esc_html_e( 'Who gets a vetting case that opens automatically. The vetting team is everyone with the Vetting role. Unassigned cases email the whole team that a case is waiting, so anyone can assign a primary vetter. Rotation makes each new case go to the next team member in turn as primary vetter. Least busy gives the case to the team member who is primary vetter on the fewest cases that are not completed; a tie goes to whoever is next in the rotation. Assigned vetters get the Vetting Assigned email.', 'remember' ); ?>
 						</p>
 					</td>
 				</tr>
@@ -1366,13 +1396,21 @@ $im_platforms = Remember_Im_Platforms::get_all();
 			<?php
 			$qb_settings = Remember_QuickBooks_OAuth::get_settings();
 			$is_connected = $qb_settings && ! empty( $qb_settings['access_token'] ) && ! empty( $qb_settings['realm_id'] );
-			$company_info = array();
+			$company_info     = array();
+			$qb_status_error  = null;
+			$qb_needs_reauth  = false;
 			if ( $is_connected ) {
 				$company_info_result = Remember_QuickBooks_API::get_company_info();
-				if ( ! is_wp_error( $company_info_result ) ) {
+				if ( is_wp_error( $company_info_result ) ) {
+					$qb_status_error = $company_info_result;
+					$qb_needs_reauth = Remember_QuickBooks_API::error_requires_reconnect( $company_info_result );
+				} else {
 					$company_info = $company_info_result;
 				}
 			}
+			$qb_environment_label = ( isset( $qb_settings['environment'] ) && 'production' === $qb_settings['environment'] )
+				? __( 'Production', 'remember' )
+				: __( 'Sandbox', 'remember' );
 			?>
 			
 			<h2><?php esc_html_e( 'QuickBooks Online Integration', 'remember' ); ?></h2>
@@ -1381,19 +1419,48 @@ $im_platforms = Remember_Im_Platforms::get_all();
 			</p>
 			
 			<!-- Connection Status -->
-			<?php if ( $is_connected ) : ?>
+			<?php if ( $is_connected && $qb_status_error ) : ?>
+				<div style="padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; margin-bottom: 20px;">
+					<p style="margin: 0; color: #664d03;">
+						<strong>
+							<?php
+							if ( $qb_needs_reauth ) {
+								esc_html_e( 'Connection expired', 'remember' );
+							} else {
+								esc_html_e( 'QuickBooks could not be reached', 'remember' );
+							}
+							?>
+						</strong>
+					</p>
+					<p style="margin: 8px 0 0;">
+						<?php echo esc_html( wp_strip_all_tags( $qb_status_error->get_error_message() ) ); ?>
+						<?php
+						if ( $qb_needs_reauth ) {
+							esc_html_e( ' Use Reconnect QuickBooks below and choose the same company. You do not need to disconnect first.', 'remember' );
+						} else {
+							esc_html_e( ' The saved connection was kept. Reload this page to try again; reconnect only if this keeps happening.', 'remember' );
+						}
+						?>
+					</p>
+					<p style="margin: 5px 0 0; font-size: 13px;">
+						<?php esc_html_e( 'Company ID:', 'remember' ); ?>
+						<code><?php echo esc_html( $qb_settings['realm_id'] ); ?></code>
+						&middot; <?php echo esc_html( $qb_environment_label ); ?>
+					</p>
+				</div>
+			<?php elseif ( $is_connected ) : ?>
 				<div style="padding: 15px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; margin-bottom: 20px;">
 					<p style="margin: 0; color: #155724;">
 						<strong><?php esc_html_e( 'Connected', 'remember' ); ?></strong>
 						<?php if ( ! empty( $company_info['CompanyName'] ) ) : ?>
-							- <?php echo esc_html( $company_info['CompanyName'] ); ?>
+							&mdash; <?php echo esc_html( $company_info['CompanyName'] ); ?>
 						<?php endif; ?>
 					</p>
-					<?php if ( ! empty( $company_info['CompanyInfo']['CompanyName'] ) ) : ?>
-						<p style="margin: 5px 0 0 0; font-size: 13px;">
-							<?php esc_html_e( 'Company:', 'remember' ); ?> <?php echo esc_html( $company_info['CompanyInfo']['CompanyName'] ); ?>
-						</p>
-					<?php endif; ?>
+					<p style="margin: 5px 0 0; font-size: 13px;">
+						<?php esc_html_e( 'Company ID:', 'remember' ); ?>
+						<code><?php echo esc_html( $qb_settings['realm_id'] ); ?></code>
+						&middot; <?php echo esc_html( $qb_environment_label ); ?>
+					</p>
 				</div>
 			<?php else : ?>
 				<div style="padding: 15px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; margin-bottom: 20px;">
@@ -1478,21 +1545,35 @@ $im_platforms = Remember_Im_Platforms::get_all();
 			
 			<!-- Connect/Disconnect -->
 			<?php if ( ! empty( $qb_settings['client_id'] ) && ! empty( $qb_settings['client_secret'] ) ) : ?>
-				<?php if ( $is_connected ) : ?>
-					<form method="post" action="" style="margin-bottom: 30px;">
-						<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
-						<input type="hidden" name="remember_settings_action" value="disconnect_qb">
-						<?php submit_button( __( 'Disconnect QuickBooks', 'remember' ), 'secondary' ); ?>
-					</form>
-				<?php else : ?>
-					<form method="post" action="" class="remember-qb-connect-form" style="margin-bottom: 1em;">
+				<div style="margin-bottom: 30px;">
+					<form method="post" action="" class="remember-qb-connect-form" style="display: inline-block; margin: 0 8px 8px 0;">
 						<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 						<input type="hidden" name="remember_settings_action" value="start_qb_oauth" />
 						<input type="hidden" name="qb_environment_oauth" id="remember_qb_oauth_environment_field" value="<?php echo esc_attr( isset( $qb_settings['environment'] ) ? $qb_settings['environment'] : 'sandbox' ); ?>" />
-						<?php submit_button( __( 'Connect to QuickBooks', 'remember' ), 'primary large', 'submit', false ); ?>
+						<?php
+						submit_button(
+							$is_connected ? __( 'Reconnect QuickBooks', 'remember' ) : __( 'Connect to QuickBooks', 'remember' ),
+							$qb_needs_reauth || ! $is_connected ? 'primary large' : 'secondary',
+							'submit',
+							false
+						);
+						?>
 					</form>
-					<p class="description">
-						<?php esc_html_e( 'Uses the Environment selected above (Sandbox or Production). Authorize the matching company type in Intuit—sandbox tokens only work with the sandbox API host.', 'remember' ); ?>
+					<?php if ( $is_connected ) : ?>
+						<form method="post" action="" style="display: inline-block; margin: 0 0 8px;">
+							<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
+							<input type="hidden" name="remember_settings_action" value="disconnect_qb">
+							<?php submit_button( __( 'Disconnect QuickBooks', 'remember' ), 'secondary', 'submit', false ); ?>
+						</form>
+					<?php endif; ?>
+					<p class="description" style="margin-top: 8px;">
+						<?php
+						if ( $is_connected ) {
+							esc_html_e( 'Reconnect signs in to QuickBooks again and replaces the stored tokens; choose the same company, or the reconnect is refused. Disconnect clears the connection and saved credentials entirely.', 'remember' );
+						} else {
+							esc_html_e( 'Uses the Environment selected above (Sandbox or Production). Authorize the matching company type in Intuit—sandbox tokens only work with the sandbox API host.', 'remember' );
+						}
+						?>
 					</p>
 					<script>
 					(function() {
@@ -1504,7 +1585,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						}
 					})();
 					</script>
-				<?php endif; ?>
+				</div>
 			<?php endif; ?>
 			
 			<!-- Sync Settings -->
@@ -2198,6 +2279,11 @@ $im_platforms = Remember_Im_Platforms::get_all();
 												<p class="description" style="margin-top: 5px; font-size: 12px;">
 													<?php esc_html_e( 'Available variables: {member_name}, {event_name}, {application_id}, {vetting_id}, {amount}, {date}, {ticket_url}, {profile_url}', 'remember' ); ?>
 												</p>
+												<?php if ( in_array( $notification->notification_type, array( 'vetting_assigned', 'vetting_scheduled', 'vetting_completed', 'vetting_collaborator_invited' ), true ) ) : ?>
+													<p class="description" style="margin-top: 5px; font-size: 12px;">
+														<?php esc_html_e( 'This email also accepts {vetter_name} (the primary vetter) and {vetting_url} (a link to the case).', 'remember' ); ?>
+													</p>
+												<?php endif; ?>
 											</td>
 										</tr>
 									</table>
@@ -2225,6 +2311,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 			$log_file_exists        = file_exists( $log_file_path );
 			$log_file_size          = $log_file_exists ? size_format( filesize( $log_file_path ) ) : '0 B';
 			$wp_debug_log_enabled   = defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG;
+			$wp_debug_log_path      = $wp_debug_log_enabled ? Remember_Logger::get_wp_debug_log_path() : '';
 			$public_debug_log       = WP_CONTENT_DIR . '/debug.log';
 			$public_debug_log_exists = file_exists( $public_debug_log );
 			?>
@@ -2243,7 +2330,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 							<option value="DEBUG" <?php selected( $current_log_level, 'DEBUG' ); ?>><?php esc_html_e( 'Debug (all messages)', 'remember' ); ?></option>
 						</select>
 						<p class="description">
-							<?php esc_html_e( 'Select the minimum log level to record. Lower levels include higher levels (e.g., WARNING includes ERROR).', 'remember' ); ?>
+							<?php esc_html_e( 'Select the minimum log level to record. Lower levels include higher levels (e.g., WARNING includes ERROR). Debug also records activation timing and sync diagnostics. reMember keeps its own log and does not need WP_DEBUG_LOG.', 'remember' ); ?>
 						</p>
 					</td>
 				</tr>
@@ -2251,7 +2338,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 					<th scope="row"><?php esc_html_e( 'Log File Information', 'remember' ); ?></th>
 					<td>
 						<p>
-							<strong><?php esc_html_e( 'Log File Path:', 'remember' ); ?></strong><br>
+							<strong><?php esc_html_e( 'reMember Log File:', 'remember' ); ?></strong><br>
 							<code><?php echo esc_html( $log_file_path ); ?></code>
 						</p>
 						<p>
@@ -2262,10 +2349,13 @@ $im_platforms = Remember_Im_Platforms::get_all();
 								<span style="color: orange;"><?php esc_html_e( 'File does not exist yet', 'remember' ); ?></span>
 							<?php endif; ?>
 						</p>
-						<?php if ( ! $wp_debug_log_enabled ) : ?>
-							<p style="color: red;">
-								<strong><?php esc_html_e( 'Warning:', 'remember' ); ?></strong> 
-								<?php esc_html_e( 'WP_DEBUG_LOG is not enabled in wp-config.php. Logging will not work until this is enabled.', 'remember' ); ?>
+						<p class="description">
+							<?php esc_html_e( 'When the file reaches 5 MB it is renamed to remember.log.1, replacing the older copy, and a new file is started.', 'remember' ); ?>
+						</p>
+						<?php if ( $wp_debug_log_enabled ) : ?>
+							<p>
+								<strong><?php esc_html_e( 'WordPress Debug Log (PHP errors):', 'remember' ); ?></strong><br>
+								<code><?php echo esc_html( $wp_debug_log_path ); ?></code>
 							</p>
 						<?php endif; ?>
 						<?php if ( $public_debug_log_exists ) : ?>
@@ -2274,7 +2364,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 							</p>
 						<?php endif; ?>
 						<p class="description">
-							<?php esc_html_e( 'Logging still requires WP_DEBUG_LOG in wp-config.php. On nginx, also deny HTTP access to debug.log if you keep a copy under wp-content.', 'remember' ); ?>
+							<?php esc_html_e( 'WP_DEBUG_LOG in wp-config.php only controls the WordPress debug log. On nginx, also deny HTTP access to debug.log if you keep a copy under wp-content.', 'remember' ); ?>
 						</p>
 					</td>
 				</tr>

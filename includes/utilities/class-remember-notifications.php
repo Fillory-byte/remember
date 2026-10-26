@@ -209,17 +209,8 @@ class Remember_Notifications {
 	 * @return string[]
 	 */
 	public static function vetting_team_emails() {
-		global $wpdb;
-		$ids = $wpdb->get_col(
-			$wpdb->prepare(
-				"SELECT DISTINCT mr.member_id
-				FROM {$wpdb->prefix}remember_member_roles mr
-				INNER JOIN {$wpdb->prefix}remember_roles r ON r.role_id = mr.role_id
-				WHERE r.role_name = %s",
-				'Vetting'
-			)
-		);
-		return self::emails_for_user_ids( $ids );
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-vetting-workflow.php';
+		return self::emails_for_user_ids( Remember_Vetting_Workflow::vetting_team_ids() );
 	}
 
 	/**
@@ -277,13 +268,16 @@ class Remember_Notifications {
 	/**
 	 * Email staff about a vetting case, using the recipient setting.
 	 *
-	 * @param string $type       vetting_assigned, vetting_scheduled, vetting_completed, or vetting_collaborator_invited.
+	 * A waiting case has nobody assigned, so it always goes to the whole vetting team.
+	 *
+	 * @param string $type       vetting_assigned, vetting_case_waiting, vetting_scheduled, vetting_completed, or vetting_collaborator_invited.
 	 * @param int    $vetting_id Vetting case ID.
 	 * @return void
 	 */
 	public static function notify_vetting_staff( $type, $vetting_id ) {
 		$allowed = array(
 			'vetting_assigned',
+			'vetting_case_waiting',
 			'vetting_scheduled',
 			'vetting_completed',
 			'vetting_collaborator_invited',
@@ -299,7 +293,7 @@ class Remember_Notifications {
 			return;
 		}
 
-		$emails = self::vetting_case_recipient_emails( $vetting_id );
+		$emails = 'vetting_case_waiting' === $type ? self::vetting_team_emails() : self::vetting_case_recipient_emails( $vetting_id );
 		if ( empty( $emails ) ) {
 			require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
 			Remember_Logger::warning(
@@ -313,7 +307,11 @@ class Remember_Notifications {
 			return;
 		}
 
-		$extra = array( 'vetting_id' => $vetting_id );
+		$vetter = ! empty( $case->primary_vetter_id ) ? get_userdata( (int) $case->primary_vetter_id ) : false;
+		$extra  = array(
+			'vetting_id'  => $vetting_id,
+			'vetter_name' => $vetter ? $vetter->display_name : '',
+		);
 		if ( 'vetting_scheduled' === $type && ! empty( $case->scheduled_at ) ) {
 			$extra['date'] = date_i18n(
 				get_option( 'date_format' ) . ' ' . get_option( 'time_format' ),
@@ -422,6 +420,65 @@ class Remember_Notifications {
 					)
 				);
 			}
+		}
+	}
+
+	/**
+	 * Email System Administrators that a vetting case could not be opened automatically.
+	 *
+	 * The database error stays in the log; the email links to the Create
+	 * Vetting Case form with this member already selected.
+	 *
+	 * @param int $member_id Member / WordPress user ID.
+	 * @return void
+	 */
+	public static function notify_vetting_case_failed( $member_id ) {
+		$member_id = absint( $member_id );
+		if ( $member_id < 1 ) {
+			return;
+		}
+
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
+		$emails = self::admin_emails();
+		if ( empty( $emails ) ) {
+			Remember_Logger::error(
+				'Vetting case failure had no admin email recipients',
+				array( 'member_id' => $member_id )
+			);
+			return;
+		}
+
+		$context = self::context_for_member(
+			$member_id,
+			array(
+				'vetting_id'  => '',
+				'vetting_url' => admin_url( 'admin.php?page=remember-vetting&member_id=' . $member_id ),
+			)
+		);
+		$sent = 0;
+		foreach ( $emails as $email ) {
+			$result = self::send( 'vetting_case_failed', $context, $email );
+			if ( true === $result ) {
+				++$sent;
+			} elseif ( is_wp_error( $result ) ) {
+				Remember_Logger::error(
+					'Vetting case failure admin email failed',
+					array(
+						'member_id' => $member_id,
+						'to'        => $email,
+						'error'     => $result->get_error_message(),
+					)
+				);
+			}
+		}
+		if ( $sent > 0 ) {
+			Remember_Logger::info(
+				'Vetting case failure emailed to admins',
+				array(
+					'member_id' => $member_id,
+					'sent'      => $sent,
+				)
+			);
 		}
 	}
 

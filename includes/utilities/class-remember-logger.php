@@ -20,6 +20,11 @@ if ( ! defined( 'WPINC' ) ) {
 class Remember_Logger {
 
 	/**
+	 * Size at which remember.log is rotated to remember.log.1.
+	 */
+	const MAX_LOG_BYTES = 5242880;
+
+	/**
 	 * Microtime when activation tracing started (for elapsed_ms).
 	 *
 	 * @var float|null
@@ -156,7 +161,7 @@ class Remember_Logger {
 			return;
 		}
 
-		$path = self::get_log_file_path();
+		$path = self::get_wp_debug_log_path();
 		// phpcs:ignore WordPress.PHP.IniSet.Risky -- relocate debug.log off a public URL.
 		ini_set( 'log_errors', '1' );
 		// phpcs:ignore WordPress.PHP.IniSet.Risky
@@ -174,7 +179,7 @@ class Remember_Logger {
 			return;
 		}
 
-		$protected = self::get_log_file_path();
+		$protected = self::get_wp_debug_log_path();
 		$public_real    = realpath( $public );
 		$protected_real = is_file( $protected ) ? realpath( $protected ) : false;
 		if ( $public_real && $protected_real && $public_real === $protected_real ) {
@@ -196,16 +201,13 @@ class Remember_Logger {
 	}
 
 	/**
-	 * Development / troubleshooting line to debug.log when WP_DEBUG_LOG is true.
-	 *
-	 * Does not use remember_options log_level (unlike info/warning/error), so sync and QuickBooks
-	 * diagnostics are visible while WP_DEBUG_LOG is enabled.
+	 * Development / troubleshooting line (sync and QuickBooks diagnostics) at the Debug log level.
 	 *
 	 * @param string $message Short message.
 	 * @param array  $context Context data.
 	 */
 	public static function dev_log( $message, $context = array() ) {
-		if ( ! defined( 'WP_DEBUG_LOG' ) || ! WP_DEBUG_LOG ) {
+		if ( ! self::should_log( 'DEBUG' ) ) {
 			return;
 		}
 
@@ -214,26 +216,19 @@ class Remember_Logger {
 		if ( ! empty( $context ) ) {
 			$log_entry .= ' | ' . wp_json_encode( $context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
 		}
-		$log_entry .= "\n";
 
-		$log_file = self::get_log_file_path();
-
-		if ( false === @error_log( $log_entry, 3, $log_file ) ) {
-			@file_put_contents( $log_file, $log_entry, FILE_APPEND | LOCK_EX );
-		}
+		self::write( $log_entry . "\n" );
 	}
 
 	/**
-	 * Log activation progress when WP_DEBUG_LOG is true.
-	 *
-	 * Ignores remember_options log_level so DEBUG lines always appear during activation troubleshooting.
+	 * Activation and schema-update progress at the Debug log level.
 	 *
 	 * @param string $label   Short step name.
 	 * @param array  $context Extra context (merged with elapsed_ms, peak_memory_mb).
 	 * @return void
 	 */
 	public static function activation_debug( $label, $context = array() ) {
-		if ( ! defined( 'WP_DEBUG_LOG' ) || ! WP_DEBUG_LOG ) {
+		if ( ! self::should_log( 'DEBUG' ) ) {
 			return;
 		}
 
@@ -262,27 +257,19 @@ class Remember_Logger {
 			wp_json_encode( $ctx, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES )
 		);
 
-		$log_file = self::get_log_file_path();
-		if ( false === @error_log( $log_entry, 3, $log_file ) ) {
-			@file_put_contents( $log_file, $log_entry, FILE_APPEND | LOCK_EX );
-		}
+		self::write( $log_entry );
 	}
 
 	/**
 	 * Get the configured log level.
 	 *
+	 * Independent of WP_DEBUG_LOG; that constant only controls WordPress's own debug log.
+	 *
 	 * @return string Log level (NONE, ERROR, WARNING, INFO, DEBUG).
 	 */
 	private static function get_log_level() {
 		$options = get_option( 'remember_options', array() );
-		$log_level = isset( $options['log_level'] ) ? $options['log_level'] : 'ERROR';
-		
-		// If WP_DEBUG_LOG is not enabled, don't log anything
-		if ( ! defined( 'WP_DEBUG_LOG' ) || ! WP_DEBUG_LOG ) {
-			return 'NONE';
-		}
-		
-		return $log_level;
+		return isset( $options['log_level'] ) ? $options['log_level'] : 'ERROR';
 	}
 
 	/**
@@ -306,14 +293,24 @@ class Remember_Logger {
 	}
 
 	/**
-	 * Absolute path of the active log file.
-	 *
-	 * Custom WP_DEBUG_LOG string paths are honored. Otherwise logs go under a
-	 * protected, unguessable directory — not the public /wp-content/debug.log URL.
+	 * Absolute path of reMember's own log, in the protected log directory.
 	 *
 	 * @return string
 	 */
 	public static function get_log_file_path() {
+		self::ensure_protected_log_dir();
+		return trailingslashit( self::protected_log_dir() ) . 'remember.log';
+	}
+
+	/**
+	 * Absolute path of WordPress's PHP debug log.
+	 *
+	 * Custom WP_DEBUG_LOG string paths are honored. Otherwise it goes under the
+	 * protected directory, not the public /wp-content/debug.log URL.
+	 *
+	 * @return string
+	 */
+	public static function get_wp_debug_log_path() {
 		if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG && is_string( WP_DEBUG_LOG ) ) {
 			return WP_DEBUG_LOG;
 		}
@@ -390,14 +387,31 @@ class Remember_Logger {
 			$log_entry .= ' | Context: ' . wp_json_encode( $context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
 		}
 
-		$log_entry .= "\n";
+		self::write( $log_entry . "\n" );
+	}
 
+	/**
+	 * Append a line to remember.log, rotating it to remember.log.1 at MAX_LOG_BYTES.
+	 *
+	 * @param string $line Complete log line, newline included.
+	 * @return void
+	 */
+	private static function write( $line ) {
 		$log_file = self::get_log_file_path();
 
+		clearstatcache( true, $log_file );
+		if ( is_file( $log_file ) && filesize( $log_file ) >= self::MAX_LOG_BYTES ) {
+			$previous = $log_file . '.1';
+			if ( is_file( $previous ) ) {
+				@unlink( $previous );
+			}
+			@rename( $log_file, $previous );
+		}
+
 		// Append to the log file explicitly. A bare error_log( $msg ) follows PHP's error_log
-		// ini setting, which on many hosts (e.g. Laravel Valet) is not wp-content/debug.log.
-		if ( false === @error_log( $log_entry, 3, $log_file ) ) {
-			@file_put_contents( $log_file, $log_entry, FILE_APPEND | LOCK_EX );
+		// ini setting, which on many hosts (e.g. Laravel Valet) is not this file.
+		if ( false === @error_log( $line, 3, $log_file ) ) {
+			@file_put_contents( $log_file, $line, FILE_APPEND | LOCK_EX );
 		}
 	}
 }

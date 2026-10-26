@@ -75,13 +75,16 @@ class Remember_Xero_API {
 	/**
 	 * Perform an authenticated Xero API request.
 	 *
+	 * Private and relative-only: the request carries the Bearer token and tenant
+	 * header, so it must never be sent anywhere but API_BASE.
+	 *
 	 * @param string $method   HTTP method.
-	 * @param string $path     Path under api.xro/2.0/ (no leading slash), or absolute URL.
+	 * @param string $path     Path under api.xro/2.0/ (no leading slash).
 	 * @param array  $body     Optional JSON body (array).
 	 * @param array  $query    Optional query args.
 	 * @return array|WP_Error Decoded JSON or error.
 	 */
-	public static function request( $method, $path, $body = null, $query = array() ) {
+	private static function request( $method, $path, $body = null, $query = array() ) {
 		$settings = self::ensure_access_token();
 		if ( is_wp_error( $settings ) ) {
 			return $settings;
@@ -90,9 +93,7 @@ class Remember_Xero_API {
 			return new WP_Error( 'xero_no_tenant', __( 'No Xero organisation (tenant) is connected.', 'remember' ) );
 		}
 
-		$url = ( 0 === strpos( $path, 'http://' ) || 0 === strpos( $path, 'https://' ) )
-			? $path
-			: self::API_BASE . ltrim( $path, '/' );
+		$url = self::API_BASE . ltrim( (string) $path, '/' );
 
 		if ( ! empty( $query ) ) {
 			$url = add_query_arg( $query, $url );
@@ -118,6 +119,13 @@ class Remember_Xero_API {
 
 		$response = wp_remote_request( $url, $args );
 		if ( is_wp_error( $response ) ) {
+			Remember_Logger::error(
+				'Xero API request could not be sent',
+				array(
+					'path'  => $path,
+					'error' => $response->get_error_message(),
+				)
+			);
 			return $response;
 		}
 
@@ -569,6 +577,15 @@ class Remember_Xero_API {
 			return self::set_invoice_status( $invoice_id, 'DELETED' );
 		}
 
+		// Refuse before touching credit allocations, so a refused void leaves the invoice as it was.
+		$amount_paid = isset( $invoice['AmountPaid'] ) ? floatval( $invoice['AmountPaid'] ) : 0.0;
+		if ( $amount_paid > 0.001 || ! empty( $invoice['Payments'] ) ) {
+			return new WP_Error(
+				'xero_invoice_has_payment',
+				__( 'Xero will not void this invoice because a payment is applied. Remove that payment in Xero, or choose Refund instead of Void.', 'remember' )
+			);
+		}
+
 		if ( ! empty( $invoice['CreditNotes'] ) && is_array( $invoice['CreditNotes'] ) ) {
 			foreach ( $invoice['CreditNotes'] as $note ) {
 				if ( ! is_array( $note ) || empty( $note['CreditNoteID'] ) ) {
@@ -579,14 +596,6 @@ class Remember_Xero_API {
 					return $removed;
 				}
 			}
-		}
-
-		$amount_paid = isset( $invoice['AmountPaid'] ) ? floatval( $invoice['AmountPaid'] ) : 0.0;
-		if ( $amount_paid > 0.001 || ! empty( $invoice['Payments'] ) ) {
-			return new WP_Error(
-				'xero_invoice_has_payment',
-				__( 'Xero will not void this invoice because a payment is applied. Remove that payment in Xero, or choose Refund instead of Void.', 'remember' )
-			);
 		}
 
 		return self::set_invoice_status( $invoice_id, 'VOIDED' );
@@ -679,111 +688,6 @@ class Remember_Xero_API {
 			}
 		}
 		return array_values( array_unique( $messages ) );
-	}
-
-	/**
-	 * Create an ACCRECCREDIT credit note for an invoice and allocate it (refund path).
-	 *
-	 * @param string $invoice_id InvoiceID.
-	 * @param string $reason     Optional reference / description prefix.
-	 * @return array|WP_Error Credit note entity or error.
-	 */
-	public static function create_and_allocate_credit_note_for_invoice( $invoice_id, $reason = '' ) {
-		$invoice = self::get_invoice( $invoice_id );
-		if ( is_wp_error( $invoice ) ) {
-			return $invoice;
-		}
-
-		$contact_id = ! empty( $invoice['Contact']['ContactID'] ) ? $invoice['Contact']['ContactID'] : '';
-		if ( '' === $contact_id ) {
-			return new WP_Error( 'xero_cn_no_contact', __( 'Invoice has no Xero contact for credit note.', 'remember' ) );
-		}
-
-		$line_items = array();
-		if ( ! empty( $invoice['LineItems'] ) && is_array( $invoice['LineItems'] ) ) {
-			foreach ( $invoice['LineItems'] as $li ) {
-				if ( ! is_array( $li ) ) {
-					continue;
-				}
-				$line = array(
-					'Description' => ! empty( $li['Description'] ) ? (string) $li['Description'] : __( 'Credit', 'remember' ),
-					'Quantity'    => isset( $li['Quantity'] ) ? floatval( $li['Quantity'] ) : 1.0,
-					'UnitAmount'  => isset( $li['UnitAmount'] ) ? floatval( $li['UnitAmount'] ) : 0.0,
-				);
-				if ( ! empty( $li['ItemCode'] ) ) {
-					$line['ItemCode'] = (string) $li['ItemCode'];
-				}
-				if ( ! empty( $li['AccountCode'] ) ) {
-					$line['AccountCode'] = (string) $li['AccountCode'];
-				}
-				if ( ! empty( $li['TaxType'] ) ) {
-					$line['TaxType'] = (string) $li['TaxType'];
-				}
-				$line_items[] = $line;
-			}
-		}
-		if ( empty( $line_items ) ) {
-			$total = isset( $invoice['Total'] ) ? floatval( $invoice['Total'] ) : 0.0;
-			if ( $total <= 0 ) {
-				return new WP_Error( 'xero_cn_no_amount', __( 'Nothing to credit on this invoice.', 'remember' ) );
-			}
-			$line_items[] = array(
-				'Description' => $reason ? $reason : __( 'Application credit', 'remember' ),
-				'Quantity'    => 1,
-				'UnitAmount'  => $total,
-			);
-		}
-
-		$cn_payload = array(
-			'Type'            => 'ACCRECCREDIT',
-			'Contact'         => array( 'ContactID' => (string) $contact_id ),
-			'LineItems'       => $line_items,
-			'Date'            => gmdate( 'Y-m-d' ),
-			'LineAmountTypes' => isset( $invoice['LineAmountTypes'] ) ? $invoice['LineAmountTypes'] : 'NoTax',
-			'Status'          => 'AUTHORISED',
-			'Reference'       => $reason ? substr( (string) $reason, 0, 255 ) : '',
-		);
-
-		$cn_result = self::request(
-			'PUT',
-			'CreditNotes',
-			array( 'CreditNotes' => array( $cn_payload ) )
-		);
-		if ( is_wp_error( $cn_result ) ) {
-			return $cn_result;
-		}
-		$credit_note = ! empty( $cn_result['CreditNotes'][0] ) ? $cn_result['CreditNotes'][0] : null;
-		if ( ! is_array( $credit_note ) || empty( $credit_note['CreditNoteID'] ) ) {
-			return new WP_Error( 'xero_cn_create_failed', __( 'Xero did not return a credit note.', 'remember' ), $cn_result );
-		}
-
-		$amount = isset( $credit_note['Total'] ) ? floatval( $credit_note['Total'] ) : 0.0;
-		if ( $amount <= 0 && isset( $invoice['AmountPaid'] ) ) {
-			$amount = floatval( $invoice['AmountPaid'] );
-		}
-		if ( $amount <= 0 && isset( $invoice['Total'] ) ) {
-			$amount = floatval( $invoice['Total'] );
-		}
-
-		if ( $amount > 0 ) {
-			$alloc = self::request(
-				'PUT',
-				'CreditNotes/' . rawurlencode( $credit_note['CreditNoteID'] ) . '/Allocations',
-				array(
-					'Allocations' => array(
-						array(
-							'Invoice' => array( 'InvoiceID' => $invoice_id ),
-							'Amount'  => $amount,
-						),
-					),
-				)
-			);
-			if ( is_wp_error( $alloc ) ) {
-				return $alloc;
-			}
-		}
-
-		return $credit_note;
 	}
 
 	/**

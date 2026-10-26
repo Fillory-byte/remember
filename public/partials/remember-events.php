@@ -15,6 +15,7 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-location
 require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-application.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-member.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-page-creator.php';
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-vetting-workflow.php';
 
 $location_model = new Remember_Location();
 $application_model = new Remember_Application();
@@ -162,9 +163,9 @@ $status_colors = array(
 								<span class="remember-status-badge" style="background-color: <?php echo esc_attr( $status_color ); ?>; padding: 8px 16px; border-radius: 3px; display: inline-block;">
 									<strong><?php esc_html_e( 'Application Status:', 'remember' ); ?></strong> <?php echo esc_html( $status_label ); ?>
 								</span>
-							<?php elseif ( 'open' === $event->status && Remember_Member::is_vetted_member( $current_member ) && Remember_Event::registration_block_reason( $event ) ) : ?>
+							<?php elseif ( 'open' === $event->status && Remember_Vetting_Workflow::member_can_apply( $current_member ) && Remember_Event::registration_block_reason( $event ) ) : ?>
 								<p class="remember-notice remember-warning" style="margin:0;display:inline-block;"><?php echo esc_html( Remember_Event::registration_block_reason( $event ) ); ?></p>
-							<?php elseif ( 'open' === $event->status && Remember_Member::is_vetted_member( $current_member ) ) : ?>
+							<?php elseif ( 'open' === $event->status && Remember_Vetting_Workflow::member_can_apply( $current_member ) ) : ?>
 								<?php
 								require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-audit.php';
 								$apply_url   = Remember_Profile_Audit::get_apply_url( (int) $event->event_id );

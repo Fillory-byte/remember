@@ -1,6 +1,7 @@
 <?php
 /**
- * Event surveys: optional on the application, and follow-ups issued later. A survey can cover every role or one role.
+ * Event surveys: one optional survey on the application, and follow-ups issued later.
+ * Each question names the roles that answer it; a question with no roles is for every role.
  *
  * @package    reMember
  * @subpackage reMember/includes/utilities
@@ -28,49 +29,56 @@ class Remember_Surveys {
 	}
 
 	/**
-	 * Role ids this survey includes. Empty means every role on the event.
+	 * Role ids that answer one question. Empty means every role on the event.
 	 *
-	 * @param int $survey_id Survey.
+	 * @param int $question_id Question.
 	 * @return int[]
 	 */
-	public static function role_ids_for_survey( $survey_id ) {
-		global $wpdb;
-		$survey_id = absint( $survey_id );
-		if ( $survey_id < 1 ) {
-			return array();
-		}
-		$ids = $wpdb->get_col(
-			$wpdb->prepare(
-				'SELECT event_role_id FROM ' . self::roles_table() . ' WHERE survey_id = %d ORDER BY event_role_id ASC',
-				$survey_id
-			)
-		);
-		if ( ! is_array( $ids ) ) {
-			return array();
-		}
-		return array_values( array_filter( array_map( 'absint', $ids ) ) );
+	public static function question_role_ids( $question_id ) {
+		$map = self::question_roles_map( array( $question_id ) );
+		return isset( $map[ absint( $question_id ) ] ) ? $map[ absint( $question_id ) ] : array();
 	}
 
 	/**
-	 * Replace the roles on a survey. An empty list means every role.
+	 * Role ids for several questions at once.
 	 *
-	 * @param int   $survey_id Survey.
-	 * @param int[] $role_ids  Event role ids.
+	 * @param int[] $question_ids Questions.
+	 * @return array<int,int[]> Question id => event role ids. Questions for every role are left out.
+	 */
+	public static function question_roles_map( $question_ids ) {
+		global $wpdb;
+		$ids = array_values( array_filter( array_map( 'absint', (array) $question_ids ) ) );
+		if ( empty( $ids ) ) {
+			return array();
+		}
+		$in   = implode( ',', $ids );
+		$rows = $wpdb->get_results( 'SELECT question_id, event_role_id FROM ' . self::question_roles_table() . " WHERE question_id IN ({$in}) ORDER BY event_role_id ASC" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- integer list.
+		$out  = array();
+		foreach ( is_array( $rows ) ? $rows : array() as $row ) {
+			$out[ (int) $row->question_id ][] = (int) $row->event_role_id;
+		}
+		return $out;
+	}
+
+	/**
+	 * Replace the roles that answer a question. An empty list means every role.
+	 *
+	 * @param int   $question_id Question.
+	 * @param int[] $role_ids    Event role ids.
 	 * @return void
 	 */
-	public static function set_survey_roles( $survey_id, $role_ids ) {
+	public static function set_question_roles( $question_id, $role_ids ) {
 		global $wpdb;
-		$survey_id = absint( $survey_id );
-		$wpdb->delete( self::roles_table(), array( 'survey_id' => $survey_id ), array( '%d' ) );
-		foreach ( $role_ids as $role_id ) {
-			$role_id = absint( $role_id );
+		$question_id = absint( $question_id );
+		$wpdb->delete( self::question_roles_table(), array( 'question_id' => $question_id ), array( '%d' ) );
+		foreach ( array_unique( array_map( 'absint', (array) $role_ids ) ) as $role_id ) {
 			if ( $role_id < 1 ) {
 				continue;
 			}
 			$wpdb->insert(
-				self::roles_table(),
+				self::question_roles_table(),
 				array(
-					'survey_id'     => $survey_id,
+					'question_id'   => $question_id,
 					'event_role_id' => $role_id,
 				),
 				array( '%d', '%d' )
@@ -79,48 +87,44 @@ class Remember_Surveys {
 	}
 
 	/**
-	 * Application survey a chosen role should answer. A survey that names that role wins. Otherwise the survey with no roles checked.
+	 * Questions asked of any of these roles, in sort order. Questions with no roles are asked of everyone.
 	 *
-	 * @param int $event_id      Event.
-	 * @param int $event_role_id Event role. 0 has no role-specific survey.
-	 * @return object|null
+	 * @param object[] $questions      Questions.
+	 * @param int[]    $event_role_ids The member's roles on the event.
+	 * @return object[]
 	 */
-	public static function application_survey( $event_id, $event_role_id = 0 ) {
-		$event_id      = absint( $event_id );
-		$event_role_id = absint( $event_role_id );
-		if ( $event_id < 1 || $event_role_id < 1 ) {
-			return null;
+	public static function questions_for_roles( $questions, $event_role_ids ) {
+		$event_role_ids = array_map( 'absint', (array) $event_role_ids );
+		$map            = self::question_roles_map( wp_list_pluck( $questions, 'question_id' ) );
+		$out            = array();
+		foreach ( $questions as $question ) {
+			$qid = (int) $question->question_id;
+			if ( empty( $map[ $qid ] ) || array_intersect( $map[ $qid ], $event_role_ids ) ) {
+				$out[] = $question;
+			}
 		}
-		$specific = self::application_slot( $event_id, $event_role_id );
-		if ( $specific ) {
-			return $specific;
-		}
-		return self::application_slot( $event_id, 0 );
+		return $out;
 	}
 
 	/**
-	 * Application survey that includes this role, or the every-role survey when the role id is 0.
+	 * The event's survey on the application, if it has one.
 	 *
-	 * @param int $event_id      Event.
-	 * @param int $event_role_id Event role, or 0 for the survey with no roles checked.
+	 * @param int $event_id Event.
 	 * @return object|null
 	 */
-	public static function application_slot( $event_id, $event_role_id ) {
+	public static function application_survey( $event_id ) {
 		global $wpdb;
-		$event_id      = absint( $event_id );
-		$event_role_id = absint( $event_role_id );
+		$event_id = absint( $event_id );
 		if ( $event_id < 1 ) {
 			return null;
 		}
-		$surveys = self::surveys_table();
-		$roles   = self::roles_table();
-		if ( $event_role_id > 0 ) {
-			$sql = "SELECT s.* FROM {$surveys} s INNER JOIN {$roles} sr ON sr.survey_id = s.survey_id AND sr.event_role_id = %d WHERE s.event_id = %d AND s.placement = %s ORDER BY s.survey_id ASC LIMIT 1";
-			$row = $wpdb->get_row( $wpdb->prepare( $sql, $event_role_id, $event_id, self::PLACEMENT_APPLICATION ) );
-		} else {
-			$sql = "SELECT s.* FROM {$surveys} s WHERE s.event_id = %d AND s.placement = %s AND NOT EXISTS (SELECT 1 FROM {$roles} sr WHERE sr.survey_id = s.survey_id) ORDER BY s.survey_id ASC LIMIT 1";
-			$row = $wpdb->get_row( $wpdb->prepare( $sql, $event_id, self::PLACEMENT_APPLICATION ) );
-		}
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				'SELECT * FROM ' . self::surveys_table() . ' WHERE event_id = %d AND placement = %s ORDER BY survey_id ASC LIMIT 1',
+				$event_id,
+				self::PLACEMENT_APPLICATION
+			)
+		);
 		return $row ? $row : null;
 	}
 
@@ -173,52 +177,42 @@ class Remember_Surveys {
 	}
 
 	/**
-	 * Roles and application-survey slots for the survey editor.
+	 * Event id => survey id of the survey already on each event's application, for the survey editor.
 	 *
-	 * @return array{roles:array<int,array<string,int|string>>,slots:array<int,array<string,int>>}
+	 * @return array<int,int>
 	 */
-	public static function audience_editor_payload() {
+	public static function application_survey_ids_by_event() {
 		global $wpdb;
-		$roles = $wpdb->get_results(
-			"SELECT er.event_id, er.event_role_id, r.role_name
-			FROM {$wpdb->prefix}remember_event_roles er
-			INNER JOIN {$wpdb->prefix}remember_roles r ON r.role_id = er.role_id
-			ORDER BY r.role_name ASC, er.event_role_id ASC"
-		);
-		$slots = $wpdb->get_results(
+		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				'SELECT s.survey_id, s.event_id, sr.event_role_id FROM ' . self::surveys_table() . ' s LEFT JOIN ' . self::roles_table() . ' sr ON sr.survey_id = s.survey_id WHERE s.placement = %s',
+				'SELECT event_id, MIN(survey_id) AS survey_id FROM ' . self::surveys_table() . ' WHERE placement = %s GROUP BY event_id',
 				self::PLACEMENT_APPLICATION
 			)
 		);
-		$role_out = array();
-		foreach ( is_array( $roles ) ? $roles : array() as $role ) {
-			$role_out[] = array(
-				'event_id'      => (int) $role->event_id,
-				'event_role_id' => (int) $role->event_role_id,
-				'role_name'     => (string) $role->role_name,
-			);
+		$out = array();
+		foreach ( is_array( $rows ) ? $rows : array() as $row ) {
+			$out[ (int) $row->event_id ] = (int) $row->survey_id;
 		}
-		$grouped = array();
-		foreach ( is_array( $slots ) ? $slots : array() as $slot ) {
-			$key = (int) $slot->survey_id;
-			if ( ! isset( $grouped[ $key ] ) ) {
-				$grouped[ $key ] = array(
-					'survey_id'      => $key,
-					'event_id'       => (int) $slot->event_id,
-					'event_role_ids' => array(),
-				);
-			}
-			$role_id = absint( $slot->event_role_id );
-			if ( $role_id > 0 ) {
-				$grouped[ $key ]['event_role_ids'][] = $role_id;
-			}
-		}
-		$slot_out = array_values( $grouped );
-		return array(
-			'roles' => $role_out,
-			'slots' => $slot_out,
+		return $out;
+	}
+
+	/**
+	 * Roles the member was accepted for on an event.
+	 *
+	 * @param int $event_id  Event.
+	 * @param int $member_id Member.
+	 * @return int[]
+	 */
+	public static function accepted_role_ids( $event_id, $member_id ) {
+		global $wpdb;
+		$ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT DISTINCT event_role_id FROM {$wpdb->prefix}remember_event_applications WHERE event_id = %d AND member_id = %d AND status = 'accepted'",
+				absint( $event_id ),
+				absint( $member_id )
+			)
 		);
+		return array_values( array_filter( array_map( 'absint', is_array( $ids ) ? $ids : array() ) ) );
 	}
 
 	/**
@@ -260,7 +254,9 @@ class Remember_Surveys {
 	}
 
 	/**
-	 * Every survey, with its event name and question count, for the admin list.
+	 * Every survey, with its event name, question count, and the roles its questions are asked of, for the admin list.
+	 *
+	 * role_names is empty when at least one question is asked of every role.
 	 *
 	 * @param int $event_id Limit to one event, or 0 for all.
 	 * @return object[]
@@ -269,26 +265,34 @@ class Remember_Surveys {
 		global $wpdb;
 		$surveys   = self::surveys_table();
 		$questions = self::questions_table();
+		$qroles    = self::question_roles_table();
 		$events    = $wpdb->prefix . 'remember_events';
 		$event_id  = absint( $event_id );
 		$where     = $event_id > 0 ? $wpdb->prepare( 'WHERE s.event_id = %d', $event_id ) : '';
 		$roles     = $wpdb->prefix . 'remember_roles';
 		$eroles    = $wpdb->prefix . 'remember_event_roles';
-		$sroles    = self::roles_table();
 		$rows      = $wpdb->get_results(
 			"SELECT s.survey_id, s.event_id, s.title, s.placement, s.timing, s.status, e.event_name,
-				(SELECT GROUP_CONCAT(r.role_name ORDER BY r.role_name SEPARATOR ', ')
-					FROM {$sroles} sr
-					INNER JOIN {$eroles} er ON er.event_role_id = sr.event_role_id
+				(SELECT GROUP_CONCAT(DISTINCT r.role_name ORDER BY r.role_name SEPARATOR ', ')
+					FROM {$questions} q
+					INNER JOIN {$qroles} qr ON qr.question_id = q.question_id
+					INNER JOIN {$eroles} er ON er.event_role_id = qr.event_role_id
 					INNER JOIN {$roles} r ON r.role_id = er.role_id
-					WHERE sr.survey_id = s.survey_id) AS role_names,
+					WHERE q.survey_id = s.survey_id) AS role_names,
+				(SELECT COUNT(*) FROM {$questions} q WHERE q.survey_id = s.survey_id AND NOT EXISTS (SELECT 1 FROM {$qroles} qr WHERE qr.question_id = q.question_id)) AS every_role_questions,
 				(SELECT COUNT(*) FROM {$questions} q WHERE q.survey_id = s.survey_id) AS question_count
 			FROM {$surveys} s
 			LEFT JOIN {$events} e ON e.event_id = s.event_id
 			{$where}
 			ORDER BY e.start_date DESC, e.event_name ASC, s.title ASC, s.survey_id ASC"
 		);
-		return is_array( $rows ) ? $rows : array();
+		$rows = is_array( $rows ) ? $rows : array();
+		foreach ( $rows as $row ) {
+			if ( (int) $row->every_role_questions > 0 ) {
+				$row->role_names = '';
+			}
+		}
+		return $rows;
 	}
 
 	/**
@@ -313,26 +317,75 @@ class Remember_Surveys {
 	}
 
 	/**
-	 * Markup for the apply form, or an empty string when this role has no application survey.
+	 * What the application form asks a member applying for one role.
+	 *
+	 * Questions for that role that the member already answered (for example when applying for a second role)
+	 * are not asked again. Their stored answers still decide whether a "required when" question applies.
+	 *
+	 * @param int $event_id      Event.
+	 * @param int $event_role_id Event role being applied for.
+	 * @param int $member_id     Member, or 0 to ask every question for the role.
+	 * @return array{survey:object|null,questions:object[],known:array<string,mixed>}
+	 */
+	public static function apply_questions( $event_id, $event_role_id, $member_id = 0 ) {
+		$empty = array(
+			'survey'    => null,
+			'questions' => array(),
+			'known'     => array(),
+		);
+		if ( absint( $event_role_id ) < 1 || ! self::role_belongs_to_event( $event_id, $event_role_id ) ) {
+			return $empty;
+		}
+		$survey = self::application_survey( $event_id );
+		if ( ! $survey ) {
+			return $empty;
+		}
+		$all       = self::questions( $survey->survey_id );
+		$questions = self::questions_for_roles( $all, array( $event_role_id ) );
+		$known     = array();
+		$existing  = absint( $member_id ) > 0 ? self::response_for_member( $survey->survey_id, $member_id ) : null;
+		if ( $existing ) {
+			$stored = self::answers_for_response( $existing->response_id );
+			$ask    = array();
+			foreach ( $questions as $question ) {
+				$qid = (int) $question->question_id;
+				if ( isset( $stored[ $qid ] ) && '' !== trim( $stored[ $qid ] ) ) {
+					continue;
+				}
+				$ask[] = $question;
+			}
+			$questions = $ask;
+			$asked     = array_flip( wp_list_pluck( $questions, 'question_id' ) );
+			foreach ( $all as $question ) {
+				$qid = (int) $question->question_id;
+				if ( ! isset( $asked[ $qid ] ) && isset( $stored[ $qid ] ) && '' !== trim( $stored[ $qid ] ) ) {
+					$value = $stored[ $qid ];
+					$known[ self::question_field_key( $question ) ] = 'multiselect' === $question->field_type ? self::decode_list( $value ) : $value;
+				}
+			}
+		}
+		return array(
+			'survey'    => $survey,
+			'questions' => $questions,
+			'known'     => $known,
+		);
+	}
+
+	/**
+	 * Markup for the apply form, or an empty string when there is nothing for this role to answer.
 	 *
 	 * @param int  $event_id      Event.
 	 * @param int  $event_role_id Event role.
 	 * @param bool $use_posted    Fill the fields from the posted answers. The caller must have checked the nonce.
+	 * @param int  $member_id     Member applying, so questions they already answered are skipped.
 	 * @return string
 	 */
-	public static function render_apply_html( $event_id, $event_role_id = 0, $use_posted = false ) {
-		if ( ! self::role_belongs_to_event( $event_id, $event_role_id ) ) {
+	public static function render_apply_html( $event_id, $event_role_id = 0, $use_posted = false, $member_id = 0 ) {
+		$set = self::apply_questions( $event_id, $event_role_id, $member_id );
+		if ( ! $set['survey'] || empty( $set['questions'] ) ) {
 			return '';
 		}
-		$survey = self::application_survey( $event_id, $event_role_id );
-		if ( ! $survey ) {
-			return '';
-		}
-		$questions = self::questions( $survey->survey_id );
-		if ( empty( $questions ) ) {
-			return '';
-		}
-		return self::render_fields( $survey, $questions, false, null, $use_posted ? self::posted_answers_map( $questions ) : null );
+		return self::render_fields( $set['survey'], $set['questions'], false, null, $use_posted ? self::posted_answers_map( $set['questions'] ) : null, $set['known'] );
 	}
 
 	/**
@@ -340,22 +393,19 @@ class Remember_Surveys {
 	 *
 	 * @param int $event_id      Event.
 	 * @param int $event_role_id Event role.
+	 * @param int $member_id     Member applying.
 	 * @return string
 	 */
-	public static function validate_apply( $event_id, $event_role_id = 0 ) {
-		$survey = self::application_survey( $event_id, $event_role_id );
-		if ( ! $survey ) {
+	public static function validate_apply( $event_id, $event_role_id = 0, $member_id = 0 ) {
+		$set = self::apply_questions( $event_id, $event_role_id, $member_id );
+		if ( ! $set['survey'] || empty( $set['questions'] ) ) {
 			return '';
 		}
-		$questions = self::questions( $survey->survey_id );
-		if ( empty( $questions ) ) {
-			return '';
-		}
-		return self::validate_posted( $questions );
+		return self::validate_posted( $set['questions'], $set['known'] );
 	}
 
 	/**
-	 * Store the application survey once the application row exists.
+	 * Store the application survey once the application row exists. Earlier answers are kept.
 	 *
 	 * @param int $application_id Application.
 	 * @param int $event_id       Event.
@@ -364,11 +414,11 @@ class Remember_Surveys {
 	 * @return void
 	 */
 	public static function save_apply_response( $application_id, $event_id, $member_id, $event_role_id = 0 ) {
-		$survey = self::application_survey( $event_id, $event_role_id );
-		if ( ! $survey ) {
+		$set = self::apply_questions( $event_id, $event_role_id, $member_id );
+		if ( ! $set['survey'] || empty( $set['questions'] ) ) {
 			return;
 		}
-		self::save_response( $survey, $member_id, $application_id );
+		self::save_response( $set['survey'], $member_id, $application_id, $set['questions'], $set['known'] );
 	}
 
 	/**
@@ -404,27 +454,29 @@ class Remember_Surveys {
 	}
 
 	/**
-	 * Whether this member may answer the survey. No roles checked means any accepted participant.
+	 * Follow-up questions for a member: those asked of any role they were accepted for.
+	 *
+	 * @param object $survey    Survey.
+	 * @param int    $member_id Member.
+	 * @return object[] Empty when the member was not accepted or no question is for their roles.
+	 */
+	public static function followup_questions_for_member( $survey, $member_id ) {
+		$role_ids = self::accepted_role_ids( $survey->event_id, $member_id );
+		if ( empty( $role_ids ) ) {
+			return array();
+		}
+		return self::questions_for_roles( self::questions( $survey->survey_id ), $role_ids );
+	}
+
+	/**
+	 * Whether this member may answer the survey: accepted, with at least one question for their roles.
 	 *
 	 * @param object $survey    Survey.
 	 * @param int    $member_id Member.
 	 * @return bool
 	 */
 	public static function member_can_answer( $survey, $member_id ) {
-		$role_ids = self::role_ids_for_survey( $survey->survey_id );
-		if ( empty( $role_ids ) ) {
-			return self::member_is_accepted( $survey->event_id, $member_id );
-		}
-		global $wpdb;
-		$in    = implode( ',', array_map( 'absint', $role_ids ) );
-		$found = $wpdb->get_var(
-			$wpdb->prepare(
-				"SELECT application_id FROM {$wpdb->prefix}remember_event_applications WHERE event_id = %d AND member_id = %d AND status = 'accepted' AND event_role_id IN ({$in}) LIMIT 1",
-				absint( $survey->event_id ),
-				absint( $member_id )
-			)
-		);
-		return (bool) $found;
+		return ! empty( self::followup_questions_for_member( $survey, $member_id ) );
 	}
 
 	/**
@@ -439,12 +491,12 @@ class Remember_Surveys {
 		if ( ! $survey || self::PLACEMENT_FOLLOWUP !== $survey->placement || 'issued' !== $survey->status ) {
 			return '<p class="remember-notice remember-error">' . esc_html__( 'That survey is not open.', 'remember' ) . '</p>';
 		}
-		if ( ! self::member_can_answer( $survey, $member_id ) ) {
+		if ( ! self::member_is_accepted( $survey->event_id, $member_id ) ) {
 			return '<p class="remember-notice remember-error">' . esc_html__( 'This survey is for accepted participants of the event.', 'remember' ) . '</p>';
 		}
-		$questions = self::questions( $survey->survey_id );
+		$questions = self::followup_questions_for_member( $survey, $member_id );
 		if ( empty( $questions ) ) {
-			return '<p class="remember-notice remember-error">' . esc_html__( 'This survey has no questions.', 'remember' ) . '</p>';
+			return '<p class="remember-notice remember-error">' . esc_html__( 'This survey has no questions for your role.', 'remember' ) . '</p>';
 		}
 
 		$notice = '';
@@ -456,7 +508,7 @@ class Remember_Surveys {
 				// Keep what the member typed so a missed required question does not wipe the form.
 				$sticky = self::posted_answers_map( $questions );
 			} else {
-				self::save_response( $survey, $member_id, 0 );
+				self::save_response( $survey, $member_id, 0, $questions );
 				$notice = '<p class="remember-notice remember-success">' . esc_html__( 'Your response was saved.', 'remember' ) . '</p>';
 			}
 		}
@@ -492,9 +544,9 @@ class Remember_Surveys {
 		}
 		if ( self::PLACEMENT_APPLICATION === $placement ) {
 			$timing   = '';
-			$existing = self::application_slot( $event_id, 0 );
+			$existing = self::application_survey( $event_id );
 			if ( $existing && (int) $existing->survey_id !== $survey_id ) {
-				return new WP_Error( 'remember_survey_application', __( 'This event already has a survey on the application for every role.', 'remember' ) );
+				return new WP_Error( 'remember_survey_application', self::application_taken_message() );
 			}
 			if ( '' === $title ) {
 				$title = __( 'Application survey', 'remember' );
@@ -503,7 +555,7 @@ class Remember_Surveys {
 		$rows = self::posted_question_rows();
 		if ( empty( $rows ) ) {
 			if ( self::PLACEMENT_APPLICATION === $placement ) {
-				$existing = self::application_slot( $event_id, 0 );
+				$existing = self::application_survey( $event_id );
 				if ( ! $existing ) {
 					return 0;
 				}
@@ -581,11 +633,23 @@ class Remember_Surveys {
 		if ( ! $survey || self::PLACEMENT_FOLLOWUP !== $survey->placement ) {
 			return new WP_Error( 'remember_survey_issue', __( 'Only a follow-on survey can be issued.', 'remember' ) );
 		}
-		if ( empty( self::questions( $survey_id ) ) ) {
+		$questions = self::questions( $survey_id );
+		if ( empty( $questions ) ) {
 			return new WP_Error( 'remember_survey_empty', __( 'Add at least one question before issuing the survey.', 'remember' ) );
 		}
 		global $wpdb;
-		$role_ids = self::role_ids_for_survey( $survey->survey_id );
+		$role_ids = array();
+		$roles    = self::question_roles_map( wp_list_pluck( $questions, 'question_id' ) );
+		foreach ( $questions as $question ) {
+			$qid = (int) $question->question_id;
+			if ( empty( $roles[ $qid ] ) ) {
+				$role_ids = array();
+				break;
+			}
+			$role_ids = array_merge( $role_ids, $roles[ $qid ] );
+		}
+		$role_ids = array_values( array_unique( $role_ids ) );
+		sort( $role_ids );
 		if ( $role_ids ) {
 			$in         = implode( ',', array_map( 'absint', $role_ids ) );
 			$member_ids = $wpdb->get_col(
@@ -698,13 +762,232 @@ class Remember_Surveys {
 		if ( $question_ids ) {
 			$in = implode( ',', array_map( 'absint', $question_ids ) );
 			$wpdb->query( "DELETE FROM " . self::answers_table() . " WHERE question_id IN ({$in})" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->query( 'DELETE FROM ' . self::question_roles_table() . " WHERE question_id IN ({$in})" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- integer list.
 		}
 		$wpdb->delete( self::questions_table(), array( 'survey_id' => $survey_id ), array( '%d' ) );
-		$wpdb->delete( self::roles_table(), array( 'survey_id' => $survey_id ), array( '%d' ) );
 		$wpdb->delete( self::surveys_table(), array( 'survey_id' => $survey_id ), array( '%d' ) );
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
 		Remember_Logger::info( 'Survey deleted', array( 'survey_id' => $survey_id ) );
 		return true;
+	}
+
+	/**
+	 * Copy a survey and its questions to an event. Responses are never copied.
+	 *
+	 * Each question's roles move to the same roles on the target event; roles the target does not
+	 * have are left off, and a question left with none is asked of every role. An application survey
+	 * stays on the application when the target has none there, and otherwise becomes a follow-up
+	 * draft so it never displaces the target's survey.
+	 *
+	 * @param int $survey_id       Survey to copy.
+	 * @param int $target_event_id Event to copy into (may be the same event).
+	 * @return array{survey_id:int,notes:string[]}|WP_Error
+	 */
+	public static function copy_survey( $survey_id, $target_event_id ) {
+		global $wpdb;
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
+
+		$source          = self::get( $survey_id );
+		$target_event_id = absint( $target_event_id );
+		if ( ! $source ) {
+			return new WP_Error( 'remember_survey_missing', __( 'Survey not found.', 'remember' ) );
+		}
+		$target_name = $wpdb->get_var( $wpdb->prepare( "SELECT event_name FROM {$wpdb->prefix}remember_events WHERE event_id = %d", $target_event_id ) );
+		if ( null === $target_name ) {
+			return new WP_Error( 'remember_survey_event', __( 'Choose the event to copy the survey to.', 'remember' ) );
+		}
+		$questions = self::questions( $source->survey_id );
+		if ( empty( $questions ) ) {
+			return new WP_Error( 'remember_survey_empty', __( 'This survey has no questions to copy.', 'remember' ) );
+		}
+
+		$notes        = array();
+		$source_roles = self::question_roles_map( wp_list_pluck( $questions, 'question_id' ) );
+		$role_map     = self::map_roles_to_event( array_unique( array_merge( array(), ...array_values( $source_roles ) ) ), $target_event_id );
+		$dropped      = array_keys(
+			array_filter(
+				$role_map,
+				static function ( $mapped ) {
+					return 0 === $mapped;
+				}
+			)
+		);
+		$target_roles = array();
+		$widened      = array();
+		foreach ( $questions as $question ) {
+			$qid    = (int) $question->question_id;
+			$mapped = array();
+			foreach ( isset( $source_roles[ $qid ] ) ? $source_roles[ $qid ] : array() as $role_id ) {
+				if ( ! empty( $role_map[ $role_id ] ) ) {
+					$mapped[] = $role_map[ $role_id ];
+				}
+			}
+			$target_roles[ $qid ] = array_values( array_unique( $mapped ) );
+			if ( ! empty( $source_roles[ $qid ] ) && empty( $mapped ) ) {
+				$widened[] = (string) $question->label;
+			}
+		}
+		if ( $dropped ) {
+			$notes[] = sprintf(
+				/* translators: 1: comma-separated role names, 2: event name */
+				__( 'These roles are not on %2$s, so the copied questions leave them out: %1$s.', 'remember' ),
+				implode( ', ', self::role_names( $dropped ) ),
+				$target_name
+			);
+		}
+		if ( $widened ) {
+			$notes[] = sprintf(
+				/* translators: %s: question labels separated by semicolons */
+				__( 'None of the roles for these questions are on that event, so the copy asks them of every role. Choose their roles before using the survey: %s', 'remember' ),
+				implode( '; ', $widened )
+			);
+		}
+
+		$placement = (string) $source->placement;
+		if ( self::PLACEMENT_APPLICATION === $placement ) {
+			if ( self::application_survey( $target_event_id ) ) {
+				$placement = self::PLACEMENT_FOLLOWUP;
+				$notes[]   = sprintf(
+					/* translators: %s: event name */
+					__( '%s already has a survey on the application, so the copy was saved as a follow-up draft and the existing survey was left in place.', 'remember' ),
+					$target_name
+				);
+			} else {
+				$notes[] = sprintf(
+					/* translators: %s: event name */
+					__( 'The copy is now on the application form for %s.', 'remember' ),
+					$target_name
+				);
+			}
+		}
+
+		$title = (string) $source->title;
+		if ( (int) $source->event_id === $target_event_id ) {
+			/* translators: %s: survey title */
+			$title = sprintf( __( '%s (copy)', 'remember' ), $title );
+		}
+		$now = current_time( 'mysql' );
+		$ok  = $wpdb->insert(
+			self::surveys_table(),
+			array(
+				'event_id'     => $target_event_id,
+				'title'        => mb_substr( $title, 0, 255 ),
+				'instructions' => isset( $source->instructions ) ? $source->instructions : null,
+				'placement'    => $placement,
+				'timing'       => self::PLACEMENT_FOLLOWUP === $placement ? ( 'before' === $source->timing ? 'before' : 'after' ) : '',
+				'status'       => self::PLACEMENT_APPLICATION === $placement ? 'open' : 'draft',
+				'created_by'   => get_current_user_id(),
+				'created_at'   => $now,
+				'updated_at'   => $now,
+			)
+		);
+		$copy_id = $ok ? (int) $wpdb->insert_id : 0;
+		if ( $copy_id < 1 ) {
+			Remember_Logger::error( 'Survey copy could not be created', array( 'source_survey_id' => (int) $source->survey_id, 'event_id' => $target_event_id, 'db_error' => $wpdb->last_error ) );
+			return new WP_Error( 'remember_survey_save', __( 'The survey could not be copied.', 'remember' ) );
+		}
+
+		$id_map = array();
+		foreach ( $questions as $question ) {
+			$row = array(
+				'survey_id'           => $copy_id,
+				'sort_order'          => (int) $question->sort_order,
+				'label'               => $question->label,
+				'field_key'           => $question->field_key,
+				'field_type'          => $question->field_type,
+				'options_text'        => $question->options_text,
+				'is_required'         => (int) $question->is_required,
+				'required_when_json'  => $question->required_when_json,
+				'show_if_question_id' => 0,
+				'show_if_value'       => (string) $question->show_if_value,
+			);
+			if ( ! $wpdb->insert( self::questions_table(), $row ) ) {
+				Remember_Logger::error( 'Survey copy failed while copying questions', array( 'source_survey_id' => (int) $source->survey_id, 'survey_id' => $copy_id, 'db_error' => $wpdb->last_error ) );
+				self::delete_survey( $copy_id );
+				return new WP_Error( 'remember_survey_save', __( 'The survey could not be copied.', 'remember' ) );
+			}
+			$id_map[ (int) $question->question_id ] = (int) $wpdb->insert_id;
+			self::set_question_roles( (int) $wpdb->insert_id, $target_roles[ (int) $question->question_id ] );
+		}
+		foreach ( $questions as $question ) {
+			$parent = (int) $question->show_if_question_id;
+			if ( $parent > 0 && isset( $id_map[ $parent ] ) ) {
+				$wpdb->update(
+					self::questions_table(),
+					array( 'show_if_question_id' => $id_map[ $parent ] ),
+					array( 'question_id' => $id_map[ (int) $question->question_id ] ),
+					array( '%d' ),
+					array( '%d' )
+				);
+			}
+		}
+
+		Remember_Logger::info(
+			'Survey copied',
+			array(
+				'source_survey_id'       => (int) $source->survey_id,
+				'survey_id'              => $copy_id,
+				'source_event_id'        => (int) $source->event_id,
+				'event_id'               => $target_event_id,
+				'placement'              => $placement,
+				'dropped_event_role_ids' => $dropped,
+				'widened_questions'      => count( $widened ),
+				'question_count'         => count( $id_map ),
+			)
+		);
+
+		return array(
+			'survey_id' => $copy_id,
+			'notes'     => $notes,
+		);
+	}
+
+	/**
+	 * Map event roles to the event role with the same underlying role on another event.
+	 *
+	 * @param int[] $event_role_ids  Source event role ids.
+	 * @param int   $target_event_id Event to map onto.
+	 * @return array<int,int> Source event role id => target event role id, or 0 when the target lacks that role.
+	 */
+	private static function map_roles_to_event( $event_role_ids, $target_event_id ) {
+		global $wpdb;
+		$out = array();
+		foreach ( $event_role_ids as $event_role_id ) {
+			$event_role_id = absint( $event_role_id );
+			$mapped        = $wpdb->get_var(
+				$wpdb->prepare(
+					"SELECT target.event_role_id
+					FROM {$wpdb->prefix}remember_event_roles source
+					INNER JOIN {$wpdb->prefix}remember_event_roles target ON target.role_id = source.role_id AND target.event_id = %d
+					WHERE source.event_role_id = %d
+					ORDER BY target.event_role_id ASC
+					LIMIT 1",
+					absint( $target_event_id ),
+					$event_role_id
+				)
+			);
+			$out[ $event_role_id ] = absint( $mapped );
+		}
+		return $out;
+	}
+
+	/**
+	 * Role names for event role ids.
+	 *
+	 * @param int[] $event_role_ids Event role ids.
+	 * @return string[]
+	 */
+	private static function role_names( $event_role_ids ) {
+		global $wpdb;
+		$ids = array_filter( array_map( 'absint', $event_role_ids ) );
+		if ( empty( $ids ) ) {
+			return array();
+		}
+		$in    = implode( ',', $ids );
+		$names = $wpdb->get_col(
+			"SELECT r.role_name FROM {$wpdb->prefix}remember_event_roles er INNER JOIN {$wpdb->prefix}remember_roles r ON r.role_id = er.role_id WHERE er.event_role_id IN ({$in}) ORDER BY r.role_name ASC" // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- integer list.
+		);
+		return is_array( $names ) ? $names : array();
 	}
 
 	/**
@@ -810,6 +1093,16 @@ class Remember_Surveys {
 			$error = __( 'Choose an earlier pick-one or pick-several question and at least one choice that makes this question required.', 'remember' );
 		}
 
+		$role_ids = self::posted_role_ids();
+		if ( '' === $error ) {
+			foreach ( $role_ids as $role_id ) {
+				if ( ! self::role_belongs_to_event( $survey->event_id, $role_id ) ) {
+					$error = __( 'Choose roles on this event.', 'remember' );
+					break;
+				}
+			}
+		}
+
 		if ( '' === $error && 'when' === $req_mode ) {
 			$rule = Remember_Profile_Questions::parse_required_when( $required_when_json );
 			$gate = $rule ? self::question_by_field_key( $survey->survey_id, $rule['field_key'] ) : null;
@@ -817,6 +1110,8 @@ class Remember_Surveys {
 				$error = __( 'The “required when” question must be a different question on this survey.', 'remember' );
 			} elseif ( ! self::type_can_gate( $gate->field_type ) ) {
 				$error = __( 'The “required when” question must be a pick-one, pick-several, or yes/no question.', 'remember' );
+			} elseif ( ! self::roles_cover( self::question_role_ids( $gate->question_id ), $role_ids ) ) {
+				$error = __( 'The “required when” question is not asked of every role this one is. Tick the same roles on both, or fewer on this one.', 'remember' );
 			} else {
 				$allowed = wp_list_pluck( self::option_pairs( $gate ), 'key' );
 				foreach ( $rule['values'] as $value ) {
@@ -824,6 +1119,21 @@ class Remember_Surveys {
 						$error = __( 'One of the “required when” choices is not valid for that question.', 'remember' );
 						break;
 					}
+				}
+			}
+		}
+
+		if ( '' === $error && $current ) {
+			foreach ( self::questions( $survey->survey_id ) as $dependent ) {
+				$rule = self::when_rule( $dependent );
+				if ( $rule && $rule['field_key'] === (string) $current->field_key && (int) $dependent->question_id !== $question_id
+					&& ! self::roles_cover( $role_ids, self::question_role_ids( $dependent->question_id ) ) ) {
+					$error = sprintf(
+						/* translators: %s: label of the question that depends on this one */
+						__( '“%s” is required depending on this question, and is asked of roles this one would not be. Tick the same roles on both, or fewer on that one.', 'remember' ),
+						$dependent->label
+					);
+					break;
 				}
 			}
 		}
@@ -854,12 +1164,14 @@ class Remember_Surveys {
 		if ( $question_id < 1 ) {
 			return new WP_Error( 'remember_survey_question', __( 'The question could not be saved.', 'remember' ) );
 		}
+		self::set_question_roles( $question_id, $role_ids );
 		Remember_Logger::info(
 			'Survey question saved',
 			array(
-				'survey_id'   => (int) $survey->survey_id,
-				'question_id' => $question_id,
-				'event_id'    => $event_id,
+				'survey_id'      => (int) $survey->survey_id,
+				'question_id'    => $question_id,
+				'event_id'       => $event_id,
+				'event_role_ids' => $role_ids,
 			)
 		);
 		Remember_Logger::debug(
@@ -887,6 +1199,7 @@ class Remember_Surveys {
 		}
 		global $wpdb;
 		$wpdb->delete( self::answers_table(), array( 'question_id' => (int) $question->question_id ), array( '%d' ) );
+		$wpdb->delete( self::question_roles_table(), array( 'question_id' => (int) $question->question_id ), array( '%d' ) );
 		$wpdb->delete( self::questions_table(), array( 'question_id' => (int) $question->question_id ), array( '%d' ) );
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
 		Remember_Logger::info(
@@ -904,14 +1217,20 @@ class Remember_Surveys {
 	 * @param object[] $questions Questions.
 	 * @param bool     $standalone Kept for callers. The block is the same on the apply form and the follow-up page.
 	 * @param object|null $existing Response row.
+	 * @param array|null  $answers_override Question id => value, used instead of stored answers.
+	 * @param array       $known    Field key => earlier answer for questions not shown again.
 	 * @return string
 	 */
-	private static function render_fields( $survey, $questions, $standalone, $existing = null, $answers_override = null ) {
+	private static function render_fields( $survey, $questions, $standalone, $existing = null, $answers_override = null, $known = array() ) {
 		// $answers_override (qid => stored-value map, from posted_answers_map()) repopulates
 		// the form after a failed submit so the member's answers are not discarded.
 		$answers = is_array( $answers_override )
 			? $answers_override
 			: ( $existing ? self::answers_for_response( $existing->response_id ) : array() );
+		$shown   = array();
+		foreach ( $questions as $question ) {
+			$shown[ self::question_field_key( $question ) ] = true;
+		}
 		$html         = '<div class="remember-survey" data-remember-survey="1">';
 		$html        .= '<div class="remember-form-label">' . esc_html( $survey->title ) . '</div>';
 		$instructions = isset( $survey->instructions ) ? trim( (string) $survey->instructions ) : '';
@@ -923,6 +1242,14 @@ class Remember_Surveys {
 			$key      = self::question_field_key( $question );
 			$rule     = self::when_rule( $question );
 			$required = ! $rule && ! empty( $question->is_required );
+			if ( $rule && ! isset( $shown[ $rule['field_key'] ] ) ) {
+				// The deciding question is not on this form. An earlier answer settles it; otherwise this one never applies.
+				if ( ! isset( $known[ $rule['field_key'] ] ) || ! self::posted_matches_values( $known[ $rule['field_key'] ], $rule['values'] ) ) {
+					continue;
+				}
+				$rule     = null;
+				$required = true;
+			}
 			$html    .= '<div class="remember-form-group remember-survey-question" data-remember-survey-question="1" data-question-id="' . esc_attr( (string) $qid ) . '" data-field-type="' . esc_attr( $question->field_type ) . '" data-remember-pq-key="' . esc_attr( $key ) . '"';
 			if ( $rule ) {
 				$html .= ' data-remember-pq-when="' . esc_attr( wp_json_encode( $rule ) ) . '" hidden';
@@ -977,12 +1304,13 @@ class Remember_Surveys {
 	}
 
 	/**
-	 * @param object[] $questions Questions.
+	 * @param object[] $questions Questions on the form.
+	 * @param array    $known     Field key => earlier answer for questions not on the form.
 	 * @return string
 	 */
-	private static function validate_posted( $questions ) {
+	private static function validate_posted( $questions, $known = array() ) {
 		$posted  = isset( $_POST['remember_survey'] ) && is_array( $_POST['remember_survey'] ) ? wp_unslash( $_POST['remember_survey'] ) : array();
-		$visible = self::visibility_map( $questions, $posted );
+		$visible = self::visibility_map( $questions, $posted, $known );
 		foreach ( $questions as $question ) {
 			$qid = (int) $question->question_id;
 			if ( empty( $visible[ $qid ] ) ) {
@@ -1001,15 +1329,18 @@ class Remember_Surveys {
 	}
 
 	/**
-	 * @param object $survey         Survey.
-	 * @param int    $member_id      Member.
-	 * @param int    $application_id Application, or 0.
+	 * Save the answers to the questions that were on the form. Answers to other questions are left as they were.
+	 *
+	 * @param object   $survey         Survey.
+	 * @param int      $member_id      Member.
+	 * @param int      $application_id Application, or 0.
+	 * @param object[] $questions      Questions that were on the form.
+	 * @param array    $known          Field key => earlier answer for questions not on the form.
 	 * @return void
 	 */
-	private static function save_response( $survey, $member_id, $application_id ) {
+	private static function save_response( $survey, $member_id, $application_id, $questions, $known = array() ) {
 		global $wpdb;
-		$questions = self::questions( $survey->survey_id );
-		$posted    = isset( $_POST['remember_survey'] ) && is_array( $_POST['remember_survey'] ) ? wp_unslash( $_POST['remember_survey'] ) : array();
+		$posted   = isset( $_POST['remember_survey'] ) && is_array( $_POST['remember_survey'] ) ? wp_unslash( $_POST['remember_survey'] ) : array();
 		$existing = self::response_for_member( $survey->survey_id, $member_id );
 		$now      = current_time( 'mysql' );
 		if ( $existing ) {
@@ -1038,7 +1369,7 @@ class Remember_Surveys {
 		if ( $response_id < 1 ) {
 			return;
 		}
-		$visible = self::visibility_map( $questions, $posted );
+		$visible = self::visibility_map( $questions, $posted, $known );
 		foreach ( $questions as $question ) {
 			$qid   = (int) $question->question_id;
 			$show  = ! empty( $visible[ $qid ] );
@@ -1254,7 +1585,6 @@ class Remember_Surveys {
 		$title        = isset( $_POST['survey_title'] ) ? sanitize_text_field( wp_unslash( $_POST['survey_title'] ) ) : '';
 		$instructions = isset( $_POST['survey_instructions'] ) ? sanitize_textarea_field( wp_unslash( $_POST['survey_instructions'] ) ) : '';
 		$timing    = isset( $_POST['survey_timing'] ) ? sanitize_key( wp_unslash( $_POST['survey_timing'] ) ) : '';
-		$role_ids  = self::posted_role_ids();
 		if ( ! in_array( $timing, array( 'before', 'after' ), true ) ) {
 			$timing = '';
 		}
@@ -1264,15 +1594,10 @@ class Remember_Surveys {
 		if ( '' === $title ) {
 			return new WP_Error( 'remember_survey_title', __( 'A survey needs a title.', 'remember' ) );
 		}
-		foreach ( $role_ids as $role_id ) {
-			if ( ! self::role_belongs_to_event( $event_id, $role_id ) ) {
-				return new WP_Error( 'remember_survey_role', __( 'Choose roles on this event.', 'remember' ) );
-			}
-		}
 		if ( self::PLACEMENT_APPLICATION === $placement ) {
-			$conflict = self::application_role_conflict( $event_id, $role_ids, $survey_id );
-			if ( $conflict ) {
-				return new WP_Error( 'remember_survey_application', $conflict );
+			$existing = self::application_survey( $event_id );
+			if ( $existing && (int) $existing->survey_id !== $survey_id ) {
+				return new WP_Error( 'remember_survey_application', self::application_taken_message() );
 			}
 		}
 		global $wpdb;
@@ -1306,14 +1631,12 @@ class Remember_Surveys {
 		if ( $survey_id < 1 ) {
 			return new WP_Error( 'remember_survey_save', __( 'The survey could not be saved.', 'remember' ) );
 		}
-		self::set_survey_roles( $survey_id, $role_ids );
 		Remember_Logger::info(
 			'Survey saved',
 			array(
-				'survey_id'      => $survey_id,
-				'event_id'       => $event_id,
-				'event_role_ids' => $role_ids,
-				'placement'      => $placement,
+				'survey_id' => $survey_id,
+				'event_id'  => $event_id,
+				'placement' => $placement,
 			)
 		);
 		$survey = self::get( $survey_id );
@@ -1413,9 +1736,10 @@ class Remember_Surveys {
 	/**
 	 * @param object[] $questions Questions in sort order.
 	 * @param array    $posted    question_id => raw posted value.
+	 * @param array    $known     Field key => earlier answer for questions not on the form.
 	 * @return array<int,bool>
 	 */
-	private static function visibility_map( $questions, $posted ) {
+	private static function visibility_map( $questions, $posted, $known = array() ) {
 		$by_key  = array();
 		$visible = array();
 		foreach ( $questions as $question ) {
@@ -1427,6 +1751,10 @@ class Remember_Surveys {
 				$rule = self::when_rule( $question );
 				if ( ! $rule ) {
 					$visible[ $qid ] = true;
+					continue;
+				}
+				if ( ! isset( $by_key[ $rule['field_key'] ] ) && isset( $known[ $rule['field_key'] ] ) ) {
+					$visible[ $qid ] = self::posted_matches_values( $known[ $rule['field_key'] ], $rule['values'] );
 					continue;
 				}
 				$gate    = isset( $by_key[ $rule['field_key'] ] ) ? $by_key[ $rule['field_key'] ] : null;
@@ -1586,7 +1914,7 @@ class Remember_Surveys {
 	}
 
 	/**
-	 * Checked role ids from the survey form. None checked means every role.
+	 * Checked role ids from the question form. None checked means every role.
 	 *
 	 * @return int[]
 	 */
@@ -1606,34 +1934,34 @@ class Remember_Surveys {
 	}
 
 	/**
-	 * Error when another application survey already covers this audience.
+	 * Whether every member asked the inner question is also asked the outer one.
 	 *
-	 * @param int   $event_id  Event.
-	 * @param int[] $role_ids  Selected roles. Empty means every role.
-	 * @param int   $survey_id Survey being saved.
+	 * @param int[] $outer Roles of the question that must be asked too. Empty means every role.
+	 * @param int[] $inner Roles of the question that depends on it. Empty means every role.
+	 * @return bool
+	 */
+	private static function roles_cover( $outer, $inner ) {
+		if ( empty( $outer ) ) {
+			return true;
+		}
+		if ( empty( $inner ) ) {
+			return false;
+		}
+		return ! array_diff( array_map( 'absint', $inner ), array_map( 'absint', $outer ) );
+	}
+
+	/**
 	 * @return string
 	 */
-	private static function application_role_conflict( $event_id, $role_ids, $survey_id ) {
-		if ( empty( $role_ids ) ) {
-			$existing = self::application_slot( $event_id, 0 );
-			if ( $existing && (int) $existing->survey_id !== absint( $survey_id ) ) {
-				return __( 'This event already has a survey on the application for every role.', 'remember' );
-			}
-			return '';
-		}
-		foreach ( $role_ids as $role_id ) {
-			$existing = self::application_slot( $event_id, $role_id );
-			if ( $existing && (int) $existing->survey_id !== absint( $survey_id ) ) {
-				return __( 'This event already has a survey on the application for one of those roles.', 'remember' );
-			}
-		}
-		return '';
+	public static function application_taken_message() {
+		return __( 'This event already has a survey on the application. Add these questions to that survey and choose which roles answer each one.', 'remember' );
 	}
 
 	/**
 	 * Answer tallies for the event screen.
 	 *
-	 * Fixed-choice questions list every option. The percent is that option's share of submitted responses.
+	 * Fixed-choice questions list every option. The percent is that option's share of the responses
+	 * that were asked the question, so a question for one role is measured against that role's responses.
 	 * A multi-select can total more than 100 percent because one response may include several choices.
 	 *
 	 * @param int $event_id Event.
@@ -1684,14 +2012,19 @@ class Remember_Surveys {
 			if ( is_array( $response_counts ) && isset( $response_counts[ $sid ] ) ) {
 				$responses = (int) $response_counts[ $sid ]->response_count;
 			}
-			$questions = array();
-			foreach ( self::questions( $sid ) as $question ) {
+			$questions     = array();
+			$survey_qs     = self::questions( $sid );
+			$question_role = self::question_roles_map( wp_list_pluck( $survey_qs, 'question_id' ) );
+			foreach ( $survey_qs as $question ) {
 				$qid    = (int) $question->question_id;
 				$values = isset( $by_question[ $qid ] ) ? $by_question[ $qid ] : array();
+				$asked  = count( $values );
 				$type   = (string) $question->field_type;
 				$item   = array(
 					'label'      => (string) $question->label,
 					'field_type' => $type,
+					'roles'      => empty( $question_role[ $qid ] ) ? '' : implode( ', ', self::role_names( $question_role[ $qid ] ) ),
+					'asked'      => $asked,
 					'choices'    => array(),
 					'written'    => 0,
 				);
@@ -1721,7 +2054,7 @@ class Remember_Surveys {
 						$item['choices'][] = array(
 							'label'   => $choice['label'],
 							'count'   => $choice['count'],
-							'percent' => $responses > 0 ? (int) round( ( $choice['count'] / $responses ) * 100 ) : 0,
+							'percent' => $asked > 0 ? (int) round( ( $choice['count'] / $asked ) * 100 ) : 0,
 						);
 					}
 				} else {
@@ -1755,9 +2088,9 @@ class Remember_Surveys {
 	/**
 	 * @return string
 	 */
-	private static function roles_table() {
+	private static function question_roles_table() {
 		global $wpdb;
-		return $wpdb->prefix . 'remember_survey_roles';
+		return $wpdb->prefix . 'remember_survey_question_roles';
 	}
 
 	/**

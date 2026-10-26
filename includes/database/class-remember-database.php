@@ -98,6 +98,7 @@ class Remember_Database {
 			'surveys'                        => 'create_surveys_table',
 			'survey_roles'                   => 'create_survey_roles_table',
 			'survey_questions'               => 'create_survey_questions_table',
+			'survey_question_roles'          => 'create_survey_question_roles_table',
 			'survey_responses'               => 'create_survey_responses_table',
 			'survey_answers'                 => 'create_survey_answers_table',
 			'sensitive_access_log'           => 'create_sensitive_access_log_table',
@@ -1279,7 +1280,7 @@ class Remember_Database {
 	}
 
 	/**
-	 * Roles a survey is limited to. No rows means every role on the event.
+	 * Legacy: roles a whole survey was limited to. Since database 2.4.2 roles are kept per question.
 	 */
 	public function create_survey_roles_table() {
 		$table_name      = $this->prefix . 'survey_roles';
@@ -1318,6 +1319,25 @@ class Remember_Database {
 			show_if_value VARCHAR(255) NOT NULL DEFAULT '',
 			PRIMARY KEY (question_id),
 			KEY survey_id (survey_id)
+		) $charset_collate;";
+
+		dbDelta( $sql );
+	}
+
+	/**
+	 * Roles that answer a survey question. No rows means every role on the event.
+	 */
+	public function create_survey_question_roles_table() {
+		$table_name      = $this->prefix . 'survey_question_roles';
+		$charset_collate = $this->wpdb->get_charset_collate();
+
+		$sql = "CREATE TABLE $table_name (
+			question_role_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+			question_id BIGINT(20) UNSIGNED NOT NULL,
+			event_role_id BIGINT(20) UNSIGNED NOT NULL,
+			PRIMARY KEY (question_role_id),
+			UNIQUE KEY question_role (question_id, event_role_id),
+			KEY event_role_id (event_role_id)
 		) $charset_collate;";
 
 		dbDelta( $sql );

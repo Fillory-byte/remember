@@ -106,18 +106,22 @@ if ( isset( $_POST['remember_profile_action'] ) && check_admin_referer( 'remembe
 	$current_password = isset( $_POST['current_password'] ) ? (string) wp_unslash( $_POST['current_password'] ) : '';
 	$new_password     = isset( $_POST['new_password'] ) ? (string) wp_unslash( $_POST['new_password'] ) : '';
 	$confirm_password = isset( $_POST['new_password_confirm'] ) ? (string) wp_unslash( $_POST['new_password_confirm'] ) : '';
-	$change_password  = ( '' !== $current_password || '' !== $new_password || '' !== $confirm_password );
+	// Browsers autofill Current password, so it alone does not start a password change.
+	$change_password  = ( '' !== $new_password || '' !== $confirm_password );
 	if ( $change_password ) {
 		if ( '' === $current_password || '' === $new_password || '' === $confirm_password ) {
 			$password_error = 'password_missing';
 			if ( '' === $current_password ) {
 				$remember_invalid_fields[] = 'current_password';
+				$remember_field_messages['current_password'] = __( 'Enter your current password to change it.', 'remember' );
 			}
 			if ( '' === $new_password ) {
 				$remember_invalid_fields[] = 'new_password';
+				$remember_field_messages['new_password'] = __( 'Enter the new password.', 'remember' );
 			}
 			if ( '' === $confirm_password ) {
 				$remember_invalid_fields[] = 'new_password_confirm';
+				$remember_field_messages['new_password_confirm'] = __( 'Enter the new password again.', 'remember' );
 			}
 		} elseif ( ! wp_check_password( $current_password, $user->user_pass, $user->ID ) ) {
 			$password_error = 'password_wrong';
@@ -521,7 +525,7 @@ if ( $remember_sticky ) {
 					} elseif ( 'weak_password' === $password_error ) {
 						esc_html_e( 'Please choose a stronger password (at least eight characters).', 'remember' );
 					} else {
-						esc_html_e( 'Please enter your current password, a new password, and the confirmation.', 'remember' );
+						esc_html_e( 'To change your password, enter your current password, the new password, and the new password again. To keep your current password, leave the new password fields blank.', 'remember' );
 					}
 					?>
 				</p>
@@ -698,7 +702,7 @@ if ( $remember_sticky ) {
 
 			<div class="remember-form-section" id="remember-change-password">
 				<h3 class="remember-form-section-title"><?php esc_html_e( 'Change Password', 'remember' ); ?></h3>
-				<p class="remember-form-help"><?php esc_html_e( 'Leave these blank to keep your current password. A new password must be at least eight characters. Save Profile applies the change; you stay logged in.', 'remember' ); ?></p>
+				<p class="remember-form-help"><?php esc_html_e( 'Leave the new password fields blank to keep your current password. Current password is only checked when you enter a new one, so it is fine if your browser fills it in. A new password must be at least eight characters. Save Profile applies the change; you stay logged in.', 'remember' ); ?></p>
 				<div class="remember-form-row">
 					<div class="remember-form-col remember-form-col-full">
 						<label for="current_password" class="remember-form-label"><?php esc_html_e( 'Current password', 'remember' ); ?></label>

@@ -41,7 +41,7 @@ $submission_error = '';
 $keep_form = false;
 
 if ( isset( $_POST['remember_apply_action'] ) && check_admin_referer( 'remember_apply_action', 'remember_apply_nonce' ) ) {
-	if ( ! Remember_Member::is_vetted_member( $member_row ) ) {
+	if ( ! Remember_Vetting_Workflow::member_can_apply( $member_row ) ) {
 		$submission_error = __( 'Member is not yet vetted.', 'remember' );
 	} else {
 	$event_id = isset( $_POST['event_id'] ) ? absint( $_POST['event_id'] ) : 0;
@@ -63,7 +63,7 @@ if ( isset( $_POST['remember_apply_action'] ) && check_admin_referer( 'remember_
 			$submission_error = __( 'You have already applied for this event and role.', 'remember' );
 			$keep_form        = true;
 		} else {
-			$survey_error = Remember_Surveys::validate_apply( $event_id, $event_role_id );
+			$survey_error = Remember_Surveys::validate_apply( $event_id, $event_role_id, $member_id );
 			if ( $survey_error ) {
 				$submission_error = $survey_error;
 				$keep_form        = true;
@@ -204,7 +204,7 @@ if ( $keep_form && $selected_event ) {
 		}
 	}
 	if ( $restore['roleId'] > 0 ) {
-		$restore_survey_html = Remember_Surveys::render_apply_html( (int) $event_id, $restore['roleId'], true );
+		$restore_survey_html = Remember_Surveys::render_apply_html( (int) $event_id, $restore['roleId'], true, $member_id );
 	}
 }
 $restore['addons'] = (object) $restore['addons'];
@@ -213,6 +213,9 @@ $restore['addons'] = (object) $restore['addons'];
 <?php if ( $submission_success ) : ?>
 	<div class="remember-notice remember-success">
 		<p><?php esc_html_e( 'Application submitted successfully! You will be notified when your application is reviewed.', 'remember' ); ?></p>
+		<?php if ( ! Remember_Member::is_vetted_member( $member_row ) ) : ?>
+			<p><?php esc_html_e( 'Your vetting is under way. Staff will review this application once your vetting is complete.', 'remember' ); ?></p>
+		<?php endif; ?>
 		<p><?php echo esc_html( $subtotal_disclaimer ); ?></p>
 		<p><a href="<?php echo esc_url( Remember_Profile_Audit::get_dashboard_url() ); ?>" class="remember-button remember-button-primary">
 			<?php esc_html_e( 'Return to Dashboard', 'remember' ); ?>
@@ -226,7 +229,7 @@ $restore['addons'] = (object) $restore['addons'];
 	<div class="remember-notice remember-warning">
 		<p><?php esc_html_e( 'This event is by invitation only.', 'remember' ); ?></p>
 	</div>
-<?php elseif ( ! Remember_Member::is_vetted_member( $member_row ) ) : ?>
+<?php elseif ( ! Remember_Vetting_Workflow::member_can_apply( $member_row ) ) : ?>
 	<div class="remember-notice remember-warning">
 		<p><?php esc_html_e( 'Member is not yet vetted.', 'remember' ); ?></p>
 	</div>

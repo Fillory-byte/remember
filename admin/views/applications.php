@@ -122,6 +122,15 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 			$application = $application_model->get( $application_id );
 			if ( ! $application ) {
 				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Application not found.', 'remember' ) . '</p></div>';
+			} elseif ( ! Remember_Member::is_vetted_member( $member_model->get( $application->member_id ) ) ) {
+				Remember_Logger::warning(
+					'Application not accepted: member is not vetted',
+					array(
+						'application_id' => $application_id,
+						'member_id'      => (int) $application->member_id,
+					)
+				);
+				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'This member is not vetted yet. Finish their vetting case before accepting this application.', 'remember' ) . '</p></div>';
 			} else {
 				global $wpdb;
 				$event_role = $wpdb->get_row(
@@ -341,11 +350,7 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 					}
 
 					echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Application declined (admin). Ticket marked VOID.', 'remember' ) . '</p></div>';
-					if ( is_wp_error( $unwind ) ) {
-						echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html( $unwind->get_error_message() ) . '</p></div>';
-					} elseif ( 'leave' !== $billing_action ) {
-						echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Billing action applied in the connected provider.', 'remember' ) . '</p></div>';
-					}
+					echo Remember_Billing_Unwind::admin_notice_html( $unwind, $billing_action ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in helper.
 				} else {
 					Remember_Logger::error( 'Failed to decline application', array( 'application_id' => $application_id ) );
 					echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Failed to decline application.', 'remember' ) . '</p></div>';
@@ -417,12 +422,10 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 					$billing_action,
 					sprintf( __( 'Admin invoice action on application #%d', 'remember' ), $application_id )
 				);
-				if ( is_wp_error( $unwind ) ) {
-					echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html( $unwind->get_error_message() ) . '</p></div>';
-				} elseif ( 'leave' === $billing_action ) {
+				if ( ! is_wp_error( $unwind ) && 'leave' === $billing_action ) {
 					echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Invoice left unaltered.', 'remember' ) . '</p></div>';
 				} else {
-					echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Billing action applied in the connected provider.', 'remember' ) . '</p></div>';
+					echo Remember_Billing_Unwind::admin_notice_html( $unwind, $billing_action ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in helper.
 				}
 			}
 		} elseif ( 'reprocess_billing' === $action ) {
