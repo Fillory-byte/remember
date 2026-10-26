@@ -75,13 +75,16 @@ class Remember_Xero_API {
 	/**
 	 * Perform an authenticated Xero API request.
 	 *
+	 * Private and relative-only: the request carries the Bearer token and tenant
+	 * header, so it must never be sent anywhere but API_BASE.
+	 *
 	 * @param string $method   HTTP method.
-	 * @param string $path     Path under api.xro/2.0/ (no leading slash), or absolute URL.
+	 * @param string $path     Path under api.xro/2.0/ (no leading slash).
 	 * @param array  $body     Optional JSON body (array).
 	 * @param array  $query    Optional query args.
 	 * @return array|WP_Error Decoded JSON or error.
 	 */
-	public static function request( $method, $path, $body = null, $query = array() ) {
+	private static function request( $method, $path, $body = null, $query = array() ) {
 		$settings = self::ensure_access_token();
 		if ( is_wp_error( $settings ) ) {
 			return $settings;
@@ -90,9 +93,7 @@ class Remember_Xero_API {
 			return new WP_Error( 'xero_no_tenant', __( 'No Xero organisation (tenant) is connected.', 'remember' ) );
 		}
 
-		$url = ( 0 === strpos( $path, 'http://' ) || 0 === strpos( $path, 'https://' ) )
-			? $path
-			: self::API_BASE . ltrim( $path, '/' );
+		$url = self::API_BASE . ltrim( (string) $path, '/' );
 
 		if ( ! empty( $query ) ) {
 			$url = add_query_arg( $query, $url );
@@ -118,6 +119,13 @@ class Remember_Xero_API {
 
 		$response = wp_remote_request( $url, $args );
 		if ( is_wp_error( $response ) ) {
+			Remember_Logger::error(
+				'Xero API request could not be sent',
+				array(
+					'path'  => $path,
+					'error' => $response->get_error_message(),
+				)
+			);
 			return $response;
 		}
 
