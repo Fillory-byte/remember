@@ -12,7 +12,7 @@ if ( ! defined( 'WPINC' ) ) {
 }
 
 /**
- * Send HSTS (HTTPS only), frame/nosniff/referrer, and a WordPress-safe CSP.
+ * Send HSTS (HTTPS sites only), frame/nosniff/referrer, and a WordPress-safe CSP.
  *
  * Does not replace headers the host already set. Tighten or disable via
  * remember_security_headers.
@@ -44,7 +44,7 @@ class Remember_Security_Headers {
 			'Content-Security-Policy' => "default-src 'self'; base-uri 'self'; form-action 'self' https:; frame-ancestors 'self'; object-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' https:; frame-src 'self' https:",
 		);
 
-		if ( is_ssl() ) {
+		if ( self::site_uses_https() ) {
 			$headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains';
 		}
 
@@ -55,6 +55,20 @@ class Remember_Security_Headers {
 		 */
 		$filtered = apply_filters( 'remember_security_headers', $headers );
 		return is_array( $filtered ) ? $filtered : array();
+	}
+
+	/**
+	 * Whether visitors reach the site over HTTPS.
+	 *
+	 * is_ssl() is false behind Cloudflare or another proxy that talks to the
+	 * server over plain HTTP, so the configured site address also counts.
+	 * Browsers ignore HSTS received over plain HTTP, so an HTTP-only site is
+	 * never locked out.
+	 *
+	 * @return bool
+	 */
+	private static function site_uses_https() {
+		return is_ssl() || 'https' === wp_parse_url( home_url(), PHP_URL_SCHEME );
 	}
 
 	/**
