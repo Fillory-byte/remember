@@ -478,6 +478,21 @@ class Remember_Xero_Sync {
 			return new WP_Error( 'no_line_items', __( 'No line items available. Map event roles and catalog products to Xero under Settings → Xero.', 'remember' ) );
 		}
 
+		$discount_rate = self::contact_sales_discount_rate( $sync_result, $xero_contact_id );
+		if ( $discount_rate > 0 ) {
+			foreach ( $line_items as $index => $line ) {
+				$line_items[ $index ]['discount_rate'] = $discount_rate;
+			}
+			Remember_Logger::info(
+				'Applying the Xero contact discount to a new invoice',
+				array(
+					'application_id'  => $application_id,
+					'xero_contact_id' => $xero_contact_id,
+					'discount_rate'   => $discount_rate,
+				)
+			);
+		}
+
 		$invoice_result = Remember_Xero_API::create_invoice(
 			array(
 				'contact_id' => $xero_contact_id,
@@ -502,9 +517,10 @@ class Remember_Xero_Sync {
 			return $invoice_result;
 		}
 
-		$total_amount = 0;
+		$discount_factor = $discount_rate > 0 ? ( 1 - ( min( 100, $discount_rate ) / 100 ) ) : 1;
+		$total_amount    = 0;
 		foreach ( $line_items as $li ) {
-			$total_amount += floatval( $li['unit_amount'] ) * floatval( $li['quantity'] );
+			$total_amount += floatval( $li['unit_amount'] ) * floatval( $li['quantity'] ) * $discount_factor;
 		}
 
 		$xero_invoice_id     = isset( $invoice_result['InvoiceID'] ) ? $invoice_result['InvoiceID'] : '';
@@ -548,11 +564,11 @@ class Remember_Xero_Sync {
 			)
 		);
 
-		$amount_due = isset( $invoice_result['AmountDue'] ) ? floatval( $invoice_result['AmountDue'] ) : 0.0;
-		if ( $amount_due <= 0.001 && isset( $invoice_result['Total'] ) ) {
+		if ( isset( $invoice_result['AmountDue'] ) ) {
+			$amount_due = floatval( $invoice_result['AmountDue'] );
+		} elseif ( isset( $invoice_result['Total'] ) ) {
 			$amount_due = floatval( $invoice_result['Total'] );
-		}
-		if ( $amount_due <= 0.001 ) {
+		} else {
 			$amount_due = $total_amount;
 		}
 		self::apply_open_credit_to_invoice( $xero_invoice_id, $xero_contact_id, $amount_due );
@@ -750,6 +766,35 @@ class Remember_Xero_Sync {
 	}
 
 	/**
+	 * Sales discount percent stored on the Xero contact.
+	 *
+	 * A contact save does not always return Discount, so a missing value is read again.
+	 *
+	 * @param mixed  $sync_result Contact returned by the member sync.
+	 * @param string $contact_id  ContactID.
+	 * @return float
+	 */
+	private static function contact_sales_discount_rate( $sync_result, $contact_id ) {
+		if ( is_array( $sync_result ) && isset( $sync_result['Discount'] ) && is_numeric( $sync_result['Discount'] ) ) {
+			return Remember_Xero_API::contact_discount_rate( $sync_result );
+		}
+
+		$contact = Remember_Xero_API::get_contact( $contact_id );
+		if ( is_wp_error( $contact ) ) {
+			Remember_Logger::warning(
+				'Could not read the Xero contact discount',
+				array(
+					'xero_contact_id' => $contact_id,
+					'error'           => $contact->get_error_message(),
+				)
+			);
+			return 0.0;
+		}
+
+		return Remember_Xero_API::contact_discount_rate( $contact );
+	}
+
+	/**
 	 * Build a create_invoice line payload from a mapped Xero ItemID.
 	 *
 	 * @param string $item_id     Xero ItemID.
@@ -878,7 +923,7 @@ class Remember_Xero_Sync {
 		}
 
 		$xero_total     = isset( $invoice['Total'] ) ? floatval( $invoice['Total'] ) : null;
-		$total_amt      = ( null !== $xero_total && $xero_total > 0.001 ) ? $xero_total : floatval( $payment->total_amount );
+		$total_amt      = null !== $xero_total ? $xero_total : floatval( $payment->total_amount );
 		$xero_due       = isset( $invoice['AmountDue'] ) ? floatval( $invoice['AmountDue'] ) : null;
 		$xero_paid      = isset( $invoice['AmountPaid'] ) ? floatval( $invoice['AmountPaid'] ) : null;
 		$xero_credited  = isset( $invoice['AmountCredited'] ) ? floatval( $invoice['AmountCredited'] ) : null;

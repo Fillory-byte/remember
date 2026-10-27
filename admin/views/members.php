@@ -131,12 +131,9 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 					global $wpdb;
 					$member_record_id = $member_model->create( $user_id, $status );
 					if ( $member_record_id ) {
-						// Create vetting case if workflow is "on_join"
-						if ( Remember_Vetting_Workflow::should_vet_on_join() ) {
-							$vetting_result = Remember_Vetting_Workflow::create_vetting_case( $user_id );
-							if ( ! $vetting_result ) {
-								Remember_Logger::warning( 'Member created but vetting case creation failed', array( 'member_id' => $user_id ) );
-							}
+						$vetting_result = Remember_Vetting_Workflow::open_automatic_case( $user_id, 'join' );
+						if ( false === $vetting_result ) {
+							Remember_Logger::warning( 'Member created but vetting case creation failed', array( 'member_id' => $user_id ) );
 						}
 						
 						Remember_Logger::info( 'Member created', array( 'member_id' => $user_id, 'status' => $status ) );
@@ -208,9 +205,9 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 
 			$created = $member_model->create_from_wp_user( $wp_user_id, $status );
 			if ( $created ) {
-				if ( Remember_Vetting_Workflow::should_vet_on_join() && 'pending_vetting' === $status ) {
-					$vetting_result = Remember_Vetting_Workflow::create_vetting_case( $wp_user_id );
-					if ( ! $vetting_result ) {
+				if ( 'pending_vetting' === $status ) {
+					$vetting_result = Remember_Vetting_Workflow::open_automatic_case( $wp_user_id, 'join' );
+					if ( false === $vetting_result ) {
 						Remember_Logger::warning( 'Converted WP user but vetting case creation failed', array( 'member_id' => $wp_user_id ) );
 					}
 				}

@@ -464,11 +464,9 @@ class Remember_Public {
 		Remember_Profile_Fields::save_junctions_from_request( $user_id );
 		Remember_Profile_Questions::save_for_member( $user_id, $pq_answers );
 
-		if ( Remember_Vetting_Workflow::should_vet_on_join() ) {
-			$vetting_result = Remember_Vetting_Workflow::create_vetting_case( $user_id );
-			if ( ! $vetting_result ) {
-				Remember_Logger::warning( 'Public member registration: vetting case not created', array( 'member_id' => $user_id ) );
-			}
+		$vetting_result = Remember_Vetting_Workflow::open_automatic_case( $user_id, 'join' );
+		if ( false === $vetting_result ) {
+			Remember_Logger::warning( 'Public member registration: vetting case not created', array( 'member_id' => $user_id ) );
 		}
 
 		Remember_Logger::info( 'Public member registration completed', array( 'user_id' => $user_id ) );
