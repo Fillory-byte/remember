@@ -287,6 +287,29 @@ class Remember_Xero_API {
 	}
 
 	/**
+	 * Default sales discount on a Xero contact, as a percent from 0 to 100.
+	 *
+	 * Xero stores this on the contact and does not copy it onto an invoice
+	 * created through the API. 0 means the contact has no discount.
+	 *
+	 * @param array $contact Contact from get_contact() or a contact save.
+	 * @return float
+	 */
+	public static function contact_discount_rate( $contact ) {
+		if ( ! is_array( $contact ) || ! isset( $contact['Discount'] ) || ! is_numeric( $contact['Discount'] ) ) {
+			return 0.0;
+		}
+		$rate = floatval( $contact['Discount'] );
+		if ( $rate <= 0 ) {
+			return 0.0;
+		}
+		if ( $rate > 100 ) {
+			$rate = 100.0;
+		}
+		return $rate;
+	}
+
+	/**
 	 * Find first Contact whose EmailAddress matches.
 	 *
 	 * @param string $email Email address.
@@ -486,7 +509,7 @@ class Remember_Xero_API {
 	/**
 	 * Create an ACCREC (sales) invoice in Xero.
 	 *
-	 * @param array $invoice_data Keys: contact_id, line_items[{item_code, quantity, unit_amount, description, tax_type?}], reference?, date?, due_date?.
+	 * @param array $invoice_data Keys: contact_id, line_items[{item_code, quantity, unit_amount, description, tax_type?, discount_rate?}], reference?, date?, due_date?.
 	 * @return array|WP_Error Invoice entity or error.
 	 */
 	public static function create_invoice( $invoice_data ) {
@@ -516,6 +539,12 @@ class Remember_Xero_API {
 			}
 			if ( ! empty( $item['account_code'] ) ) {
 				$line['AccountCode'] = (string) $item['account_code'];
+			}
+			if ( isset( $item['discount_rate'] ) && is_numeric( $item['discount_rate'] ) ) {
+				$discount_rate = floatval( $item['discount_rate'] );
+				if ( $discount_rate > 0 ) {
+					$line['DiscountRate'] = $discount_rate > 100 ? 100.0 : $discount_rate;
+				}
 			}
 			$line_items[] = $line;
 		}
