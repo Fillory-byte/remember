@@ -10,71 +10,41 @@
 if ( ! defined( 'WPINC' ) ) {
 	die;
 }
+
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-admin-dashboard.php';
+
+$dashboard        = Remember_Admin_Dashboard::collect();
+$attention_count  = count( $dashboard['attention'] );
 ?>
 
 <div class="remember-dashboard-widget">
-	<div class="remember-widget-stats">
-		<?php if ( current_user_can( 'remember_read_members' ) || current_user_can( 'remember_read_attendees' ) ) : ?>
-		<div class="remember-widget-stat">
-			<span class="remember-widget-stat-number"><?php echo esc_html( $total_members ); ?></span>
-			<span class="remember-widget-stat-label"><?php esc_html_e( 'Total Members', 'remember' ); ?></span>
+	<?php if ( ! empty( $dashboard['stats'] ) ) : ?>
+		<div class="remember-widget-stats">
+			<?php foreach ( $dashboard['stats'] as $stat ) : ?>
+				<a class="remember-widget-stat" href="<?php echo esc_url( $stat['url'] ); ?>">
+					<span class="remember-widget-stat-number"><?php echo esc_html( $stat['count'] ); ?></span>
+					<span class="remember-widget-stat-label"><?php echo esc_html( $stat['label'] ); ?></span>
+				</a>
+			<?php endforeach; ?>
 		</div>
-		<?php endif; ?>
-
-		<?php if ( current_user_can( 'remember_read_applications' ) ) : ?>
-		<div class="remember-widget-stat">
-			<span class="remember-widget-stat-number"><?php echo esc_html( $pending_applications_count ); ?></span>
-			<span class="remember-widget-stat-label"><?php esc_html_e( 'Pending Applications', 'remember' ); ?></span>
-		</div>
-		<?php endif; ?>
-
-		<?php if ( current_user_can( 'remember_read_events' ) ) : ?>
-		<div class="remember-widget-stat">
-			<span class="remember-widget-stat-number"><?php echo esc_html( count( $open_events ) ); ?></span>
-			<span class="remember-widget-stat-label"><?php esc_html_e( 'Open Events', 'remember' ); ?></span>
-		</div>
-
-		<div class="remember-widget-stat">
-			<span class="remember-widget-stat-number"><?php echo esc_html( count( $upcoming_events ) ); ?></span>
-			<span class="remember-widget-stat-label"><?php esc_html_e( 'Upcoming Events', 'remember' ); ?></span>
-		</div>
-		<?php endif; ?>
-
-		<?php if ( current_user_can( 'remember_read_vetting' ) ) : ?>
-		<div class="remember-widget-stat">
-			<span class="remember-widget-stat-number"><?php echo esc_html( $open_vetting_records_count ); ?></span>
-			<span class="remember-widget-stat-label"><?php esc_html_e( 'Open Vetting', 'remember' ); ?></span>
-		</div>
-		<?php endif; ?>
-	</div>
+	<?php endif; ?>
 
 	<div class="remember-widget-actions">
-		<?php if ( current_user_can( 'remember_read_members' ) || current_user_can( 'remember_read_attendees' ) ) : ?>
-		<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-members' ) ); ?>" class="button button-secondary">
-			<?php esc_html_e( 'Manage Members', 'remember' ); ?>
-		</a>
+		<?php if ( $attention_count > 0 ) : ?>
+			<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember' ) ); ?>" class="button button-secondary">
+				<?php
+				echo esc_html(
+					sprintf(
+						/* translators: %d: number of dashboard items that need attention */
+						_n( '%d item needs attention', '%d items need attention', $attention_count, 'remember' ),
+						$attention_count
+					)
+				);
+				?>
+			</a>
 		<?php endif; ?>
-
-		<?php if ( current_user_can( 'remember_read_events' ) ) : ?>
-		<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-events' ) ); ?>" class="button button-secondary">
-			<?php esc_html_e( 'Manage Events', 'remember' ); ?>
-		</a>
-		<?php endif; ?>
-
-		<?php if ( current_user_can( 'remember_read_applications' ) ) : ?>
-		<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-applications' ) ); ?>" class="button button-secondary">
-			<?php esc_html_e( 'Review Applications', 'remember' ); ?>
-		</a>
-		<?php endif; ?>
-
-		<?php if ( current_user_can( 'remember_read_vetting' ) ) : ?>
-		<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-vetting' ) ); ?>" class="button button-secondary">
-			<?php esc_html_e( 'Vetting Queue', 'remember' ); ?>
-		</a>
-		<?php endif; ?>
-
 		<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember' ) ); ?>" class="button button-primary">
-			<?php esc_html_e( 'View Dashboard', 'remember' ); ?>
+			<?php esc_html_e( 'Open reMember', 'remember' ); ?>
 		</a>
 	</div>
 </div>
@@ -87,30 +57,37 @@ if ( ! defined( 'WPINC' ) ) {
 .remember-widget-stats {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-	gap: 15px;
-	margin-bottom: 20px;
+	gap: 8px;
+	margin-bottom: 12px;
 	padding: 0 12px;
 }
 
 .remember-widget-stat {
+	display: block;
 	text-align: center;
+	text-decoration: none;
+	padding: 8px 4px;
+	border-radius: 6px;
+}
+
+.remember-widget-stat:hover,
+.remember-widget-stat:focus {
+	background: #f6f7f7;
 }
 
 .remember-widget-stat-number {
 	display: block;
-	font-size: 28px;
+	font-size: 26px;
 	font-weight: 600;
-	color: #2271b1;
+	color: #1d2327;
 	line-height: 1.2;
-	margin-bottom: 5px;
+	margin-bottom: 2px;
 }
 
 .remember-widget-stat-label {
 	display: block;
 	font-size: 12px;
 	color: #646970;
-	text-transform: uppercase;
-	letter-spacing: 0.5px;
 }
 
 .remember-widget-actions {

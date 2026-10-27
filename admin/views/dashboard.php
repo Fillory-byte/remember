@@ -12,312 +12,299 @@ if ( ! defined( 'WPINC' ) ) {
 }
 
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-logger.php';
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-admin-dashboard.php';
+
 Remember_Logger::debug( 'Dashboard page loaded' );
 
-// Load models
-require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-member.php';
-require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-event.php';
-require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-application.php';
-require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-vetting.php';
+$dashboard = Remember_Admin_Dashboard::collect();
 
-global $wpdb;
-
-$member_model    = new Remember_Member();
-$event_model     = new Remember_Event();
-$application_model = new Remember_Application();
-$vetting_model   = new Remember_Vetting();
-
-// Get statistics (only count valid members with existing WordPress users)
-$all_members = $member_model->get_all_valid();
-$total_members = count( $all_members );
-
-// Filter status-based queries to only include valid members
-$pending_vetting = $member_model->get_by_status( 'pending_vetting' );
-$in_vetting = $member_model->get_by_status( 'in_vetting' );
-$vetted = $member_model->get_by_status( 'vetted' );
-
-// Filter out orphaned records (members without WordPress users)
-$pending_vetting = array_filter( $pending_vetting, function( $member ) {
-	return get_user_by( 'id', $member->member_id ) !== false;
-} );
-$in_vetting = array_filter( $in_vetting, function( $member ) {
-	return get_user_by( 'id', $member->member_id ) !== false;
-} );
-$vetted = array_filter( $vetted, function( $member ) {
-	return get_user_by( 'id', $member->member_id ) !== false;
-} );
-
-$pending_vetting_count = count( $pending_vetting );
-$in_vetting_count = count( $in_vetting );
-$vetted_count = count( $vetted );
-
-$open_events = $event_model->get_open();
-$upcoming_events = $event_model->get_upcoming();
-
-$pending_applications = $application_model->get_by_status( 'pending' );
-$pending_applications_count = count( $pending_applications );
-
-$open_vetting_records = $vetting_model->get_open();
-$open_vetting_records_count = count( $open_vetting_records );
-
-// Load timezone utility
-require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-timezone.php';
-
-// Get To Do items for logged-in user
-$current_user_id = get_current_user_id();
-$todo_items = array();
-
-// Get vetting cases assigned to current user
-if ( current_user_can( 'remember_read_vetting' ) ) {
-	$assigned_vetting = $vetting_model->get_by_vetter( $current_user_id );
-	foreach ( $assigned_vetting as $vetting ) {
-		if ( in_array( $vetting->status, array( 'pending', 'scheduled', 'in_progress' ), true ) ) {
-			$member = $member_model->get( $vetting->member_id );
-			$member_user = $member ? get_user_by( 'id', $vetting->member_id ) : null;
-			$member_name = $member_user ? $member_user->display_name : __( 'Unknown Member', 'remember' );
-			
-			// Get scheduled time with timezone conversion
-			$scheduled_time = '';
-			$is_overdue = false;
-			if ( 'scheduled' === $vetting->status && ! empty( $vetting->scheduled_at ) ) {
-				$scheduled_time = Remember_Timezone::format_with_your_time( $vetting->scheduled_at, $current_user_id, false );
-				
-				// Check if scheduled time is in the past (in user's timezone)
-				$user_tz = Remember_Timezone::get_user_timezone( $current_user_id );
-				$scheduled_dt = Remember_Timezone::convert_to_user_timezone( $vetting->scheduled_at, $current_user_id );
-				$now = new DateTime( 'now', $user_tz );
-				$is_overdue = $scheduled_dt < $now;
-			}
-			
-			// Determine sort timestamp (use scheduled_at if scheduled, otherwise created_at)
-			$sort_timestamp = ! empty( $vetting->scheduled_at ) ? $vetting->scheduled_at : $vetting->created_at;
-			
-			$todo_items[] = array(
-				'type' => 'vetting',
-				'title' => sprintf( __( 'Review vetting: %s', 'remember' ), $member_name ),
-				'url' => admin_url( 'admin.php?page=remember-vetting&view=' . $vetting->vetting_id ),
-				'priority' => $is_overdue ? 'overdue' : ( 'pending' === $vetting->status ? 'high' : 'normal' ),
-				'status' => $vetting->status,
-				'scheduled_time' => $scheduled_time,
-				'sort_timestamp' => $sort_timestamp,
-				'is_overdue' => $is_overdue,
-			);
-		}
-	}
-	
-	// Get vetting cases where user is a collaborator
-	$collaborator_vetting_ids = $wpdb->get_col( $wpdb->prepare(
-		"SELECT DISTINCT v.vetting_id 
-		FROM {$wpdb->prefix}remember_vetting v
-		INNER JOIN {$wpdb->prefix}remember_vetting_collaborators vc ON v.vetting_id = vc.vetting_id
-		WHERE vc.member_id = %d 
-		AND vc.status = 'accepted'
-		AND v.status IN ('pending', 'scheduled', 'in_progress')
-		ORDER BY v.created_at DESC",
-		$current_user_id
-	) );
-	
-	foreach ( $collaborator_vetting_ids as $vetting_id ) {
-		$vetting = $vetting_model->get( $vetting_id );
-		if ( $vetting ) {
-			$member = $member_model->get( $vetting->member_id );
-			$member_user = $member ? get_user_by( 'id', $vetting->member_id ) : null;
-			$member_name = $member_user ? $member_user->display_name : __( 'Unknown Member', 'remember' );
-			
-			// Get scheduled time with timezone conversion
-			$scheduled_time = '';
-			$is_overdue = false;
-			if ( 'scheduled' === $vetting->status && ! empty( $vetting->scheduled_at ) ) {
-				$scheduled_time = Remember_Timezone::format_with_your_time( $vetting->scheduled_at, $current_user_id, false );
-				
-				// Check if scheduled time is in the past (in user's timezone)
-				$user_tz = Remember_Timezone::get_user_timezone( $current_user_id );
-				$scheduled_dt = Remember_Timezone::convert_to_user_timezone( $vetting->scheduled_at, $current_user_id );
-				$now = new DateTime( 'now', $user_tz );
-				$is_overdue = $scheduled_dt < $now;
-			}
-			
-			// Determine sort timestamp (use scheduled_at if scheduled, otherwise created_at)
-			$sort_timestamp = ! empty( $vetting->scheduled_at ) ? $vetting->scheduled_at : $vetting->created_at;
-			
-			$todo_items[] = array(
-				'type' => 'collaboration',
-				'title' => sprintf( __( 'Collaborate on vetting: %s', 'remember' ), $member_name ),
-				'url' => admin_url( 'admin.php?page=remember-vetting&view=' . $vetting_id ),
-				'priority' => $is_overdue ? 'overdue' : 'normal',
-				'status' => $vetting->status,
-				'scheduled_time' => $scheduled_time,
-				'sort_timestamp' => $sort_timestamp,
-				'is_overdue' => $is_overdue,
-			);
-		}
-	}
-	
-	// Sort tasks chronologically (most pressing first - earliest scheduled/created first)
-	usort( $todo_items, function( $a, $b ) {
-		$time_a = strtotime( $a['sort_timestamp'] );
-		$time_b = strtotime( $b['sort_timestamp'] );
-		return $time_a - $time_b; // Ascending order (earliest first)
-	} );
-}
-
-// Get recent activity (system-wide, subject to capabilities)
-$recent_activity = array();
-
-// Recent vetting cases (if user can view vetting)
-if ( current_user_can( 'remember_read_vetting' ) ) {
-	$recent_vetting = $wpdb->get_results(
-		"SELECT v.*, u.display_name as member_name 
-		FROM {$wpdb->prefix}remember_vetting v
-		LEFT JOIN {$wpdb->prefix}users u ON v.member_id = u.ID
-		ORDER BY v.created_at DESC 
-		LIMIT 10"
-	);
-	
-	foreach ( $recent_vetting as $vetting ) {
-		$recent_activity[] = array(
-			'type' => 'vetting',
-			'timestamp' => $vetting->created_at,
-			'message' => sprintf( 
-				__( 'Vetting case %s created for %s', 'remember' ),
-				'<a href="' . esc_url( admin_url( 'admin.php?page=remember-vetting&view=' . $vetting->vetting_id ) ) . '">#' . $vetting->vetting_id . '</a>',
-				$vetting->member_name ?: __( 'Unknown Member', 'remember' )
-			),
-		);
-	}
-}
-
-// Recent applications (if user can view applications)
-if ( current_user_can( 'remember_read_applications' ) ) {
-	$recent_applications = $application_model->get_all( array( 'limit' => 10 ) );
-	
-	foreach ( $recent_applications as $app ) {
-		$member_user = get_user_by( 'id', $app->member_id );
-		$event = $event_model->get( $app->event_id );
-		
-		$recent_activity[] = array(
-			'type' => 'application',
-			'timestamp' => $app->applied_at,
-			'message' => sprintf(
-				__( '%s applied to %s', 'remember' ),
-				$member_user ? $member_user->display_name : __( 'Unknown Member', 'remember' ),
-				$event ? $event->event_name : __( 'Unknown Event', 'remember' )
-			),
-		);
-	}
-}
-
-// Sort recent activity by timestamp
-usort( $recent_activity, function( $a, $b ) {
-	return strtotime( $b['timestamp'] ) - strtotime( $a['timestamp'] );
-} );
-$recent_activity = array_slice( $recent_activity, 0, 10 ); // Limit to 10 most recent
+/**
+ * One linked row in a dashboard card.
+ *
+ * @param array{title:string,detail?:string,meta?:string,url:string,tone?:string} $item Row.
+ * @return void
+ */
+$remember_dash_row = function ( $item ) {
+	$tone = isset( $item['tone'] ) ? $item['tone'] : 'normal';
+	?>
+	<a class="remember-dash-row remember-dash-row--<?php echo esc_attr( $tone ); ?>" href="<?php echo esc_url( $item['url'] ); ?>">
+		<span class="remember-dash-row__main">
+			<span class="remember-dash-row__title"><?php echo esc_html( $item['title'] ); ?></span>
+			<?php if ( ! empty( $item['detail'] ) ) : ?>
+				<span class="remember-dash-row__detail"><?php echo esc_html( $item['detail'] ); ?></span>
+			<?php endif; ?>
+		</span>
+		<?php if ( ! empty( $item['meta'] ) ) : ?>
+			<span class="remember-dash-row__meta"><?php echo esc_html( $item['meta'] ); ?></span>
+		<?php endif; ?>
+	</a>
+	<?php
+};
 ?>
 
 <div class="wrap remember-dashboard">
 	<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
+	<?php if ( ! empty( $dashboard['summary'] ) ) : ?>
+		<p class="remember-dash-summary"><?php echo esc_html( $dashboard['summary'] ); ?></p>
+	<?php endif; ?>
 
-	<div class="remember-dashboard-stats-box">
-		<div class="remember-dashboard-stats">
-			<?php if ( current_user_can( 'remember_read_members' ) || current_user_can( 'remember_read_attendees' ) ) : ?>
-			<div class="remember-stat">
-				<span class="remember-stat-number"><?php echo esc_html( $total_members ); ?></span>
-				<span class="remember-stat-label"><?php esc_html_e( 'Total Members', 'remember' ); ?></span>
-				<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-members' ) ); ?>" class="button button-small button-secondary">
-					<?php esc_html_e( 'Manage Members', 'remember' ); ?>
+	<?php if ( ! empty( $dashboard['stats'] ) ) : ?>
+		<div class="remember-dash-stats">
+			<?php foreach ( $dashboard['stats'] as $stat ) : ?>
+				<a class="remember-dash-stat remember-dash-stat--<?php echo esc_attr( $stat['tone'] ); ?>" href="<?php echo esc_url( $stat['url'] ); ?>">
+					<span class="remember-dash-stat__count"><?php echo esc_html( $stat['count'] ); ?></span>
+					<span class="remember-dash-stat__label"><?php echo esc_html( $stat['label'] ); ?></span>
 				</a>
-			</div>
-			<?php endif; ?>
-
-				<?php if ( current_user_can( 'remember_read_vetting' ) ) : ?>
-				<div class="remember-stat">
-					<span class="remember-stat-number"><?php echo esc_html( $open_vetting_records_count ); ?></span>
-					<span class="remember-stat-label"><?php esc_html_e( 'Open Vetting', 'remember' ); ?></span>
-					<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-vetting' ) ); ?>" class="button button-small button-secondary">
-						<?php esc_html_e( 'Vetting Queue', 'remember' ); ?>
-					</a>
-				</div>
-				<?php endif; ?>
-
-			<?php if ( current_user_can( 'remember_read_vetting' ) ) : ?>
-			<div class="remember-stat">
-				<span class="remember-stat-number"><?php echo esc_html( $vetted_count ); ?></span>
-				<span class="remember-stat-label"><?php esc_html_e( 'Vetted Members', 'remember' ); ?></span>
-			</div>
-			<?php endif; ?>
-
-			<?php if ( current_user_can( 'remember_read_applications' ) ) : ?>
-			<div class="remember-stat">
-				<span class="remember-stat-number"><?php echo esc_html( $pending_applications_count ); ?></span>
-				<span class="remember-stat-label"><?php esc_html_e( 'Pending Applications', 'remember' ); ?></span>
-				<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-applications' ) ); ?>" class="button button-small button-secondary">
-					<?php esc_html_e( 'Review Applications', 'remember' ); ?>
-				</a>
-			</div>
-			<?php endif; ?>
-
-			<?php if ( current_user_can( 'remember_read_events' ) ) : ?>
-			<div class="remember-stat">
-				<span class="remember-stat-number"><?php echo esc_html( count( $open_events ) ); ?></span>
-				<span class="remember-stat-label"><?php esc_html_e( 'Open Events', 'remember' ); ?></span>
-				<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-events' ) ); ?>" class="button button-small button-secondary">
-					<?php esc_html_e( 'Manage Events', 'remember' ); ?>
-				</a>
-			</div>
-
-			<div class="remember-stat">
-				<span class="remember-stat-number"><?php echo esc_html( count( $upcoming_events ) ); ?></span>
-				<span class="remember-stat-label"><?php esc_html_e( 'Upcoming Events', 'remember' ); ?></span>
-			</div>
-			<?php endif; ?>
+			<?php endforeach; ?>
 		</div>
-	</div>
+	<?php endif; ?>
 
-	<div class="remember-dashboard-content">
-		<div class="remember-dashboard-column">
-			<h2><?php esc_html_e( 'Recent Activity', 'remember' ); ?></h2>
-			<?php if ( ! empty( $recent_activity ) ) : ?>
+	<?php if ( empty( $dashboard['attention'] ) ) : ?>
+		<p class="remember-dash-clear"><?php esc_html_e( 'All clear. Nothing is waiting on you.', 'remember' ); ?></p>
+	<?php endif; ?>
+
+	<div class="remember-dash-layout">
+		<?php if ( ! empty( $dashboard['attention'] ) ) : ?>
+			<section class="remember-dash-panel">
+				<h2><?php esc_html_e( 'Needs attention', 'remember' ); ?></h2>
+				<div class="remember-dash-rows">
+					<?php foreach ( $dashboard['attention'] as $item ) : ?>
+						<?php $remember_dash_row( $item ); ?>
+					<?php endforeach; ?>
+				</div>
+			</section>
+		<?php endif; ?>
+
+		<?php if ( ! empty( $dashboard['show_people'] ) ) : ?>
+			<section class="remember-dash-panel">
+				<h2><?php esc_html_e( 'People', 'remember' ); ?></h2>
+				<?php if ( ! empty( $dashboard['people'] ) ) : ?>
+					<div class="remember-dash-rows">
+						<?php foreach ( $dashboard['people'] as $person ) : ?>
+							<?php $remember_dash_row( $person ); ?>
+						<?php endforeach; ?>
+					</div>
+				<?php else : ?>
+					<p class="remember-dash-empty">
+						<?php esc_html_e( 'No members yet.', 'remember' ); ?>
+						<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-members' ) ); ?>"><?php esc_html_e( 'Add one', 'remember' ); ?></a>
+					</p>
+				<?php endif; ?>
+			</section>
+		<?php endif; ?>
+
+		<?php if ( ! empty( $dashboard['show_events'] ) ) : ?>
+			<section class="remember-dash-panel">
+				<h2><?php esc_html_e( 'Upcoming events', 'remember' ); ?></h2>
+				<?php if ( ! empty( $dashboard['upcoming'] ) ) : ?>
+					<div class="remember-dash-rows">
+						<?php foreach ( $dashboard['upcoming'] as $event ) : ?>
+							<?php $remember_dash_row( $event ); ?>
+						<?php endforeach; ?>
+					</div>
+				<?php else : ?>
+					<p class="remember-dash-empty">
+						<?php esc_html_e( 'No events are scheduled.', 'remember' ); ?>
+						<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-events' ) ); ?>"><?php esc_html_e( 'Open events', 'remember' ); ?></a>
+					</p>
+				<?php endif; ?>
+			</section>
+		<?php endif; ?>
+
+		<?php if ( ! empty( $dashboard['activity'] ) ) : ?>
+			<section class="remember-dash-panel remember-dash-span">
+				<h2><?php esc_html_e( 'Recent activity', 'remember' ); ?></h2>
 				<ul class="remember-activity-list">
-					<?php foreach ( $recent_activity as $activity ) : ?>
-						<li class="remember-activity-item remember-activity-<?php echo esc_attr( $activity['type'] ); ?>">
-							<span class="remember-activity-time"><?php echo esc_html( human_time_diff( strtotime( $activity['timestamp'] ), current_time( 'timestamp' ) ) . ' ago' ); ?></span>
+					<?php foreach ( $dashboard['activity'] as $activity ) : ?>
+						<li class="remember-activity-item">
+							<span class="remember-activity-time">
+								<?php
+								echo esc_html(
+									sprintf(
+										/* translators: %s: human time difference, such as "3 hours" */
+										__( '%s ago', 'remember' ),
+										human_time_diff( strtotime( $activity['timestamp'] ), current_time( 'timestamp' ) )
+									)
+								);
+								?>
+							</span>
 							<span class="remember-activity-message"><?php echo wp_kses_post( $activity['message'] ); ?></span>
 						</li>
 					<?php endforeach; ?>
 				</ul>
-			<?php else : ?>
-				<p><?php esc_html_e( 'No recent activity to display.', 'remember' ); ?></p>
-			<?php endif; ?>
-		</div>
-
-		<div class="remember-dashboard-column">
-			<h2><?php esc_html_e( 'My Tasks', 'remember' ); ?></h2>
-			<?php if ( ! empty( $todo_items ) ) : ?>
-				<ul class="remember-todo-list">
-					<?php foreach ( $todo_items as $todo ) : ?>
-						<li class="remember-todo-item remember-todo-<?php echo esc_attr( $todo['priority'] ); ?>">
-							<a href="<?php echo esc_url( $todo['url'] ); ?>">
-								<span class="remember-todo-type"><?php echo esc_html( 'collaboration' === $todo['type'] ? __( 'Collaboration', 'remember' ) : __( 'Vetting', 'remember' ) ); ?></span>
-								<span class="remember-todo-title"><?php echo esc_html( $todo['title'] ); ?></span>
-								<?php if ( ! empty( $todo['scheduled_time'] ) ) : ?>
-									<span class="remember-todo-scheduled <?php echo $todo['is_overdue'] ? 'remember-todo-overdue' : ''; ?>">
-										<?php echo esc_html( $todo['scheduled_time'] ); ?>
-										<?php if ( $todo['is_overdue'] ) : ?>
-											<span class="remember-todo-overdue-badge"><?php esc_html_e( 'Overdue', 'remember' ); ?></span>
-										<?php endif; ?>
-									</span>
-								<?php elseif ( 'scheduled' === $todo['status'] ) : ?>
-									<span class="remember-todo-badge"><?php esc_html_e( 'Scheduled', 'remember' ); ?></span>
-								<?php elseif ( 'in_progress' === $todo['status'] ) : ?>
-									<span class="remember-todo-badge"><?php esc_html_e( 'In Progress', 'remember' ); ?></span>
-								<?php endif; ?>
-							</a>
-						</li>
-					<?php endforeach; ?>
-				</ul>
-			<?php else : ?>
-				<p><?php esc_html_e( 'No tasks assigned to you.', 'remember' ); ?></p>
-			<?php endif; ?>
-		</div>
+			</section>
+		<?php endif; ?>
 	</div>
 </div>
+
+<style>
+.remember-dashboard .remember-dash-summary {
+	margin: -8px 0 16px;
+	color: #646970;
+	font-size: 14px;
+}
+.remember-dashboard .remember-dash-stats {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 12px;
+	margin: 0 0 16px;
+}
+.remember-dashboard .remember-dash-stat {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+	padding: 16px 18px 14px;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-top-width: 3px;
+	border-radius: 4px;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+	text-decoration: none;
+	color: #1d2327;
+}
+.remember-dashboard .remember-dash-stat--members { border-top-color: #2271b1; }
+.remember-dashboard .remember-dash-stat--vetting { border-top-color: #dba617; }
+.remember-dashboard .remember-dash-stat--applications { border-top-color: #d63638; }
+.remember-dashboard .remember-dash-stat--events { border-top-color: #00a32a; }
+.remember-dashboard .remember-dash-stat:hover,
+.remember-dashboard .remember-dash-stat:focus {
+	border-color: #2271b1;
+	color: #1d2327;
+	box-shadow: 0 0 0 1px #2271b1;
+}
+.remember-dashboard .remember-dash-stat--vetting:hover,
+.remember-dashboard .remember-dash-stat--vetting:focus { border-top-color: #dba617; }
+.remember-dashboard .remember-dash-stat--applications:hover,
+.remember-dashboard .remember-dash-stat--applications:focus { border-top-color: #d63638; }
+.remember-dashboard .remember-dash-stat--events:hover,
+.remember-dashboard .remember-dash-stat--events:focus { border-top-color: #00a32a; }
+.remember-dashboard .remember-dash-stat__count {
+	display: block;
+	font-size: 32px;
+	font-weight: 600;
+	line-height: 1;
+	color: #1d2327;
+}
+.remember-dashboard .remember-dash-stat__label {
+	display: block;
+	font-size: 13px;
+	line-height: 1.3;
+	color: #646970;
+}
+.remember-dashboard .remember-dash-clear {
+	margin: 0 0 16px;
+	padding: 10px 14px;
+	background: #edfaef;
+	border: 1px solid #b8e6bf;
+	border-radius: 4px;
+	color: #1e4620;
+}
+.remember-dashboard .remember-dash-layout {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 16px;
+}
+.remember-dashboard .remember-dash-span {
+	grid-column: 1 / -1;
+}
+.remember-dashboard .remember-dash-panel {
+	min-width: 0;
+	margin: 0;
+	padding: 4px 16px 8px;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+.remember-dashboard .remember-dash-panel h2 {
+	margin: 12px 0;
+	padding: 0;
+	font-size: 14px;
+	font-weight: 600;
+}
+.remember-dashboard .remember-dash-empty {
+	margin: 0 0 14px;
+	color: #646970;
+}
+.remember-dashboard .remember-dash-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin: 0 0 8px;
+	padding: 10px 12px;
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-left-width: 3px;
+	border-radius: 4px;
+	text-decoration: none;
+	color: #1d2327;
+}
+.remember-dashboard .remember-dash-row--overdue { border-left-color: #d63638; }
+.remember-dashboard .remember-dash-row--soon { border-left-color: #dba617; }
+.remember-dashboard .remember-dash-row--normal { border-left-color: #2271b1; }
+.remember-dashboard .remember-dash-row:hover,
+.remember-dashboard .remember-dash-row:focus {
+	border-color: #2271b1;
+	color: #1d2327;
+}
+.remember-dashboard .remember-dash-row--overdue:hover,
+.remember-dashboard .remember-dash-row--overdue:focus { border-left-color: #d63638; }
+.remember-dashboard .remember-dash-row--soon:hover,
+.remember-dashboard .remember-dash-row--soon:focus { border-left-color: #dba617; }
+.remember-dashboard .remember-dash-row__main { min-width: 0; }
+.remember-dashboard .remember-dash-row__title {
+	display: block;
+	color: #1d2327;
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.4;
+}
+.remember-dashboard .remember-dash-row__detail {
+	display: block;
+	margin-top: 2px;
+	color: #646970;
+	font-size: 12px;
+	line-height: 1.4;
+}
+.remember-dashboard .remember-dash-row__meta {
+	flex: 0 0 auto;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: #f0f0f1;
+	color: #1d2327;
+	font-size: 12px;
+	font-weight: 600;
+}
+.remember-dashboard .remember-dash-row--overdue .remember-dash-row__meta {
+	background: #fcf0f1;
+	color: #8a2424;
+}
+.remember-dashboard .remember-activity-list {
+	list-style: none;
+	margin: 0 0 8px;
+	padding: 0;
+}
+.remember-dashboard .remember-activity-item {
+	display: grid;
+	grid-template-columns: 7.5em minmax(0, 1fr);
+	gap: 4px 12px;
+	align-items: baseline;
+	padding: 8px 0;
+	border-bottom: 1px solid #f0f0f1;
+}
+.remember-dashboard .remember-activity-item:last-child { border-bottom: none; }
+.remember-dashboard .remember-activity-time { font-size: 12px; color: #646970; }
+.remember-dashboard .remember-activity-message { font-size: 13px; color: #1d2327; line-height: 1.5; }
+.remember-dashboard .remember-activity-message a { text-decoration: none; }
+@media screen and (max-width: 782px) {
+	.remember-dashboard .remember-dash-stats,
+	.remember-dashboard .remember-dash-layout {
+		grid-template-columns: 1fr;
+	}
+	.remember-dashboard .remember-activity-item {
+		grid-template-columns: 1fr;
+	}
+}
+</style>
