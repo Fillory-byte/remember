@@ -243,6 +243,19 @@ class Remember_Ticket {
 			$amount_due = $total_amount;
 		}
 
+		$list_total       = 0.0;
+		foreach ( $line_items as $item ) {
+			$list_total += floatval( $item['total'] );
+		}
+		$list_total       = round( $list_total, 2 );
+		$discount_amount  = round( $list_total - round( $total_amount, 2 ), 2 );
+		$discount_percent = 0.0;
+		if ( $discount_amount > 0.001 && $list_total > 0.001 ) {
+			$discount_percent = round( ( $discount_amount / $list_total ) * 100, 2 );
+		} else {
+			$discount_amount = 0.0;
+		}
+
 		$invoice_number = '';
 		if ( $payment ) {
 			if ( ! empty( $payment->xero_invoice_number ) ) {
@@ -303,6 +316,8 @@ class Remember_Ticket {
 			'location_lines'     => $location_lines,
 			'role_name'          => $event_role ? $event_role->role_name : '',
 			'line_items'         => $line_items,
+			'discount_amount'    => $discount_amount,
+			'discount_percent'   => $discount_percent,
 			'payment_status'     => $payment_status,
 			'total_amount'       => $total_amount,
 			'amount_paid'        => $amount_paid,

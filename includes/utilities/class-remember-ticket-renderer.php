@@ -238,6 +238,30 @@ class Remember_Ticket_Renderer {
 						<?php endif; ?>
 					</tbody>
 					<tfoot>
+						<?php if ( ! empty( $data['discount_amount'] ) && (float) $data['discount_amount'] > 0 ) : ?>
+						<tr>
+							<th colspan="3">
+								<?php
+								$discount_percent = isset( $data['discount_percent'] ) ? (float) $data['discount_percent'] : 0;
+								if ( $discount_percent > 0 ) {
+									$percent_label = ( abs( $discount_percent - round( $discount_percent ) ) < 0.05 )
+										? (string) (int) round( $discount_percent )
+										: rtrim( rtrim( number_format( $discount_percent, 2, '.', '' ), '0' ), '.' );
+									echo esc_html(
+										sprintf(
+											/* translators: %s: discount percent */
+											__( 'Discount (%s%%)', 'remember' ),
+											$percent_label
+										)
+									);
+								} else {
+									esc_html_e( 'Discount', 'remember' );
+								}
+								?>
+							</th>
+							<th><?php echo esc_html( self::money( 0 - (float) $data['discount_amount'] ) ); ?></th>
+						</tr>
+						<?php endif; ?>
 						<tr>
 							<th colspan="3"><?php esc_html_e( 'Total', 'remember' ); ?></th>
 							<th><?php echo esc_html( self::money( $data['total_amount'] ) ); ?></th>
@@ -499,7 +523,9 @@ class Remember_Ticket_Renderer {
 	 * @return string
 	 */
 	private static function money( $amount ) {
-		return '$' . number_format( (float) $amount, 2 );
+		$amount = (float) $amount;
+		$formatted = '$' . number_format( abs( $amount ), 2 );
+		return $amount < 0 ? '-' . $formatted : $formatted;
 	}
 
 	/**
