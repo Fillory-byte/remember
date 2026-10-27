@@ -189,6 +189,185 @@ class Remember_Notifications {
 	}
 
 	/**
+	 * Saved WordPress and reMember roles that are emailed about a new member.
+	 *
+	 * Null means the setting has never been saved. Callers then use admin_emails().
+	 *
+	 * @return string[]|null Tokens wp:{role} and rm:{role_id}, or null when unset.
+	 */
+	public static function member_registered_notify_roles() {
+		$options = get_option( 'remember_options', array() );
+		if ( ! is_array( $options ) || ! isset( $options['member_registered_notify_roles'] ) || ! is_array( $options['member_registered_notify_roles'] ) ) {
+			return null;
+		}
+		return array_values( $options['member_registered_notify_roles'] );
+	}
+
+	/**
+	 * Keep only role tokens that exist.
+	 *
+	 * @param array $posted Raw checkbox values.
+	 * @return string[]
+	 */
+	public static function sanitize_member_registered_notify_roles( $posted ) {
+		global $wpdb;
+
+		$wp_allowed = array();
+		if ( function_exists( 'wp_roles' ) ) {
+			$wp_roles = wp_roles();
+			if ( $wp_roles && isset( $wp_roles->roles ) && is_array( $wp_roles->roles ) ) {
+				$wp_allowed = array_keys( $wp_roles->roles );
+			}
+		}
+
+		$rm_allowed = $wpdb->get_col( "SELECT role_id FROM {$wpdb->prefix}remember_roles" );
+		$rm_allowed = array_map( 'absint', is_array( $rm_allowed ) ? $rm_allowed : array() );
+
+		$out = array();
+		foreach ( (array) $posted as $raw ) {
+			$token = sanitize_text_field( wp_unslash( $raw ) );
+			if ( preg_match( '/^wp:([a-z0-9_-]+)$/', $token, $match ) && in_array( $match[1], $wp_allowed, true ) ) {
+				$out[] = 'wp:' . $match[1];
+				continue;
+			}
+			if ( preg_match( '/^rm:(\d+)$/', $token, $match ) ) {
+				$role_id = absint( $match[1] );
+				if ( $role_id > 0 && in_array( $role_id, $rm_allowed, true ) ) {
+					$out[] = 'rm:' . $role_id;
+				}
+			}
+		}
+		return array_values( array_unique( $out ) );
+	}
+
+	/**
+	 * reMember role rows for the new-member notification setting.
+	 *
+	 * @return object[]
+	 */
+	public static function member_registered_role_choices() {
+		global $wpdb;
+		$rows = $wpdb->get_results(
+			"SELECT role_id, role_name, is_event_role
+			FROM {$wpdb->prefix}remember_roles
+			ORDER BY is_event_role ASC, role_name ASC"
+		);
+		return is_array( $rows ) ? $rows : array();
+	}
+
+	/**
+	 * Addresses emailed when a new member profile is created.
+	 *
+	 * An unsaved setting uses System Administrators, then WordPress administrators
+	 * if that role has no address. A saved setting uses only the chosen roles.
+	 * The new member is left off the list.
+	 *
+	 * @param int $exclude_user_id Member who was just created.
+	 * @return string[]
+	 */
+	public static function member_registered_recipient_emails( $exclude_user_id = 0 ) {
+		$roles = self::member_registered_notify_roles();
+		if ( null === $roles ) {
+			$emails = self::admin_emails();
+		} else {
+			$emails = self::emails_for_notify_role_tokens( $roles );
+		}
+
+		$exclude_user_id = absint( $exclude_user_id );
+		if ( $exclude_user_id < 1 ) {
+			return $emails;
+		}
+		$member = get_userdata( $exclude_user_id );
+		$own    = ( $member && is_email( $member->user_email ) ) ? strtolower( $member->user_email ) : '';
+		if ( '' === $own ) {
+			return $emails;
+		}
+		$kept = array();
+		foreach ( $emails as $email ) {
+			if ( strtolower( $email ) !== $own ) {
+				$kept[] = $email;
+			}
+		}
+		return $kept;
+	}
+
+	/**
+	 * Addresses for wp:{role} and rm:{role_id} tokens.
+	 *
+	 * @param string[] $tokens Saved role tokens.
+	 * @return string[]
+	 */
+	private static function emails_for_notify_role_tokens( $tokens ) {
+		global $wpdb;
+
+		$emails   = array();
+		$rm_ids   = array();
+		$seen     = array();
+		foreach ( (array) $tokens as $token ) {
+			$token = (string) $token;
+			if ( 0 === strpos( $token, 'wp:' ) ) {
+				$role = substr( $token, 3 );
+				if ( '' === $role ) {
+					continue;
+				}
+				$users = get_users(
+					array(
+						'role'   => $role,
+						'fields' => array( 'user_email' ),
+						'number' => -1,
+					)
+				);
+				foreach ( (array) $users as $user ) {
+					if ( ! empty( $user->user_email ) && is_email( $user->user_email ) ) {
+						self::push_unique_email( $emails, $seen, $user->user_email );
+					}
+				}
+				continue;
+			}
+			if ( preg_match( '/^rm:(\d+)$/', $token, $match ) ) {
+				$role_id = absint( $match[1] );
+				if ( $role_id > 0 ) {
+					$rm_ids[] = $role_id;
+				}
+			}
+		}
+
+		$rm_ids = array_values( array_unique( $rm_ids ) );
+		if ( ! empty( $rm_ids ) ) {
+			$placeholders = implode( ',', array_fill( 0, count( $rm_ids ), '%d' ) );
+			$member_ids   = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT DISTINCT member_id FROM {$wpdb->prefix}remember_member_roles WHERE role_id IN ({$placeholders})",
+					...$rm_ids
+				)
+			);
+			foreach ( self::emails_for_user_ids( is_array( $member_ids ) ? $member_ids : array() ) as $email ) {
+				self::push_unique_email( $emails, $seen, $email );
+			}
+		}
+
+		return $emails;
+	}
+
+	/**
+	 * Append an address once, ignoring case.
+	 *
+	 * @param string[] $emails Collected addresses.
+	 * @param array    $seen   Lowercase addresses already kept.
+	 * @param string   $email  Candidate.
+	 * @return void
+	 */
+	private static function push_unique_email( array &$emails, array &$seen, $email ) {
+		$email = (string) $email;
+		$key   = strtolower( $email );
+		if ( '' === $key || isset( $seen[ $key ] ) ) {
+			return;
+		}
+		$seen[ $key ] = true;
+		$emails[]     = $email;
+	}
+
+	/**
 	 * Who receives staff vetting emails.
 	 *
 	 * `team` is everyone with the Vetting role. `assigned` is the primary
@@ -385,7 +564,10 @@ class Remember_Notifications {
 	}
 
 	/**
-	 * Email System Administrators that a new member registered.
+	 * Email the configured roles that a new member profile was created.
+	 *
+	 * Public registration, a member added in wp-admin, and a WordPress user
+	 * converted into a member all use this. The new member is not a recipient.
 	 *
 	 * @param int $member_id Member / WordPress user ID.
 	 * @return void
@@ -396,12 +578,15 @@ class Remember_Notifications {
 			return;
 		}
 
-		$emails = self::admin_emails();
+		$emails = self::member_registered_recipient_emails( $member_id );
 		if ( empty( $emails ) ) {
 			require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
 			Remember_Logger::warning(
-				'New member registered but no admin email recipients',
-				array( 'member_id' => $member_id )
+				'New member registered but no email recipients',
+				array(
+					'member_id' => $member_id,
+					'roles'     => self::member_registered_notify_roles(),
+				)
 			);
 			return;
 		}
