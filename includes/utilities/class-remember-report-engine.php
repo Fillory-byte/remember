@@ -39,6 +39,10 @@ class Remember_Report_Engine {
 			return $compiled;
 		}
 
+		if ( 'surveys' === $compiled['subject'] && 'detail' === $compiled['mode'] ) {
+			return self::run_survey_grid( $compiled, $page, $per_page, $export, $event_id );
+		}
+
 		$count_sql = $compiled['count_sql'];
 		$count     = empty( $compiled['count_params'] )
 			? (int) $wpdb->get_var( $count_sql ) // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
@@ -294,11 +298,262 @@ class Remember_Report_Engine {
 			'params'       => $params,
 			'count_sql'    => $count_sql,
 			'count_params' => $count_params,
-			'columns'     => $headers,
-			'select_ids'  => $select_ids,
-			'mode'        => $mode,
-			'subject'     => $subject,
+			'columns'      => $headers,
+			'select_ids'   => $select_ids,
+			'mode'         => $mode,
+			'subject'      => $subject,
+			'from'         => $from,
+			'joins'        => $joins,
+			'where_sql'    => $where_sql,
 		);
+	}
+
+	/**
+	 * Survey detail reports: one row per response, one column per question.
+	 *
+	 * Other subjects, and survey summaries, keep the row-per-record query.
+	 * A filter still decides which responses qualify. Each qualifying response
+	 * then shows every answer, so one filtered question does not drop the rest
+	 * of that member's row.
+	 *
+	 * @param array $compiled Compiled fragments. Needs from, joins, where_sql, params.
+	 * @param int   $page     1-based page.
+	 * @param int   $per_page Page size.
+	 * @param bool  $export   Full export, capped.
+	 * @param int   $event_id Run-time event scope.
+	 * @return array|\WP_Error
+	 */
+	private static function run_survey_grid( $compiled, $page, $per_page, $export, $event_id ) {
+		global $wpdb;
+
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-surveys.php';
+
+		$fields = Remember_Report_Catalog::fields_for_current_user( 'surveys' );
+		$skip   = array( 'question.label', 'question.roles', 'answer.value' );
+		$identity = array();
+		foreach ( $compiled['select_ids'] as $id ) {
+			if ( isset( $fields[ $id ] ) && ! in_array( $id, $skip, true ) ) {
+				$identity[] = $id;
+			}
+		}
+		if ( ! in_array( 'user.display_name', $identity, true ) && isset( $fields['user.display_name'] ) ) {
+			array_unshift( $identity, 'user.display_name' );
+		}
+
+		$from      = $compiled['from'];
+		$joins     = $compiled['joins'];
+		$where_sql = $compiled['where_sql'];
+		$params    = $compiled['params'];
+		if ( false === strpos( $joins, 'u.ID = resp.member_id' ) ) {
+			$joins .= ' INNER JOIN ' . $wpdb->users . ' u ON u.ID = resp.member_id';
+		}
+
+		$sort_id  = '';
+		$sort_dir = 'ASC';
+		if ( preg_match( '/ORDER BY (.+) (ASC|DESC)$/', $compiled['sql'], $sort_match ) ) {
+			$sort_dir = $sort_match[2];
+		}
+		foreach ( $identity as $id ) {
+			$marker = 'ORDER BY ' . $fields[ $id ]['sql'] . ' ';
+			if ( false !== strpos( $compiled['sql'], $marker ) ) {
+				$sort_id = $id;
+				break;
+			}
+		}
+		$order_sql = $sort_id ? 'MIN(' . $fields[ $sort_id ]['sql'] . ')' : 'MIN(u.display_name)';
+
+		$count_sql = 'SELECT COUNT(DISTINCT resp.response_id) ' . $from . ' ' . $joins . $where_sql;
+		$count     = empty( $params )
+			? (int) $wpdb->get_var( $count_sql ) // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+			: (int) $wpdb->get_var( $wpdb->prepare( $count_sql, ...$params ) );
+
+		$page     = max( 1, absint( $page ) );
+		$per_page = min( 100, max( 1, absint( $per_page ) ) );
+		$offset   = ( $page - 1 ) * $per_page;
+		$limit    = $export ? self::MAX_EXPORT : $per_page;
+		$limit_sql = $export ? ' LIMIT %d' : ' LIMIT %d OFFSET %d';
+
+		$id_sql    = 'SELECT resp.response_id ' . $from . ' ' . $joins . $where_sql . ' GROUP BY resp.response_id ORDER BY ' . $order_sql . ' ' . $sort_dir . $limit_sql;
+		$id_params = $params;
+		$id_params[] = $limit;
+		if ( ! $export ) {
+			$id_params[] = $offset;
+		}
+		$response_ids = $wpdb->get_col( $wpdb->prepare( $id_sql, ...$id_params ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$response_ids = self::int_list( $response_ids );
+
+		$questions = array();
+		if ( $count > 0 ) {
+			$survey_sql = 'SELECT DISTINCT sv.survey_id ' . $from . ' ' . $joins . $where_sql;
+			$survey_ids = empty( $params )
+				? $wpdb->get_col( $survey_sql ) // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+				: $wpdb->get_col( $wpdb->prepare( $survey_sql, ...$params ) );
+			$survey_ids = self::int_list( $survey_ids );
+			if ( $survey_ids ) {
+				$questions = self::survey_grid_questions( $survey_ids );
+			}
+		}
+
+		$headers = array();
+		foreach ( $identity as $id ) {
+			$headers[] = array(
+				'id'    => $id,
+				'label' => $fields[ $id ]['label'],
+			);
+		}
+		foreach ( $questions as $question ) {
+			$headers[] = array(
+				'id'    => 'q' . (int) $question->question_id,
+				'label' => $question->heading,
+			);
+		}
+
+		$rows = array();
+		if ( $response_ids ) {
+			$select = array( 'resp.response_id' );
+			foreach ( $identity as $id ) {
+				$select[] = 'MIN(' . $fields[ $id ]['sql'] . ') AS `' . self::alias( $id ) . '`';
+			}
+			$in         = implode( ',', array_fill( 0, count( $response_ids ), '%d' ) );
+			$detail_sql = 'SELECT ' . implode( ', ', $select ) . ' ' . $from . ' ' . $joins . $where_sql . " AND resp.response_id IN ({$in}) GROUP BY resp.response_id";
+			$detail     = $wpdb->get_results( $wpdb->prepare( $detail_sql, ...array_merge( $params, $response_ids ) ), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+			$by_id      = array();
+			if ( is_array( $detail ) ) {
+				foreach ( $detail as $detail_row ) {
+					$by_id[ (int) $detail_row['response_id'] ] = $detail_row;
+				}
+			}
+			$answers = self::survey_grid_answers( $response_ids );
+			foreach ( $response_ids as $response_id ) {
+				$source = isset( $by_id[ $response_id ] ) ? $by_id[ $response_id ] : array();
+				$line   = array();
+				foreach ( $identity as $id ) {
+					$key         = self::alias( $id );
+					$line[ $id ] = self::format_list_cell( isset( $source[ $key ] ) ? $source[ $key ] : '' );
+				}
+				foreach ( $questions as $question ) {
+					$qid = (int) $question->question_id;
+					$stored = isset( $answers[ $response_id ][ $qid ] ) ? $answers[ $response_id ][ $qid ] : '';
+					$line[ 'q' . $qid ] = Remember_Surveys::format_stored_answer( $question->field_type, $question->options_text, $stored );
+				}
+				$rows[] = $line;
+			}
+		}
+
+		return array(
+			'columns'     => $headers,
+			'rows'        => $rows,
+			'total'       => $count,
+			'page'        => $page,
+			'pages'       => $export ? 1 : (int) max( 1, ceil( $count / $per_page ) ),
+			'mode'        => 'detail',
+			'subject'     => 'surveys',
+			'event_id'    => $event_id,
+			'event_label' => $event_id ? Remember_Report_Catalog::event_label( $event_id ) : '',
+		);
+	}
+
+	/**
+	 * Questions for the surveys in a filtered result, in survey then question order.
+	 *
+	 * A repeated question label is prefixed with its survey title.
+	 *
+	 * @param int[] $survey_ids Survey ids.
+	 * @return object[]
+	 */
+	private static function survey_grid_questions( $survey_ids ) {
+		global $wpdb;
+
+		$survey_ids = self::int_list( $survey_ids );
+		if ( ! $survey_ids ) {
+			return array();
+		}
+		$p  = $wpdb->prefix;
+		$in = implode( ',', array_fill( 0, count( $survey_ids ), '%d' ) );
+		$sql = "SELECT sq.question_id, sq.label, sq.field_type, sq.options_text, sv.title AS survey_title
+			FROM {$p}remember_survey_questions sq
+			INNER JOIN {$p}remember_surveys sv ON sv.survey_id = sq.survey_id
+			WHERE sq.survey_id IN ({$in})
+			ORDER BY sv.title ASC, sq.sort_order ASC, sq.question_id ASC";
+		$questions = $wpdb->get_results( $wpdb->prepare( $sql, ...$survey_ids ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		if ( ! is_array( $questions ) ) {
+			return array();
+		}
+
+		$counts = array();
+		foreach ( $questions as $question ) {
+			$label = trim( (string) $question->label );
+			if ( '' === $label ) {
+				$label = __( 'Question', 'remember' );
+			}
+			$question->heading = $label;
+			if ( ! isset( $counts[ $label ] ) ) {
+				$counts[ $label ] = 0;
+			}
+			++$counts[ $label ];
+		}
+		$used = array();
+		foreach ( $questions as $question ) {
+			$heading = $question->heading;
+			if ( $counts[ $heading ] > 1 ) {
+				$title = trim( (string) $question->survey_title );
+				if ( '' !== $title ) {
+					$heading = $title . ': ' . $heading;
+				}
+			}
+			if ( isset( $used[ $heading ] ) ) {
+				$heading .= ' (' . (int) $question->question_id . ')';
+			}
+			$used[ $heading ]     = true;
+			$question->heading    = $heading;
+		}
+		return $questions;
+	}
+
+	/**
+	 * Stored answers for a page of responses, keyed by response id then question id.
+	 *
+	 * @param int[] $response_ids Response ids.
+	 * @return array<int,array<int,string>>
+	 */
+	private static function survey_grid_answers( $response_ids ) {
+		global $wpdb;
+
+		$response_ids = self::int_list( $response_ids );
+		if ( ! $response_ids ) {
+			return array();
+		}
+		$p  = $wpdb->prefix;
+		$in = implode( ',', array_fill( 0, count( $response_ids ), '%d' ) );
+		$sql = "SELECT ans.response_id, ans.question_id, ans.value_text
+			FROM {$p}remember_survey_answers ans
+			WHERE ans.response_id IN ({$in})";
+		$found = $wpdb->get_results( $wpdb->prepare( $sql, ...$response_ids ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$out   = array();
+		if ( ! is_array( $found ) ) {
+			return $out;
+		}
+		foreach ( $found as $answer ) {
+			$out[ (int) $answer->response_id ][ (int) $answer->question_id ] = (string) $answer->value_text;
+		}
+		return $out;
+	}
+
+	/**
+	 * Positive unique ids.
+	 *
+	 * @param array $ids Raw ids.
+	 * @return int[]
+	 */
+	private static function int_list( $ids ) {
+		$clean = array();
+		foreach ( (array) $ids as $id ) {
+			$id = absint( $id );
+			if ( $id > 0 ) {
+				$clean[] = $id;
+			}
+		}
+		return array_values( array_unique( $clean ) );
 	}
 
 	/**

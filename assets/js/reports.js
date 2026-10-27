@@ -223,11 +223,22 @@
 		});
 	}
 
+	function surveyGrid() {
+		return state.subject === 'surveys' && state.mode !== 'summary';
+	}
+
+	function surveyMatrixField(id) {
+		return surveyGrid() && (id === 'question.label' || id === 'question.roles' || id === 'answer.value');
+	}
+
 	function renderColumns() {
 		var $groups = $('#remember-report-column-groups');
 		var grouped = {};
 		var order = [];
 		fields().forEach(function (f) {
+			if (surveyMatrixField(f.id)) {
+				return;
+			}
 			if (!grouped[f.group]) {
 				grouped[f.group] = [];
 				order.push(f.group);
@@ -251,6 +262,7 @@
 			$groups.append($cluster);
 		});
 		renderColumnOrder();
+		$('#remember-report-survey-layout').prop('hidden', !surveyGrid());
 	}
 
 	function renderColumnOrder() {
@@ -258,7 +270,7 @@
 		$ol.empty();
 		state.columns.forEach(function (id, index) {
 			var field = fieldById(id);
-			if (!field) {
+			if (!field || surveyMatrixField(id)) {
 				return;
 			}
 			var $li = $('<li/>');
@@ -275,6 +287,7 @@
 		var summary = state.mode === 'summary';
 		$('#remember-report-columns-wrap').toggle(!summary);
 		$('#remember-report-summary-wrap').prop('hidden', !summary);
+		$('#remember-report-survey-layout').prop('hidden', !surveyGrid());
 		$('input[name="remember_report_mode"][value="' + state.mode + '"]').prop('checked', true);
 		if (summary && !state.aggregations.length) {
 			state.aggregations = [{ fn: 'count', field: '*' }];
@@ -627,6 +640,9 @@
 	function renderSort() {
 		var choices = state.mode === 'summary' ? state.group_by.slice() : state.columns.slice();
 		var items = choices.map(function (id) {
+			if (surveyMatrixField(id)) {
+				return null;
+			}
 			var f = fieldById(id);
 			return f ? { id: f.id, label: f.label } : null;
 		}).filter(Boolean);
