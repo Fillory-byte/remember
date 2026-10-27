@@ -172,7 +172,7 @@ class Remember_Admin_Dashboard {
 	}
 
 	/**
-	 * Newest members, with their roles, for the people card.
+	 * Members updated most recently, with their roles.
 	 *
 	 * @return array<int,array{title:string,detail:string,meta:string,url:string}>
 	 */

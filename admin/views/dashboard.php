@@ -63,9 +63,21 @@ $remember_dash_row = function ( $item ) {
 		<p class="remember-dash-clear"><?php esc_html_e( 'All clear. Nothing is waiting on you.', 'remember' ); ?></p>
 	<?php endif; ?>
 
+	<?php
+	$remember_show_people   = ! empty( $dashboard['show_people'] );
+	$remember_show_events   = ! empty( $dashboard['show_events'] );
+	$remember_has_attention = ! empty( $dashboard['attention'] );
+	$remember_pair_columns  = $remember_show_people && ( $remember_has_attention || $remember_show_events );
+	$remember_panel_count   = (int) $remember_has_attention + (int) $remember_show_people + (int) $remember_show_events;
+	$remember_solo_class    = ( ! $remember_pair_columns && 1 === $remember_panel_count ) ? ' remember-dash-span' : '';
+	?>
 	<div class="remember-dash-layout">
-		<?php if ( ! empty( $dashboard['attention'] ) ) : ?>
-			<section class="remember-dash-panel">
+		<?php if ( $remember_pair_columns ) : ?>
+			<div class="remember-dash-stack">
+		<?php endif; ?>
+
+		<?php if ( $remember_has_attention ) : ?>
+			<section class="remember-dash-panel<?php echo esc_attr( $remember_solo_class ); ?>">
 				<h2><?php esc_html_e( 'Needs attention', 'remember' ); ?></h2>
 				<div class="remember-dash-rows">
 					<?php foreach ( $dashboard['attention'] as $item ) : ?>
@@ -75,9 +87,31 @@ $remember_dash_row = function ( $item ) {
 			</section>
 		<?php endif; ?>
 
-		<?php if ( ! empty( $dashboard['show_people'] ) ) : ?>
+		<?php if ( $remember_show_events && $remember_pair_columns ) : ?>
 			<section class="remember-dash-panel">
-				<h2><?php esc_html_e( 'People', 'remember' ); ?></h2>
+				<h2><?php esc_html_e( 'Upcoming events', 'remember' ); ?></h2>
+				<?php if ( ! empty( $dashboard['upcoming'] ) ) : ?>
+					<div class="remember-dash-rows">
+						<?php foreach ( $dashboard['upcoming'] as $event ) : ?>
+							<?php $remember_dash_row( $event ); ?>
+						<?php endforeach; ?>
+					</div>
+				<?php else : ?>
+					<p class="remember-dash-empty">
+						<?php esc_html_e( 'No events are scheduled.', 'remember' ); ?>
+						<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-events' ) ); ?>"><?php esc_html_e( 'Open events', 'remember' ); ?></a>
+					</p>
+				<?php endif; ?>
+			</section>
+		<?php endif; ?>
+
+		<?php if ( $remember_pair_columns ) : ?>
+			</div>
+		<?php endif; ?>
+
+		<?php if ( $remember_show_people ) : ?>
+			<section class="remember-dash-panel<?php echo esc_attr( $remember_solo_class ); ?>">
+				<h2><?php esc_html_e( 'Recently Updated Members', 'remember' ); ?></h2>
 				<?php if ( ! empty( $dashboard['people'] ) ) : ?>
 					<div class="remember-dash-rows">
 						<?php foreach ( $dashboard['people'] as $person ) : ?>
@@ -93,8 +127,8 @@ $remember_dash_row = function ( $item ) {
 			</section>
 		<?php endif; ?>
 
-		<?php if ( ! empty( $dashboard['show_events'] ) ) : ?>
-			<section class="remember-dash-panel">
+		<?php if ( $remember_show_events && ! $remember_pair_columns ) : ?>
+			<section class="remember-dash-panel<?php echo esc_attr( $remember_solo_class ); ?>">
 				<h2><?php esc_html_e( 'Upcoming events', 'remember' ); ?></h2>
 				<?php if ( ! empty( $dashboard['upcoming'] ) ) : ?>
 					<div class="remember-dash-rows">
@@ -204,6 +238,13 @@ $remember_dash_row = function ( $item ) {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 	gap: 16px;
+	align-items: start;
+}
+.remember-dashboard .remember-dash-stack {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	min-width: 0;
 }
 .remember-dashboard .remember-dash-span {
 	grid-column: 1 / -1;
