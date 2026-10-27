@@ -199,6 +199,51 @@ class Remember_Vetting_Workflow {
 	}
 
 	/**
+	 * Open an automatic vetting case, or leave the member alone.
+	 *
+	 * An already vetted member is skipped before the workflow is considered,
+	 * so a first application or a new profile cannot put them back into vetting.
+	 * Pass $is_first for an application trigger. The application row already
+	 * exists by the time this runs, so the caller records that fact first.
+	 *
+	 * @param int    $member_id Member.
+	 * @param string $trigger   'join' for a new profile, or 'first_application'.
+	 * @param bool   $is_first  True when this application is the member's first.
+	 * @return int|false Case id when one is opened, 0 when none is needed, false when opening failed.
+	 */
+	public static function open_automatic_case( $member_id, $trigger, $is_first = false ) {
+		$member_id = absint( $member_id );
+		require_once plugin_dir_path( __FILE__ ) . '../models/class-member.php';
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
+
+		$member = ( new Remember_Member() )->get( $member_id );
+		if ( Remember_Member::is_vetted_member( $member ) ) {
+			Remember_Logger::info(
+				'Automatic vetting skipped because the member is already vetted',
+				array(
+					'member_id' => $member_id,
+					'trigger'   => (string) $trigger,
+				)
+			);
+			return 0;
+		}
+
+		if ( 'join' === $trigger ) {
+			if ( ! self::should_vet_on_join() ) {
+				return 0;
+			}
+		} elseif ( 'first_application' === $trigger ) {
+			if ( ! $is_first || ! self::should_vet_on_first_application() ) {
+				return 0;
+			}
+		} else {
+			return 0;
+		}
+
+		return self::create_vetting_case( $member_id );
+	}
+
+	/**
 	 * Create vetting case for a member.
 	 *
 	 * @param int $member_id Member ID.

@@ -142,10 +142,8 @@ if ( isset( $_POST['remember_apply_action'] ) && check_admin_referer( 'remember_
 					}
 				}
 
-				// Create vetting case if this is first application and workflow is "first_application"
-				if ( $is_first && Remember_Vetting_Workflow::should_vet_on_first_application() ) {
-					Remember_Vetting_Workflow::create_vetting_case( $member_id );
-				}
+				// Already vetted members are skipped. A first application opens a case only after that.
+				Remember_Vetting_Workflow::open_automatic_case( $member_id, 'first_application', $is_first );
 
 				$submission_success = true;
 			} else {

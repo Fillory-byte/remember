@@ -4,6 +4,7 @@ All notable changes to reMember are listed here. The current plugin version is i
 
 ## 2.2.6
 
+- **Fix:** Automatic vetting leaves a member alone when they are already vetted. A new profile or a first event application is considered only after that, so a vetted member's first application no longer opens a case or moves them back to in vetting. Opening a case by hand is unchanged.
 - **Feature:** A survey report lists each response on its own row and each question in its own column, with the answer in the cell. A choice shows its label, and a question the member was not asked is left blank. Question and Answer remain filters. Summaries, and reports for members, applications, payments, vetting, and events, are unchanged.
 - **Fix:** A one-click update stops before it touches the plugin when the web server cannot replace the files ([#113](https://github.com/ctucker1984/remember/issues/113)). The message names up to five paths, who owns them, and the account the web server runs as, and the installed copy stays active. Upload → Replace does the same check once the zip is open. This is the failure that left a half-deleted plugin folder on the demo box.
 - **Feature:** The updater checks the downloaded release zip against the SHA-256 digest GitHub records for that asset ([#104](https://github.com/ctucker1984/remember/issues/104)). A mismatch, or a release with no digest, stops the update and nothing is installed. The digest comes from the same GitHub API as the download, so a compromised release account is still the trust boundary.
