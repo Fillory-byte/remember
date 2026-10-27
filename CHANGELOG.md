@@ -4,6 +4,7 @@ All notable changes to reMember are listed here. The current plugin version is i
 
 ## 2.2.7
 
+- **Fix:** On a phone, each application in wp-admin is one short card. The event name and status share the first line, the member is on the next, and the role, billing, and date sit together. The action buttons wrap on their own line. A long event name no longer stacks one letter per line beside the member's email.
 - **Fix:** Automatic vetting opens a case only for a member who has none, and only when the configured trigger says to. A new profile does that when the workflow is On Join. A first event application does that when the workflow is On First Event Application. A member who already has a case is left alone, including a vetted member whose first application used to be skipped only because their status was vetted. Another case after that is opened by hand.
 - **Fix:** A member whose latest decided vetting case was a rejection cannot see events they were not already accepted to, and cannot apply to any event. Events they were accepted to stay visible. A newer case that is still open does not lift this. It lifts when that newer case is accepted.
 
