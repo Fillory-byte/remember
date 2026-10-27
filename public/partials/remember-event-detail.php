@@ -16,6 +16,7 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-applicat
 require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-location.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-member.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-event-invites.php';
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-vetting-workflow.php';
 
 $event_model = new Remember_Event();
 $application_model = new Remember_Application();
@@ -134,7 +135,15 @@ $is_multi_day = ( $event->start_date !== $event->end_date );
 		</div>
 	</div>
 
-	<?php if ( $current_member && ! Remember_Member::is_vetted_member( $current_member ) ) : ?>
+	<?php if ( $current_member && Remember_Vetting_Workflow::is_barred_by_rejection( $current_member ) ) : ?>
+		<div class="remember-event-notice">
+			<p class="remember-notice remember-warning">
+				<?php echo esc_html( Remember_Vetting_Workflow::apply_block_message( $current_member ) ); ?>
+			</p>
+		</div>
+	<?php endif; ?>
+
+	<?php if ( $current_member && ! Remember_Vetting_Workflow::is_barred_by_rejection( $current_member ) && ! Remember_Member::is_vetted_member( $current_member ) ) : ?>
 		<div class="remember-event-notice">
 			<p class="remember-notice remember-warning">
 				<?php esc_html_e( 'Member is not yet vetted.', 'remember' ); ?>

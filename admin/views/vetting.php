@@ -17,6 +17,7 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-vetting.
 require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-member.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-application.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-event.php';
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-vetting-workflow.php';
 
 Remember_Logger::debug( 'Vetting page loaded' );
 
@@ -110,35 +111,14 @@ if ( isset( $_POST['remember_vetting_action'] ) && check_admin_referer( 'remembe
 					// Update member status based on most recent completed vetting case
 					$vetting = $vetting_model->get( $vetting_id );
 					if ( $vetting ) {
-						$member_model = new Remember_Member();
-						
-						// Get all completed vetting cases for this member, ordered by decision_date DESC
-						global $wpdb;
-						$completed_cases = $wpdb->get_results( $wpdb->prepare(
-							"SELECT * FROM {$wpdb->prefix}remember_vetting 
-							WHERE member_id = %d 
-							AND status = 'completed' 
-							AND decision IN ('accepted', 'rejected')
-							ORDER BY decision_date DESC 
-							LIMIT 1",
-							$vetting->member_id
-						) );
-						
-						// Update member status based on the most recent completed case
-						if ( ! empty( $completed_cases ) ) {
-							$latest_decision = $completed_cases[0]->decision;
-							if ( 'accepted' === $latest_decision ) {
-								$member_model->update_status( $vetting->member_id, 'vetted' );
-								// Trigger hook to sync member to QuickBooks (only if this is the latest decision)
-								if ( $completed_cases[0]->vetting_id == $vetting_id ) {
-									do_action( 'remember_member_vetted', $vetting->member_id );
-								}
-							} elseif ( 'rejected' === $latest_decision ) {
-								$member_model->update_status( $vetting->member_id, 'rejected' );
+						$latest_case = Remember_Vetting_Workflow::latest_completed_case( $vetting->member_id );
+						if ( $latest_case ) {
+							Remember_Vetting_Workflow::sync_member_status_from_latest_decision( $vetting->member_id );
+							if ( 'accepted' === $latest_case->decision && (int) $latest_case->vetting_id === (int) $vetting_id ) {
+								do_action( 'remember_member_vetted', $vetting->member_id );
 							}
-
-							if ( (int) $completed_cases[0]->vetting_id === (int) $vetting_id ) {
-								Remember_Notifications::send_vetting_result( $vetting->member_id, $latest_decision, $vetting_id );
+							if ( (int) $latest_case->vetting_id === (int) $vetting_id ) {
+								Remember_Notifications::send_vetting_result( $vetting->member_id, $latest_case->decision, $vetting_id );
 								Remember_Notifications::notify_vetting_staff( 'vetting_completed', $vetting_id );
 							}
 						}

@@ -42,7 +42,7 @@ $keep_form = false;
 
 if ( isset( $_POST['remember_apply_action'] ) && check_admin_referer( 'remember_apply_action', 'remember_apply_nonce' ) ) {
 	if ( ! Remember_Vetting_Workflow::member_can_apply( $member_row ) ) {
-		$submission_error = __( 'Member is not yet vetted.', 'remember' );
+		$submission_error = Remember_Vetting_Workflow::apply_block_message( $member_row );
 	} else {
 	$event_id = isset( $_POST['event_id'] ) ? absint( $_POST['event_id'] ) : 0;
 	$event_role_id = isset( $_POST['event_role_id'] ) ? absint( $_POST['event_role_id'] ) : 0;
@@ -142,7 +142,7 @@ if ( isset( $_POST['remember_apply_action'] ) && check_admin_referer( 'remember_
 					}
 				}
 
-				// Already vetted members are skipped. A first application opens a case only after that.
+				// A member who already has a vetting case is left alone. A first application opens a case only when they have none.
 				Remember_Vetting_Workflow::open_automatic_case( $member_id, 'first_application', $is_first );
 
 				$submission_success = true;
@@ -229,7 +229,7 @@ $restore['addons'] = (object) $restore['addons'];
 	</div>
 <?php elseif ( ! Remember_Vetting_Workflow::member_can_apply( $member_row ) ) : ?>
 	<div class="remember-notice remember-warning">
-		<p><?php esc_html_e( 'Member is not yet vetted.', 'remember' ); ?></p>
+		<p><?php echo esc_html( Remember_Vetting_Workflow::apply_block_message( $member_row ) ); ?></p>
 	</div>
 <?php elseif ( $registration_block ) : ?>
 	<div class="remember-notice remember-warning">

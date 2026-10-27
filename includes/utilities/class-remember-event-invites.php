@@ -180,8 +180,10 @@ class Remember_Event_Invites {
 	/**
 	 * Whether the member may see this event on the public list or detail page.
 	 *
-	 * Invitees see it. Anyone who already applied still sees it so they can
-	 * follow their application. Everyone else does not.
+	 * A member whose latest vetting decision was a rejection sees only events
+	 * they were already accepted to. Otherwise, invitees see a private event,
+	 * and anyone who already applied still sees it so they can follow that
+	 * application. Everyone else does not.
 	 *
 	 * @param object|null $event     Event row.
 	 * @param int         $member_id Member ID.
@@ -191,11 +193,19 @@ class Remember_Event_Invites {
 		if ( ! is_object( $event ) ) {
 			return false;
 		}
+		$member_id = absint( $member_id );
+		$event_id  = absint( $event->event_id );
+		if ( $member_id > 0 ) {
+			require_once plugin_dir_path( __FILE__ ) . 'class-remember-vetting-workflow.php';
+			require_once plugin_dir_path( __FILE__ ) . '../models/class-member.php';
+			$member = ( new Remember_Member() )->get( $member_id );
+			if ( Remember_Vetting_Workflow::is_barred_by_rejection( $member ) ) {
+				return Remember_Vetting_Workflow::member_was_accepted_to_event( $member_id, $event_id );
+			}
+		}
 		if ( ! self::is_private( $event ) ) {
 			return true;
 		}
-		$member_id = absint( $member_id );
-		$event_id  = absint( $event->event_id );
 		if ( $member_id < 1 ) {
 			return false;
 		}
