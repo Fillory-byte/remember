@@ -338,6 +338,12 @@ if ( isset( $_POST['remember_settings_action'] ) && check_admin_referer( 'rememb
 			$options['vetting_notify_targets'] = ( 'assigned' === $targets ) ? 'assigned' : 'team';
 		}
 
+		if ( isset( $_POST['member_registered_notify_set'] ) ) {
+			require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-notifications.php';
+			$posted_roles = isset( $_POST['member_registered_notify_roles'] ) && is_array( $_POST['member_registered_notify_roles'] ) ? wp_unslash( $_POST['member_registered_notify_roles'] ) : array();
+			$options['member_registered_notify_roles'] = Remember_Notifications::sanitize_member_registered_notify_roles( $posted_roles );
+		}
+
 		$registration_guard_error = '';
 		if ( isset( $_POST['registration_captcha_provider'] ) ) {
 			require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-registration-guard.php';
@@ -835,6 +841,71 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						</select>
 						<p class="description">
 							<?php esc_html_e( 'Who is emailed when a vetter is assigned, a case is scheduled, a case is completed, or a collaborator is invited. The entire team is everyone with the Vetting role. Assigned vetters are the primary vetter and collaborators on that case. The member’s own accepted or rejected email is unchanged.', 'remember' ); ?>
+						</p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">
+						<?php esc_html_e( 'New member notifications', 'remember' ); ?>
+					</th>
+					<td>
+						<?php
+						require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-notifications.php';
+						$notify_saved = Remember_Notifications::member_registered_notify_roles();
+						$notify_roles = is_array( $notify_saved ) ? $notify_saved : array();
+						$notify_default_rm = 0;
+						if ( null === $notify_saved ) {
+							foreach ( Remember_Notifications::member_registered_role_choices() as $notify_role_row ) {
+								if ( isset( $notify_role_row->role_name ) && 'System Administrator' === $notify_role_row->role_name ) {
+									$notify_default_rm = (int) $notify_role_row->role_id;
+									break;
+								}
+							}
+						}
+						?>
+						<input type="hidden" name="member_registered_notify_set" value="1">
+						<fieldset>
+							<legend class="screen-reader-text"><?php esc_html_e( 'New member notifications', 'remember' ); ?></legend>
+							<p><strong><?php esc_html_e( 'WordPress roles', 'remember' ); ?></strong></p>
+							<?php
+							$notify_wp_roles = function_exists( 'wp_roles' ) ? wp_roles() : null;
+							if ( $notify_wp_roles && ! empty( $notify_wp_roles->roles ) ) {
+								foreach ( $notify_wp_roles->roles as $notify_wp_key => $notify_wp_role ) {
+									$notify_token = 'wp:' . $notify_wp_key;
+									$notify_label = isset( $notify_wp_role['name'] ) ? translate_user_role( $notify_wp_role['name'] ) : $notify_wp_key;
+									?>
+									<label style="display:block;margin:0 0 0.25em 0;">
+										<input type="checkbox" name="member_registered_notify_roles[]" value="<?php echo esc_attr( $notify_token ); ?>" <?php checked( in_array( $notify_token, $notify_roles, true ) ); ?>>
+										<?php echo esc_html( $notify_label ); ?>
+									</label>
+									<?php
+								}
+							}
+							?>
+							<p style="margin-top:0.8em;"><strong><?php esc_html_e( 'reMember roles', 'remember' ); ?></strong></p>
+							<?php
+							foreach ( Remember_Notifications::member_registered_role_choices() as $notify_role_row ) {
+								$notify_role_id = isset( $notify_role_row->role_id ) ? (int) $notify_role_row->role_id : 0;
+								if ( $notify_role_id < 1 ) {
+									continue;
+								}
+								$notify_token   = 'rm:' . $notify_role_id;
+								$notify_checked = in_array( $notify_token, $notify_roles, true ) || ( null === $notify_saved && $notify_role_id === $notify_default_rm );
+								$notify_label   = isset( $notify_role_row->role_name ) ? (string) $notify_role_row->role_name : $notify_token;
+								if ( ! empty( $notify_role_row->is_event_role ) ) {
+									$notify_label .= ' ' . __( '(event)', 'remember' );
+								}
+								?>
+								<label style="display:block;margin:0 0 0.25em 0;">
+									<input type="checkbox" name="member_registered_notify_roles[]" value="<?php echo esc_attr( $notify_token ); ?>" <?php checked( $notify_checked ); ?>>
+									<?php echo esc_html( $notify_label ); ?>
+								</label>
+								<?php
+							}
+							?>
+						</fieldset>
+						<p class="description">
+							<?php esc_html_e( 'Who is emailed when someone registers, when a member is added in wp-admin, or when a WordPress user is turned into a member. The new member is not emailed about their own profile. Until you save this, System Administrators are emailed, and WordPress administrators are emailed only when no System Administrator has an email address. After you save, only the checked roles are emailed. Clearing every box turns the email off.', 'remember' ); ?>
 						</p>
 					</td>
 				</tr>
