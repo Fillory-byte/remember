@@ -2,6 +2,12 @@
 
 All notable changes to reMember are listed here. The current plugin version is in `remember.php` (`REMEMBER_VERSION`) and [GitHub Releases](https://github.com/ctucker1984/remember/releases).
 
+## 2.2.6
+
+- **Fix:** A one-click update stops before it touches the plugin when the web server cannot replace the files ([#113](https://github.com/ctucker1984/remember/issues/113)). The message names up to five paths, who owns them, and the account the web server runs as, and the installed copy stays active. Upload → Replace does the same check once the zip is open. This is the failure that left a half-deleted plugin folder on the demo box.
+- **Feature:** The updater checks the downloaded release zip against the SHA-256 digest GitHub records for that asset ([#104](https://github.com/ctucker1984/remember/issues/104)). A mismatch, or a release with no digest, stops the update and nothing is installed. The digest comes from the same GitHub API as the download, so a compromised release account is still the trust boundary.
+- **Feature:** The admin dashboard leads with the work that needs someone: your vetting, unassigned cases, applications waiting for review, duplicate profiles, and events whose registration closes within a week. The counts are links. Upcoming events show the date, the place, and how many applications are pending or accepted. The newest members are listed with their roles. A quiet site says all clear instead of three empty sections. The WordPress dashboard widget uses the same counts.
+
 ## 2.2.5
 
 - **Feature:** Survey roles are chosen per question instead of per survey. An event has one survey on the application, plus any follow-ups, and each question says which roles answer it; ticking no roles asks everyone. Applicants see only the questions for the role they apply for, and applying for a second role keeps earlier answers and asks only the new questions. Follow-ups are emailed only to accepted members with at least one question for their role. Event results measure each question against the members who were asked it. In survey reports, "Role" is now the member's role, and "Question asked of" shows which roles a question was for. Database 2.4.2 moves each survey's roles onto its questions and merges an event's application surveys into one, keeping every question and answer; the merged surveys' instructions are added to the end under their old titles, and a notice on the Surveys screen lists what was merged so the wording can be checked.
