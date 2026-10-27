@@ -393,7 +393,7 @@ class Remember_Xero_Sync {
 
 		$line_items = array();
 
-		if ( $event_role && $event_role->cost > 0 ) {
+		if ( $event_role && floatval( $event_role->cost ) >= 0 ) {
 			$role_item_id = self::resolve_xero_item_id_for_role( $event_role->role_id, $event_role->role_name );
 			if ( ! is_wp_error( $role_item_id ) ) {
 				$line = self::build_line_item_from_xero_item(
@@ -474,7 +474,14 @@ class Remember_Xero_Sync {
 			}
 		}
 
+		$quoted_amount = $event_role ? floatval( $event_role->cost ) : 0;
+		foreach ( $merchandise_items as $item ) {
+			$quoted_amount += floatval( $item->total_cost );
+		}
 		if ( empty( $line_items ) ) {
+			if ( $quoted_amount <= 0.001 ) {
+				return self::record_zero_charge_payment( $application_id, $member_id, $event_role ? floatval( $event_role->cost ) : 0 );
+			}
 			return new WP_Error( 'no_line_items', __( 'No line items available. Map event roles and catalog products to Xero under Settings → Xero.', 'remember' ) );
 		}
 
@@ -491,6 +498,12 @@ class Remember_Xero_Sync {
 					'discount_rate'   => $discount_rate,
 				)
 			);
+		}
+
+		$discount_factor = $discount_rate > 0 ? ( 1 - ( min( 100, $discount_rate ) / 100 ) ) : 1;
+		$total_amount    = 0;
+		foreach ( $line_items as $li ) {
+			$total_amount += floatval( $li['unit_amount'] ) * floatval( $li['quantity'] ) * $discount_factor;
 		}
 
 		$invoice_result = Remember_Xero_API::create_invoice(
@@ -514,13 +527,14 @@ class Remember_Xero_Sync {
 					'error'          => $invoice_result->get_error_message(),
 				)
 			);
+			if ( $total_amount <= 0.001 ) {
+				Remember_Logger::info(
+					'Xero invoice was not created for a zero charge; marking the application paid',
+					array( 'application_id' => $application_id )
+				);
+				return self::record_zero_charge_payment( $application_id, $member_id, $event_role ? floatval( $event_role->cost ) : 0 );
+			}
 			return $invoice_result;
-		}
-
-		$discount_factor = $discount_rate > 0 ? ( 1 - ( min( 100, $discount_rate ) / 100 ) ) : 1;
-		$total_amount    = 0;
-		foreach ( $line_items as $li ) {
-			$total_amount += floatval( $li['unit_amount'] ) * floatval( $li['quantity'] ) * $discount_factor;
 		}
 
 		$xero_invoice_id     = isset( $invoice_result['InvoiceID'] ) ? $invoice_result['InvoiceID'] : '';
@@ -588,6 +602,52 @@ class Remember_Xero_Sync {
 		}
 
 		return $invoice_result;
+	}
+
+	/**
+	 * Whether create_invoice_for_application recorded a paid zero charge and sent no invoice.
+	 *
+	 * @param mixed $result Return value from create_invoice_for_application().
+	 * @return bool
+	 */
+	public static function is_zero_charge_result( $result ) {
+		return is_array( $result ) && ! empty( $result['remember_zero_charge'] );
+	}
+
+	/**
+	 * Mark an application paid at $0 when there is nothing to invoice.
+	 *
+	 * @param int   $application_id Application ID.
+	 * @param int   $member_id      Member ID.
+	 * @param float $role_cost      Event role price.
+	 * @return array{remember_zero_charge:true}
+	 */
+	private static function record_zero_charge_payment( $application_id, $member_id, $role_cost ) {
+		$payment_model = new Remember_Payment();
+		$payment       = $payment_model->get_by_application( $application_id );
+		$data          = array(
+			'role_cost'        => $role_cost,
+			'merchandise_cost' => 0,
+			'total_amount'     => 0,
+			'amount_paid'      => 0,
+			'amount_due'       => 0,
+			'payment_status'   => 'paid',
+			'payment_date'     => current_time( 'mysql' ),
+		);
+		if ( ! $payment ) {
+			$data['event_application_id'] = $application_id;
+			$data['member_id']            = $member_id;
+			$payment_model->create( $data );
+		} elseif ( empty( $payment->xero_invoice_id ) && empty( $payment->quickbooks_invoice_id ) ) {
+			$payment_model->update( $payment->payment_id, $data );
+		}
+
+		Remember_Logger::info(
+			'Application marked paid with no invoice because the charge is zero',
+			array( 'application_id' => $application_id )
+		);
+
+		return array( 'remember_zero_charge' => true );
 	}
 
 	/**

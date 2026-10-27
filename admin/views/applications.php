@@ -197,6 +197,8 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 								)
 							);
 							echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__( 'Application accepted, but Xero invoice creation failed: ', 'remember' ) . esc_html( $invoice_result->get_error_message() ) . '</p></div>';
+						} elseif ( Remember_Xero_Sync::is_zero_charge_result( $invoice_result ) ) {
+							echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Application accepted. The charge is $0.00, so no invoice was sent and the application is marked paid.', 'remember' ) . '</p></div>';
 						} else {
 							echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Application accepted and Xero invoice created successfully.', 'remember' ) . '</p></div>';
 							echo Remember_Xero_Sync::credit_apply_admin_notices(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- notices are escaped in the helper.
@@ -448,6 +450,8 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 						$invoice_result = Remember_Xero_Sync::create_invoice_for_application( $application_id );
 						if ( is_wp_error( $invoice_result ) ) {
 							echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__( 'Billing reprocess failed: ', 'remember' ) . esc_html( $invoice_result->get_error_message() ) . '</p></div>';
+						} elseif ( Remember_Xero_Sync::is_zero_charge_result( $invoice_result ) ) {
+							echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Billing reprocess succeeded. The charge is $0.00, so no invoice was sent and the application is marked paid.', 'remember' ) . '</p></div>';
 						} else {
 							echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Billing reprocess succeeded. Xero invoice created.', 'remember' ) . '</p></div>';
 							echo Remember_Xero_Sync::credit_apply_admin_notices(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- notices are escaped in the helper.
@@ -614,6 +618,10 @@ if ( isset( $_GET['view'] ) ) {
 		$viewing_billing_label = __( 'Not invoiced yet', 'remember' );
 		$viewing_billing_html  = '';
 		$viewing_billing_color = '#72777c';
+		if ( $viewing_payment && 'paid' === $viewing_payment->payment_status && floatval( $viewing_payment->amount_due ) <= 0.001 && empty( $viewing_payment->xero_invoice_id ) && empty( $viewing_payment->quickbooks_invoice_id ) ) {
+			$viewing_billing_label = __( 'Paid', 'remember' );
+			$viewing_billing_color = '#46b450';
+		}
 		if ( $viewing_payment && ( ! empty( $viewing_payment->xero_invoice_id ) || ! empty( $viewing_payment->quickbooks_invoice_id ) ) ) {
 			require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-billing-template.php';
 			$link_data = Remember_Billing_Template::get_payment_invoice_link_data( $viewing_payment );
@@ -855,6 +863,9 @@ $status_colors = array(
 					$billing_color = '#72777c';
 					if ( $application_payment && ( ! empty( $application_payment->xero_invoice_id ) || ! empty( $application_payment->quickbooks_invoice_id ) ) ) {
 						$billing_label = __( 'Invoiced', 'remember' );
+						$billing_color = '#46b450';
+					} elseif ( $application_payment && 'paid' === $application_payment->payment_status && floatval( $application_payment->amount_due ) <= 0.001 ) {
+						$billing_label = __( 'Paid', 'remember' );
 						$billing_color = '#46b450';
 					}
 				?>
