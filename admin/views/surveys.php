@@ -368,7 +368,7 @@ function remember_survey_question_form( $survey, $placement, $question ) {
 			<th scope="row"><label for="field_key"><?php esc_html_e( 'Short name', 'remember' ); ?></label></th>
 			<td>
 				<input type="text" class="regular-text" name="field_key" id="field_key" value="<?php echo esc_attr( $field_key ); ?>" pattern="[a-z0-9_]*" placeholder="ice_cream_flavor" autocomplete="off">
-				<p class="description"><?php esc_html_e( 'Used as the column name in survey reports. Example: ice_cream_flavor. Leave blank and we will suggest one from the question.', 'remember' ); ?></p>
+				<p class="description"><?php esc_html_e( 'A short name for this question, such as ice_cream_flavor. Leave blank and we will suggest one from the question. Survey reports use the question text as the column heading.', 'remember' ); ?></p>
 			</td>
 		</tr>
 		<tr>

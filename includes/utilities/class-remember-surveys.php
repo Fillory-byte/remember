@@ -1543,6 +1543,22 @@ class Remember_Surveys {
 	/**
 	 * Human text for a stored answer. Option keys become their labels.
 	 *
+	 * @param string $field_type   Question field type.
+	 * @param string $options_text Option list as stored on the question.
+	 * @param string $stored       Stored value_text.
+	 * @return string Empty when nothing was answered.
+	 */
+	public static function format_stored_answer( $field_type, $options_text, $stored ) {
+		$question = (object) array(
+			'field_type'   => (string) $field_type,
+			'options_text' => (string) $options_text,
+		);
+		return self::answer_display( $question, $stored );
+	}
+
+	/**
+	 * Human text for a stored answer. Option keys become their labels.
+	 *
 	 * @param object $question Question row. Needs field_type and options_text.
 	 * @param string $stored   Stored value_text.
 	 * @return string Empty when nothing was answered.

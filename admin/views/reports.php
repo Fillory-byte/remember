@@ -64,6 +64,7 @@ if ( ! defined( 'WPINC' ) ) {
 					<div class="remember-reports-section__head">
 						<h3><?php esc_html_e( 'Columns', 'remember' ); ?></h3>
 						<p class="description"><?php esc_html_e( 'Choose fields, then order the selected list.', 'remember' ); ?></p>
+						<p class="description" id="remember-report-survey-layout" hidden><?php esc_html_e( 'A survey result is one row per response. Each question is a column, and the cell is the answer. Question and Answer stay available as filters.', 'remember' ); ?></p>
 					</div>
 					<div class="remember-reports-columns-grid">
 						<div id="remember-report-column-groups"></div>
