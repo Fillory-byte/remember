@@ -16,8 +16,11 @@
  * GitHub's generated "Source code" zip unpacks to remember-<tag>/ and would install
  * beside the active copy instead of replacing it.
  *
- * There is no signature check. The GitHub accounts that can publish a release are
- * the trust boundary. See the readme section on updates.
+ * Before WordPress unpacks a dashboard update, the downloaded zip is checked
+ * against the SHA-256 digest GitHub records on that release asset. A mismatch
+ * or a missing digest stops the update and nothing is installed. The digest
+ * comes from the same GitHub API as the download URL, so a compromised release
+ * account can still publish both. See the readme section on updates.
  *
  * @package    reMember
  * @subpackage reMember/includes/utilities
@@ -46,11 +49,93 @@ class Remember_GitHub_Updater {
 	 */
 	public static function init() {
 		add_filter( 'update_plugins_github.com', array( __CLASS__, 'check_for_update' ), 10, 3 );
+		add_filter( 'upgrader_pre_download', array( __CLASS__, 'verify_package_download' ), 10, 4 );
 		add_filter( 'plugins_api', array( __CLASS__, 'plugin_details' ), 10, 3 );
 		add_filter( 'site_transient_update_plugins', array( __CLASS__, 'inject_update' ) );
 		add_action( 'upgrader_process_complete', array( __CLASS__, 'flush_after_upgrade' ), 10, 2 );
 		add_action( 'delete_site_transient_update_plugins', array( __CLASS__, 'clear_release_cache' ) );
 		add_action( 'load-update-core.php', array( __CLASS__, 'maybe_flush_on_force_check' ) );
+	}
+
+	/**
+	 * Download our release zip and compare it to GitHub's SHA-256 digest.
+	 *
+	 * Other plugins' downloads are left untouched. Returning the temp path
+	 * tells WordPress the download is already done.
+	 *
+	 * @param false|string|WP_Error $reply      Short-circuit value from an earlier filter.
+	 * @param string                $package    Package URL.
+	 * @param WP_Upgrader           $upgrader   Upgrader instance.
+	 * @param array                 $hook_extra Extra arguments.
+	 * @return false|string|WP_Error
+	 */
+	public static function verify_package_download( $reply, $package, $upgrader, $hook_extra ) {
+		unset( $upgrader, $hook_extra );
+
+		if ( false !== $reply ) {
+			return $reply;
+		}
+
+		$release = self::get_latest_release();
+		if ( empty( $release['package'] ) || (string) $package !== (string) $release['package'] ) {
+			return $reply;
+		}
+
+		$version = isset( $release['version'] ) ? (string) $release['version'] : '';
+		$digest  = isset( $release['digest'] ) ? (string) $release['digest'] : '';
+		$expected = '';
+		if ( 0 === strpos( $digest, 'sha256:' ) ) {
+			$expected = substr( $digest, 7 );
+		}
+		if ( ! preg_match( '/^[a-f0-9]{64}$/', $expected ) ) {
+			self::log_update(
+				'warning',
+				'Refused reMember update because GitHub returned no SHA-256 digest',
+				array(
+					'version' => $version,
+					'digest'  => $digest,
+				)
+			);
+			return new WP_Error(
+				'remember_checksum_missing',
+				__( 'The reMember update was not installed. GitHub did not provide a checksum for this release.', 'remember' )
+			);
+		}
+
+		$tmp = download_url( $package );
+		if ( is_wp_error( $tmp ) ) {
+			return $tmp;
+		}
+
+		$actual  = hash_file( 'sha256', $tmp );
+		$matches = is_string( $actual ) && hash_equals( $expected, strtolower( $actual ) );
+		if ( ! $matches ) {
+			wp_delete_file( $tmp );
+			self::log_update(
+				'warning',
+				'Downloaded reMember update did not match GitHub\'s checksum',
+				array(
+					'version'  => $version,
+					'expected' => $expected,
+					'actual'   => is_string( $actual ) ? strtolower( $actual ) : '',
+				)
+			);
+			return new WP_Error(
+				'remember_checksum_mismatch',
+				__( 'The downloaded reMember update does not match GitHub\'s checksum. Nothing was installed.', 'remember' )
+			);
+		}
+
+		self::log_update(
+			'debug',
+			'reMember update checksum matched',
+			array(
+				'version' => $version,
+				'digest'  => $digest,
+			)
+		);
+
+		return $tmp;
 	}
 
 	/**
@@ -242,7 +327,7 @@ class Remember_GitHub_Updater {
 	 *
 	 * Dashboard Check again (`force-check`) skips the snapshot and talks to GitHub now.
 	 *
-	 * @return array{version:string,package:string,url:string,notes:string}|array{}
+	 * @return array{version:string,package:string,digest:string,url:string,notes:string}|array{}
 	 */
 	private static function get_latest_release() {
 		$force = isset( $_GET['force-check'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
@@ -250,7 +335,8 @@ class Remember_GitHub_Updater {
 			self::clear_release_cache();
 		} else {
 			$cached = get_transient( self::TRANSIENT_KEY );
-			if ( is_array( $cached ) ) {
+			// A snapshot from before the digest was stored is fetched again.
+			if ( is_array( $cached ) && ( array() === $cached || array_key_exists( 'digest', $cached ) ) ) {
 				return $cached;
 			}
 		}
@@ -280,9 +366,11 @@ class Remember_GitHub_Updater {
 		}
 
 		$version = ltrim( (string) $body['tag_name'], 'vV' );
+		$asset   = self::find_release_asset( $body, $version );
 		$release = array(
 			'version' => $version,
-			'package' => self::find_release_asset( $body, $version ),
+			'package' => $asset['package'],
+			'digest'  => $asset['digest'],
 			'url'     => ! empty( $body['html_url'] ) ? esc_url_raw( $body['html_url'] ) : self::UPDATE_URI,
 			'notes'   => isset( $body['body'] ) ? (string) $body['body'] : '',
 		);
@@ -293,18 +381,24 @@ class Remember_GitHub_Updater {
 	}
 
 	/**
-	 * Download URL for the remember-<version>.zip asset attached to a release.
+	 * Download URL and SHA-256 digest for the remember-<version>.zip asset.
 	 *
-	 * Returns an empty string when only GitHub's generated source zip is present, since
+	 * Package is empty when only GitHub's generated source zip is present, since
 	 * that archive unpacks to the wrong folder name and must never be offered.
+	 * Digest is empty unless the asset's digest is a sha256 value. Other forms
+	 * are ignored so the download check refuses the update.
 	 *
 	 * @param array  $body    Decoded release payload.
 	 * @param string $version Release version without the leading v.
-	 * @return string
+	 * @return array{package:string,digest:string}
 	 */
 	private static function find_release_asset( $body, $version ) {
+		$empty = array(
+			'package' => '',
+			'digest'  => '',
+		);
 		if ( empty( $body['assets'] ) || ! is_array( $body['assets'] ) ) {
-			return '';
+			return $empty;
 		}
 
 		$expected = 'remember-' . $version . '.zip';
@@ -312,11 +406,49 @@ class Remember_GitHub_Updater {
 			if ( ! is_array( $asset ) || empty( $asset['name'] ) || empty( $asset['browser_download_url'] ) ) {
 				continue;
 			}
-			if ( $expected === $asset['name'] ) {
-				return esc_url_raw( $asset['browser_download_url'] );
+			if ( $expected !== $asset['name'] ) {
+				continue;
 			}
+
+			$digest = '';
+			if ( ! empty( $asset['digest'] ) && is_string( $asset['digest'] ) && 0 === strpos( $asset['digest'], 'sha256:' ) ) {
+				$hex = strtolower( substr( $asset['digest'], 7 ) );
+				if ( preg_match( '/^[a-f0-9]{64}$/', $hex ) ) {
+					$digest = 'sha256:' . $hex;
+				}
+			}
+
+			return array(
+				'package' => esc_url_raw( $asset['browser_download_url'] ),
+				'digest'  => $digest,
+			);
 		}
 
-		return '';
+		return $empty;
+	}
+
+	/**
+	 * Write an updater log line when the logger is available.
+	 *
+	 * @param string $level   warning|debug.
+	 * @param string $message Log message.
+	 * @param array  $context Context.
+	 * @return void
+	 */
+	private static function log_update( $level, $message, $context = array() ) {
+		if ( ! class_exists( 'Remember_Logger', false ) && defined( 'REMEMBER_PLUGIN_DIR' ) ) {
+			$logger = REMEMBER_PLUGIN_DIR . 'includes/utilities/class-remember-logger.php';
+			if ( is_readable( $logger ) ) {
+				require_once $logger;
+			}
+		}
+		if ( ! class_exists( 'Remember_Logger', false ) ) {
+			return;
+		}
+		if ( 'debug' === $level ) {
+			Remember_Logger::debug( $message, $context );
+			return;
+		}
+		Remember_Logger::warning( $message, $context );
 	}
 }

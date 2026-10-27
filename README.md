@@ -2,7 +2,7 @@
 
 WordPress membership communities: **members**, **events**, **locations**, **applications**, **vetting**, **admission tickets**, and **billing** with **QuickBooks Online** or **Xero**. Extends WordPress users with custom tables, an admin UI under **reMember**, and front-end pages via shortcodes.
 
-**Version:** 2.2.5  
+**Version:** 2.2.6  
 **Requires:** WordPress 5.0+  
 **License:** [GPL v2 or later](https://www.gnu.org/licenses/gpl-2.0.html)  
 **Source:** [github.com/ctucker1984/remember](https://github.com/ctucker1984/remember)
@@ -22,7 +22,9 @@ Members log in through WordPress (`wp-login.php` or the site’s login). reMembe
 
 **Updates:** From **1.3.5+**, new releases appear under **Plugins → Updates** in wp-admin (WordPress 5.8+). reMember reads [GitHub Releases](https://github.com/ctucker1984/remember/releases) and installs the packaged `remember-x.y.z.zip`. Getting to 1.3.5 itself still requires one manual upload.
 
-The updater does not check a signature or checksum. It installs whatever `remember-x.y.z.zip` is attached to the latest GitHub release, and it ignores GitHub’s automatic “Source code” zip. An account that can publish a release can ship code to every site running reMember. A checksum file on that same release would not change this, because the same account could publish the checksum too.
+Before a dashboard update or Upload → Replace, reMember checks that the web server can replace every file in the plugin folder. If it cannot, the update stops and the installed copy stays as it is.
+
+The updater checks the downloaded `remember-x.y.z.zip` against the SHA-256 digest GitHub records for that release asset. A download that does not match, or a release with no digest, is discarded and nothing is installed. That catches a truncated, corrupted, or swapped file between GitHub and the site. It does not protect against a compromised release account, because the digest comes from the same GitHub API as the download URL. An account that can publish a release can still ship code to every site running reMember. The updater ignores GitHub’s automatic “Source code” zip.
 
 Keep that list small. Turn on two-factor authentication for every collaborator, give write access to as few people as possible, and protect `master` and release tags so a release cannot be published from an unprotected push.
 

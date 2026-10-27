@@ -13,6 +13,12 @@
  * 444, or `dist/` from local zip builds). We purge non-release paths, chmod the
  * tree writable, and retry the wipe when core’s clear_destination fails.
  *
+ * Before any of that, a dashboard update or Upload → Replace checks that the
+ * PHP user can replace the installed copy. If a directory is owned by someone
+ * else, the update stops while the old version is still in place. WordPress 6.3+
+ * otherwise moves the folder into upgrade-temp-backup first and can leave a
+ * half-deleted plugin when that move fails partway.
+ *
  * @package    reMember
  * @subpackage reMember/includes/utilities
  */
@@ -32,13 +38,21 @@ class Remember_Plugin_Upgrader {
 	const PENDING_KEY     = 'remember_upgrade_pending_replace';
 
 	/**
+	 * Whether this request already checked writability and prepared the installed copy.
+	 *
+	 * @var bool
+	 */
+	private static $replacement_ready = false;
+
+	/**
 	 * Register hooks (call from main plugin bootstrap).
 	 *
 	 * @return void
 	 */
 	public static function init() {
 		add_filter( 'upgrader_source_selection', array( __CLASS__, 'flag_remember_package' ), 10, 4 );
-		add_filter( 'upgrader_pre_install', array( __CLASS__, 'prepare_remember_destination' ), 10, 2 );
+		// Priority 1: run before Plugin_Upgrader deactivates the plugin at priority 10.
+		add_filter( 'upgrader_pre_install', array( __CLASS__, 'prepare_remember_destination' ), 1, 2 );
 		add_filter( 'upgrader_clear_destination', array( __CLASS__, 'after_clear_destination' ), 1, 4 );
 		add_action( 'upgrader_overwrote_package', array( __CLASS__, 'maybe_reactivate_after_overwrite' ), 10, 3 );
 		add_action( 'upgrader_process_complete', array( __CLASS__, 'maybe_reactivate_after_process' ), 10, 2 );
@@ -108,7 +122,13 @@ class Remember_Plugin_Upgrader {
 	}
 
 	/**
-	 * Mark when the package being installed is reMember (so pre_install can prepare).
+	 * Mark when the package being installed is reMember.
+	 *
+	 * Upload → Replace does not put the plugin basename in hook_extra, and this
+	 * filter runs before WordPress moves or deletes the installed copy. The
+	 * writability check for that path lives here. A dashboard update is checked
+	 * earlier, in prepare_remember_destination(), because hook_extra already
+	 * names remember/remember.php.
 	 *
 	 * @param string      $source        Source path.
 	 * @param string      $remote_source Remote source.
@@ -117,22 +137,41 @@ class Remember_Plugin_Upgrader {
 	 * @return string|WP_Error
 	 */
 	public static function flag_remember_package( $source, $remote_source, $upgrader, $args = array() ) {
-		unset( $remote_source, $upgrader, $args );
+		unset( $remote_source, $upgrader );
 		if ( is_wp_error( $source ) ) {
 			return $source;
 		}
 		$source_path = trailingslashit( (string) $source );
-		if ( file_exists( $source_path . 'remember.php' ) ) {
-			$data = get_plugin_data( $source_path . 'remember.php', false, false );
-			if ( self::is_remember_plugin_data( $data ) ) {
-				set_transient( self::PENDING_KEY, 1, 30 * MINUTE_IN_SECONDS );
-			}
+		if ( ! file_exists( $source_path . 'remember.php' ) ) {
+			return $source;
 		}
+		$data = get_plugin_data( $source_path . 'remember.php', false, false );
+		if ( ! self::is_remember_plugin_data( $data ) ) {
+			return $source;
+		}
+
+		set_transient( self::PENDING_KEY, 1, 30 * MINUTE_IN_SECONDS );
+
+		if ( self::hook_targets_remember( $args ) ) {
+			return $source;
+		}
+
+		$blocked = self::block_if_not_replaceable();
+		if ( is_wp_error( $blocked ) ) {
+			delete_transient( self::PENDING_KEY );
+			return $blocked;
+		}
+		self::prepare_installed_copy();
+
 		return $source;
 	}
 
 	/**
-	 * Before install: deactivate and scrub non-release junk so clear_destination can succeed.
+	 * Before install: refuse an unwritable tree, then deactivate and scrub non-release junk.
+	 *
+	 * Dashboard updates (including bulk) pass remember/remember.php in hook_extra.
+	 * That is available here, before WordPress moves the folder aside. Upload → Replace
+	 * is handled in flag_remember_package() once the zip is open.
 	 *
 	 * @param bool|WP_Error $response   Pre-install response.
 	 * @param array         $hook_extra Hook extras.
@@ -142,13 +181,66 @@ class Remember_Plugin_Upgrader {
 		if ( is_wp_error( $response ) ) {
 			return $response;
 		}
-		if ( empty( $hook_extra['type'] ) || 'plugin' !== $hook_extra['type'] ) {
-			return $response;
-		}
-		if ( ! get_transient( self::PENDING_KEY ) ) {
+		if ( ! self::hook_targets_remember( $hook_extra ) ) {
 			return $response;
 		}
 
+		$blocked = self::block_if_not_replaceable();
+		if ( is_wp_error( $blocked ) ) {
+			return $blocked;
+		}
+		self::prepare_installed_copy();
+
+		return $response;
+	}
+
+	/**
+	 * Whether this upgrader hook is aimed at the installed reMember plugin.
+	 *
+	 * Bulk updates omit `type` and still set `plugin`.
+	 *
+	 * @param array $hook_extra Hook extras.
+	 * @return bool
+	 */
+	private static function hook_targets_remember( $hook_extra ) {
+		if ( ! is_array( $hook_extra ) ) {
+			return false;
+		}
+		if ( ! empty( $hook_extra['plugin'] ) && self::PLUGIN_BASENAME === $hook_extra['plugin'] ) {
+			return true;
+		}
+		if ( ! empty( $hook_extra['plugins'] ) && is_array( $hook_extra['plugins'] ) && in_array( self::PLUGIN_BASENAME, $hook_extra['plugins'], true ) ) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Stop the update when the installed copy cannot be replaced safely.
+	 *
+	 * @return true|WP_Error True when the tree can be replaced.
+	 */
+	private static function block_if_not_replaceable() {
+		if ( self::$replacement_ready ) {
+			return true;
+		}
+		$failures = self::replacement_blockers();
+		if ( empty( $failures ) ) {
+			return true;
+		}
+		return self::not_writable_error( $failures );
+	}
+
+	/**
+	 * Deactivate and clear dev artifacts once the writability check has passed.
+	 *
+	 * @return void
+	 */
+	private static function prepare_installed_copy() {
+		if ( self::$replacement_ready ) {
+			return;
+		}
+		self::$replacement_ready = true;
 		self::deactivate_for_upgrade();
 
 		$dir = self::installed_remember_dir();
@@ -156,8 +248,283 @@ class Remember_Plugin_Upgrader {
 			self::purge_non_release_paths( $dir );
 			self::ensure_tree_writable( $dir );
 		}
+	}
 
-		return $response;
+	/**
+	 * Paths the PHP user cannot replace: the plugin tree, its parent, and the temp backup.
+	 *
+	 * A file is replaceable when its parent directory is writable. Mode 0444 files
+	 * inside a writable directory (git objects) are left for the later chmod pass.
+	 * An unwritable directory is reported once; its children are not listed again.
+	 *
+	 * @return string[] Absolute paths.
+	 */
+	private static function replacement_blockers() {
+		$failures = array();
+
+		if ( defined( 'WP_PLUGIN_DIR' ) && '' !== WP_PLUGIN_DIR && ! is_writable( WP_PLUGIN_DIR ) ) {
+			$failures[] = WP_PLUGIN_DIR;
+		}
+
+		$plugin = self::installed_remember_dir();
+		if ( '' !== $plugin ) {
+			$failures = array_merge( $failures, self::unwritable_paths( $plugin ) );
+		}
+
+		return array_values( array_unique( array_merge( $failures, self::backup_dir_blockers() ) ) );
+	}
+
+	/**
+	 * Whether upgrade-temp-backup/plugins can receive the old plugin folder.
+	 *
+	 * @return string[] Absolute paths that block the move.
+	 */
+	private static function backup_dir_blockers() {
+		if ( ! defined( 'WP_CONTENT_DIR' ) || '' === WP_CONTENT_DIR ) {
+			return array();
+		}
+
+		$content  = untrailingslashit( WP_CONTENT_DIR );
+		$backup   = $content . '/upgrade-temp-backup';
+		$plugins  = $backup . '/plugins';
+		$existing = $plugins . '/remember';
+		$failures = array();
+
+		if ( is_dir( $plugins ) ) {
+			if ( ! is_writable( $plugins ) ) {
+				$failures[] = $plugins;
+			}
+		} elseif ( is_dir( $backup ) ) {
+			if ( ! is_writable( $backup ) ) {
+				$failures[] = $backup;
+			}
+		} elseif ( ! is_writable( $content ) ) {
+			$failures[] = $content;
+		}
+
+		if ( is_dir( $existing ) ) {
+			$failures = array_merge( $failures, self::unwritable_paths( $existing ) );
+		}
+
+		return $failures;
+	}
+
+	/**
+	 * Directories the PHP user cannot write, which means the files inside cannot be deleted.
+	 *
+	 * @param string $dir Directory path.
+	 * @return string[]
+	 */
+	private static function unwritable_paths( $dir ) {
+		$dir = untrailingslashit( (string) $dir );
+		if ( '' === $dir || ! file_exists( $dir ) ) {
+			return array();
+		}
+		if ( ! is_dir( $dir ) ) {
+			return is_writable( dirname( $dir ) ) ? array() : array( $dir );
+		}
+		if ( ! is_readable( $dir ) || ! is_writable( $dir ) ) {
+			return array( $dir );
+		}
+
+		$failures    = array();
+		$blocked_dirs = array();
+		try {
+			$iterator = new RecursiveIteratorIterator(
+				new RecursiveDirectoryIterator( $dir, FilesystemIterator::SKIP_DOTS ),
+				RecursiveIteratorIterator::SELF_FIRST
+			);
+			foreach ( $iterator as $item ) {
+				$path = $item->getPathname();
+				if ( self::path_under_blocked_dir( $path, $blocked_dirs ) ) {
+					continue;
+				}
+				if ( $item->isDir() && ( ! is_readable( $path ) || ! is_writable( $path ) ) ) {
+					$failures[]     = $path;
+					$blocked_dirs[] = $path;
+				}
+			}
+		} catch ( Exception $e ) {
+			$failures[] = $dir;
+		}
+
+		return $failures;
+	}
+
+	/**
+	 * Whether $path sits inside a directory already reported as unwritable.
+	 *
+	 * @param string   $path         Path to test.
+	 * @param string[] $blocked_dirs Directories already reported.
+	 * @return bool
+	 */
+	private static function path_under_blocked_dir( $path, $blocked_dirs ) {
+		$path = str_replace( '\\', '/', (string) $path );
+		foreach ( $blocked_dirs as $blocked ) {
+			$blocked = str_replace( '\\', '/', (string) $blocked );
+			if ( 0 === strpos( $path, $blocked . '/' ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Error shown when the update must stop, plus a log of every blocked path.
+	 *
+	 * @param string[] $failures Absolute paths.
+	 * @return WP_Error
+	 */
+	private static function not_writable_error( $failures ) {
+		$php_user = self::process_user();
+		$shown    = array_slice( $failures, 0, 5 );
+		$bits     = array();
+		foreach ( $shown as $path ) {
+			$bits[] = self::display_path( $path ) . ' (' . self::path_owner( $path ) . ')';
+		}
+		$path_list = implode( ', ', $bits );
+		$extra     = count( $failures ) - count( $shown );
+		if ( $extra > 0 ) {
+			$path_list .= ' ' . sprintf(
+				/* translators: %d: number of additional paths */
+				__( 'and %d more', 'remember' ),
+				$extra
+			);
+		}
+
+		$message = sprintf(
+			/* translators: 1: account the web server runs as, 2: paths and their owners */
+			__( 'reMember was not updated. The web server runs as %1$s and cannot replace these files, so the installed copy is unchanged: %2$s.', 'remember' ),
+			$php_user,
+			$path_list
+		);
+
+		$chown_user = self::process_user_token();
+		if ( '' !== $chown_user ) {
+			$message .= ' ' . sprintf(
+				/* translators: %s: example chown command */
+				__( 'Give that user ownership of the plugin folder, for example: %s', 'remember' ),
+				'chown -R ' . $chown_user . ':' . $chown_user . ' wp-content/plugins/remember'
+			);
+		}
+
+		self::log_upgrade(
+			'error',
+			'Update stopped because the web server cannot replace the plugin files',
+			array(
+				'php_user' => $php_user,
+				'paths'    => array_values( $failures ),
+			)
+		);
+
+		return new WP_Error( 'remember_not_writable', $message );
+	}
+
+	/**
+	 * Account name for a numeric uid.
+	 *
+	 * @param int $uid User id.
+	 * @return string
+	 */
+	private static function account_name( $uid ) {
+		$uid = (int) $uid;
+		if ( function_exists( 'posix_getpwuid' ) ) {
+			$info = posix_getpwuid( $uid );
+			if ( is_array( $info ) && ! empty( $info['name'] ) ) {
+				return (string) $info['name'];
+			}
+		}
+		return 'uid ' . $uid;
+	}
+
+	/**
+	 * Account the current PHP process runs as.
+	 *
+	 * @return string
+	 */
+	private static function process_user() {
+		if ( function_exists( 'posix_geteuid' ) ) {
+			return self::account_name( (int) posix_geteuid() );
+		}
+		$current = function_exists( 'get_current_user' ) ? get_current_user() : '';
+		if ( is_string( $current ) && '' !== $current ) {
+			return $current;
+		}
+		return __( 'the web server', 'remember' );
+	}
+
+	/**
+	 * Process user when it is safe to place in a chown command.
+	 *
+	 * @return string Empty when the name is unknown or contains shell-sensitive characters.
+	 */
+	private static function process_user_token() {
+		if ( ! function_exists( 'posix_geteuid' ) ) {
+			return '';
+		}
+		$token = self::process_user();
+		if ( ! preg_match( '/^[A-Za-z0-9._-]+$/', $token ) ) {
+			return '';
+		}
+		return $token;
+	}
+
+	/**
+	 * Owner name for a path.
+	 *
+	 * @param string $path Absolute path.
+	 * @return string
+	 */
+	private static function path_owner( $path ) {
+		$uid = fileowner( $path );
+		if ( false === $uid ) {
+			return __( 'unknown owner', 'remember' );
+		}
+		return self::account_name( (int) $uid );
+	}
+
+	/**
+	 * Path relative to the WordPress root, for the message shown to staff.
+	 *
+	 * @param string $path Absolute path.
+	 * @return string
+	 */
+	private static function display_path( $path ) {
+		$path = str_replace( '\\', '/', (string) $path );
+		$root = defined( 'ABSPATH' ) ? untrailingslashit( str_replace( '\\', '/', ABSPATH ) ) : '';
+		if ( '' !== $root && 0 === strpos( $path, $root . '/' ) ) {
+			return substr( $path, strlen( $root ) + 1 );
+		}
+		return $path;
+	}
+
+	/**
+	 * Write an upgrade log line when the logger is available.
+	 *
+	 * @param string $level   error|warning|debug.
+	 * @param string $message Log message.
+	 * @param array  $context Context.
+	 * @return void
+	 */
+	private static function log_upgrade( $level, $message, $context = array() ) {
+		if ( ! class_exists( 'Remember_Logger', false ) && defined( 'REMEMBER_PLUGIN_DIR' ) ) {
+			$logger = REMEMBER_PLUGIN_DIR . 'includes/utilities/class-remember-logger.php';
+			if ( is_readable( $logger ) ) {
+				require_once $logger;
+			}
+		}
+		if ( ! class_exists( 'Remember_Logger', false ) ) {
+			return;
+		}
+		if ( 'warning' === $level ) {
+			Remember_Logger::warning( $message, $context );
+			return;
+		}
+		if ( 'debug' === $level ) {
+			Remember_Logger::debug( $message, $context );
+			return;
+		}
+		Remember_Logger::error( $message, $context );
 	}
 
 	/**
