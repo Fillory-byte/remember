@@ -149,17 +149,157 @@ class Remember_Vetting_Workflow {
 	}
 
 	/**
+	 * Most recently decided vetting case for a member.
+	 *
+	 * A later case that is still open does not count. The rejection stands
+	 * until a newer case is completed as accepted.
+	 *
+	 * @param int $member_id Member ID.
+	 * @return object|null
+	 */
+	public static function latest_completed_case( $member_id ) {
+		global $wpdb;
+		$member_id = absint( $member_id );
+		if ( $member_id < 1 ) {
+			return null;
+		}
+		return $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM {$wpdb->prefix}remember_vetting
+				WHERE member_id = %d
+				AND status = 'completed'
+				AND decision IN ('accepted', 'rejected')
+				ORDER BY decision_date DESC, vetting_id DESC
+				LIMIT 1",
+				$member_id
+			)
+		);
+	}
+
+	/**
+	 * Whether the member already has any vetting case.
+	 *
+	 * @param int $member_id Member ID.
+	 * @return bool
+	 */
+	public static function member_has_vetting_cases( $member_id ) {
+		global $wpdb;
+		$member_id = absint( $member_id );
+		if ( $member_id < 1 ) {
+			return false;
+		}
+		$count = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$wpdb->prefix}remember_vetting WHERE member_id = %d",
+				$member_id
+			)
+		);
+		return $count > 0;
+	}
+
+	/**
+	 * Whether the latest decided case was a rejection.
+	 *
+	 * An older rejection does not count once a newer case has been accepted.
+	 * A member whose status is rejected and who has no decided case is barred too.
+	 *
+	 * @param object|null $member Row from Remember_Member::get().
+	 * @return bool
+	 */
+	public static function is_barred_by_rejection( $member ) {
+		if ( ! $member || empty( $member->member_id ) ) {
+			return false;
+		}
+		$latest = self::latest_completed_case( $member->member_id );
+		if ( $latest && 'rejected' === $latest->decision ) {
+			return true;
+		}
+		if ( $latest && 'accepted' === $latest->decision ) {
+			return false;
+		}
+		return isset( $member->status ) && 'rejected' === $member->status;
+	}
+
+	/**
+	 * Whether the member was accepted to this event.
+	 *
+	 * That is the event they can still see after a rejection.
+	 *
+	 * @param int $member_id Member ID.
+	 * @param int $event_id  Event ID.
+	 * @return bool
+	 */
+	public static function member_was_accepted_to_event( $member_id, $event_id ) {
+		global $wpdb;
+		$count = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$wpdb->prefix}remember_event_applications
+				WHERE member_id = %d AND event_id = %d AND status = 'accepted'",
+				absint( $member_id ),
+				absint( $event_id )
+			)
+		);
+		return $count > 0;
+	}
+
+	/**
+	 * Set member status from the latest decided case.
+	 *
+	 * @param int $member_id Member ID.
+	 * @return string 'accepted', 'rejected', or '' when nothing was decided.
+	 */
+	public static function sync_member_status_from_latest_decision( $member_id ) {
+		require_once plugin_dir_path( __FILE__ ) . '../models/class-member.php';
+		$latest = self::latest_completed_case( $member_id );
+		if ( ! $latest ) {
+			return '';
+		}
+		$member_model = new Remember_Member();
+		if ( 'accepted' === $latest->decision ) {
+			$member_model->update_status( $member_id, 'vetted' );
+			return 'accepted';
+		}
+		if ( 'rejected' === $latest->decision ) {
+			$member_model->update_status( $member_id, 'rejected' );
+			return 'rejected';
+		}
+		return '';
+	}
+
+	/**
+	 * Message shown when this member cannot submit an application.
+	 *
+	 * @param object|null $member Row from Remember_Member::get().
+	 * @return string Empty when they may apply.
+	 */
+	public static function apply_block_message( $member ) {
+		if ( self::member_can_apply( $member ) ) {
+			return '';
+		}
+		if ( self::is_barred_by_rejection( $member ) ) {
+			return __( 'Your latest vetting decision was not accepted. You can still view events you were already accepted to. You cannot apply to any others until a new vetting case is opened by hand and accepted.', 'remember' );
+		}
+		return __( 'Member is not yet vetted.', 'remember' );
+	}
+
+	/**
 	 * Whether this member may submit event applications.
 	 *
-	 * Vetted members always may. With first-application vetting, members who
-	 * have not been vetted yet may too: their first application opens the case,
-	 * and staff cannot accept it until the member is vetted.
+	 * A member whose latest decided case was a rejection may not, until a
+	 * newer case is accepted. Vetted members otherwise may. With
+	 * first-application vetting, members who have not been vetted yet may
+	 * too: their first application opens the case, and staff cannot accept
+	 * it until the member is vetted.
 	 *
 	 * @param object|null $member Row from Remember_Member::get().
 	 * @return bool
 	 */
 	public static function member_can_apply( $member ) {
 		require_once plugin_dir_path( __FILE__ ) . '../models/class-member.php';
+
+		if ( self::is_barred_by_rejection( $member ) ) {
+			return false;
+		}
 
 		if ( Remember_Member::is_vetted_member( $member ) ) {
 			return true;
@@ -201,10 +341,11 @@ class Remember_Vetting_Workflow {
 	/**
 	 * Open an automatic vetting case, or leave the member alone.
 	 *
-	 * An already vetted member is skipped before the workflow is considered,
-	 * so a first application or a new profile cannot put them back into vetting.
-	 * Pass $is_first for an application trigger. The application row already
-	 * exists by the time this runs, so the caller records that fact first.
+	 * Any existing vetting case is left as it is. A new case after that is
+	 * opened by hand. Only a member with no cases is considered for the
+	 * configured trigger. Pass $is_first for an application trigger. The
+	 * application row already exists by the time this runs, so the caller
+	 * records that fact first.
 	 *
 	 * @param int    $member_id Member.
 	 * @param string $trigger   'join' for a new profile, or 'first_application'.
@@ -213,13 +354,11 @@ class Remember_Vetting_Workflow {
 	 */
 	public static function open_automatic_case( $member_id, $trigger, $is_first = false ) {
 		$member_id = absint( $member_id );
-		require_once plugin_dir_path( __FILE__ ) . '../models/class-member.php';
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
 
-		$member = ( new Remember_Member() )->get( $member_id );
-		if ( Remember_Member::is_vetted_member( $member ) ) {
+		if ( self::member_has_vetting_cases( $member_id ) ) {
 			Remember_Logger::info(
-				'Automatic vetting skipped because the member is already vetted',
+				'Automatic vetting skipped because the member already has a vetting case',
 				array(
 					'member_id' => $member_id,
 					'trigger'   => (string) $trigger,

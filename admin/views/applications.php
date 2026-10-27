@@ -84,8 +84,11 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 		if ( $event_id > 0 && $member_id > 0 && $event_role_id > 0 ) {
 			// Check if application already exists
 			$existing = $application_model->get_existing_application( $event_id, $member_id, $event_role_id );
+			$apply_member = $member_model->get( $member_id );
 			if ( $existing ) {
 				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'An application for this member, event, and role already exists.', 'remember' ) . '</p></div>';
+			} elseif ( Remember_Vetting_Workflow::is_barred_by_rejection( $apply_member ) ) {
+				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( Remember_Vetting_Workflow::apply_block_message( $apply_member ) ) . '</p></div>';
 			} else {
 				$data = array(
 					'event_id'     => $event_id,
@@ -98,7 +101,7 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 				
 				$new_application_id = $application_model->create( $data );
 				if ( $new_application_id ) {
-					// Already vetted members are skipped. A first application opens a case only after that.
+					// A member who already has a vetting case is left alone. A first application opens a case only when they have none.
 					Remember_Vetting_Workflow::open_automatic_case( $member_id, 'first_application', $is_first );
 					
 					Remember_Logger::info( 'Application created', array( 'application_id' => $new_application_id ) );

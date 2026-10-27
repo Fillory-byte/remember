@@ -393,8 +393,8 @@ if ( '' === $remember_reg_im_type ) {
 				</div>
 			<?php endif; ?>
 
-			<h3 class="remember-register-section-title"><?php esc_html_e( 'Interests', 'remember' ); ?></h3>
-			<p class="remember-register-section-help"><?php esc_html_e( 'What are you trying to get out of this event? Optional.', 'remember' ); ?></p>
+			<h3 class="remember-register-section-title"><?php esc_html_e( 'Interests', 'remember' ); ?> <span class="required">*</span></h3>
+			<p class="remember-register-section-help"><?php esc_html_e( 'Required. What are you trying to get out of this event?', 'remember' ); ?></p>
 			<div class="<?php echo esc_attr( Remember_Profile_Fields::group_class( 'interests', $remember_invalid_fields, 'remember-register-editor' ) ); ?>">
 				<?php
 				$interests_value = isset( $_POST['remember_reg_interests'] ) ? Remember_Profile_Fields::sanitize_interests( wp_unslash( $_POST['remember_reg_interests'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- sticky display only.

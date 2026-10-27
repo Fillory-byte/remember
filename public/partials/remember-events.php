@@ -178,7 +178,7 @@ $status_colors = array(
 									<?php esc_html_e( 'Apply for Event', 'remember' ); ?>
 								</a>
 							<?php elseif ( 'open' === $event->status ) : ?>
-								<p class="remember-notice remember-warning" style="margin:0;display:inline-block;"><?php esc_html_e( 'Member is not yet vetted.', 'remember' ); ?></p>
+								<p class="remember-notice remember-warning" style="margin:0;display:inline-block;"><?php echo esc_html( Remember_Vetting_Workflow::apply_block_message( $current_member ) ); ?></p>
 							<?php endif; ?>
 						</footer>
 					<?php elseif ( 'open' === $event->status ) : ?>

@@ -2,6 +2,13 @@
 
 All notable changes to reMember are listed here. The current plugin version is in `remember.php` (`REMEMBER_VERSION`) and [GitHub Releases](https://github.com/ctucker1984/remember/releases).
 
+## 2.2.7
+
+- **Fix:** Interests is required when someone registers and when a member saves their profile. A blank editor does not count, including one that only contains an empty paragraph or a space. Staff can still save a member in wp-admin without interests. [#121](https://github.com/ctucker1984/remember/issues/121)
+- **Fix:** On a phone, each application in wp-admin is one short card. The event name and status share the first line, the member is on the next, and the role, billing, and date sit together. The action buttons wrap on their own line. A long event name no longer stacks one letter per line beside the member's email.
+- **Fix:** Automatic vetting opens a case only for a member who has none, and only when the configured trigger says to. A new profile does that when the workflow is On Join. A first event application does that when the workflow is On First Event Application. A member who already has a case is left alone, including a vetted member whose first application used to be skipped only because their status was vetted. Another case after that is opened by hand.
+- **Fix:** A member whose latest decided vetting case was a rejection cannot see events they were not already accepted to, and cannot apply to any event. Events they were accepted to stay visible. A newer case that is still open does not lift this. It lifts when that newer case is accepted.
+
 ## 2.2.6
 
 - **Fix:** A Xero invoice for an event application uses the discount stored on that contact. A contact set to 100% is invoiced at zero, and the amount due stays zero instead of the full price. The invoice already sent for a live application is left as it is.

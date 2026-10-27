@@ -985,11 +985,11 @@ if ( $remember_sticky ) {
 			</div>
 
 			<div class="remember-form-section">
-				<h3 class="remember-form-section-title"><?php esc_html_e( 'Interests', 'remember' ); ?></h3>
-				<p class="remember-form-help"><?php esc_html_e( 'What are you trying to get out of this event?', 'remember' ); ?></p>
+				<h3 class="remember-form-section-title"><?php esc_html_e( 'Interests', 'remember' ); ?> <span class="remember-required">*</span></h3>
+				<p class="remember-form-help"><?php esc_html_e( 'Required. What are you trying to get out of this event?', 'remember' ); ?></p>
 				<div class="remember-form-row">
 					<div class="remember-form-col remember-form-col-full">
-						<label for="interests" class="remember-form-label"><?php esc_html_e( 'Interests', 'remember' ); ?></label>
+						<label for="interests" class="remember-form-label"><?php esc_html_e( 'Interests', 'remember' ); ?> <span class="remember-required">*</span></label>
 						<div class="<?php echo esc_attr( Remember_Profile_Fields::group_class( 'interests', $remember_invalid_fields ) ); ?>">
 						<?php
 						Remember_Profile_Fields::render_interests_editor(

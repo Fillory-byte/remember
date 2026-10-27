@@ -38,6 +38,7 @@ class Remember_Profile_Fields {
 			'emergency_contact_last',
 			'emergency_contact_phone',
 			'emergency_contact_relationship',
+			'interests',
 		);
 	}
 
@@ -313,7 +314,14 @@ class Remember_Profile_Fields {
 			}
 		}
 		foreach ( self::required_profile_keys_for_context( $context ) as $key ) {
-			if ( ! isset( $profile_data[ $key ] ) || '' === trim( (string) $profile_data[ $key ] ) ) {
+			$value = isset( $profile_data[ $key ] ) ? (string) $profile_data[ $key ] : '';
+			if ( 'interests' === $key ) {
+				if ( self::interests_is_blank( $value ) ) {
+					$missing[] = $key;
+				}
+				continue;
+			}
+			if ( '' === trim( $value ) ) {
 				$missing[] = $key;
 			}
 		}
@@ -791,6 +799,19 @@ class Remember_Profile_Fields {
 	public static function interests_plain_text( $html ) {
 		$text = wp_strip_all_tags( (string) $html );
 		return html_entity_decode( $text, ENT_QUOTES, 'UTF-8' );
+	}
+
+	/**
+	 * Whether Interests has no visible text.
+	 *
+	 * An empty editor often posts a paragraph or a non-breaking space. Those do not count.
+	 *
+	 * @param string $html Rich text.
+	 * @return bool
+	 */
+	public static function interests_is_blank( $html ) {
+		$text = str_replace( "\xc2\xa0", ' ', self::interests_plain_text( $html ) );
+		return '' === trim( $text );
 	}
 
 	/**
