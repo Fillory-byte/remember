@@ -198,6 +198,54 @@ $status_colors = array(
 		</details>
 	<?php endif; ?>
 
+	<?php
+	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-surveys.php';
+	$viewing_survey_answers = Remember_Surveys::answers_for_application( (int) $viewing_application->application_id );
+	if ( ! empty( $viewing_survey_answers ) ) :
+		?>
+		<div class="remember-application-detail-section" style="margin-bottom: 15px;">
+			<h3><?php esc_html_e( 'Survey answers', 'remember' ); ?></h3>
+			<?php foreach ( $viewing_survey_answers as $viewing_survey ) : ?>
+				<?php if ( ! empty( $viewing_survey['title'] ) || ! empty( $viewing_survey['submitted_at'] ) ) : ?>
+					<p class="description" style="margin: 0 0 8px;">
+						<?php
+						$remember_survey_meta = array();
+						if ( ! empty( $viewing_survey['title'] ) ) {
+							$remember_survey_meta[] = $viewing_survey['title'];
+						}
+						if ( ! empty( $viewing_survey['submitted_at'] ) ) {
+							$remember_survey_meta[] = sprintf(
+								/* translators: %s: date and time the survey was submitted */
+								__( 'Submitted %s', 'remember' ),
+								date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $viewing_survey['submitted_at'] ) )
+							);
+						}
+						echo esc_html( implode( ' · ', $remember_survey_meta ) );
+						?>
+					</p>
+				<?php endif; ?>
+				<?php if ( empty( $viewing_survey['answers'] ) ) : ?>
+					<p><?php esc_html_e( 'No answers were given.', 'remember' ); ?></p>
+				<?php else : ?>
+					<table class="form-table" style="margin: 0 0 12px;">
+						<?php foreach ( $viewing_survey['answers'] as $viewing_answer ) : ?>
+							<tr>
+								<th style="width: 220px;"><?php echo esc_html( $viewing_answer['label'] ); ?></th>
+								<td>
+									<?php if ( '' === $viewing_answer['value'] ) : ?>
+										<span class="description"><?php esc_html_e( 'No answer', 'remember' ); ?></span>
+									<?php else : ?>
+										<?php echo wp_kses_post( nl2br( esc_html( $viewing_answer['value'] ) ) ); ?>
+									<?php endif; ?>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</table>
+				<?php endif; ?>
+			<?php endforeach; ?>
+		</div>
+	<?php endif; ?>
+
 	<!-- Application Information Grid -->
 	<div class="remember-application-detail-grid">
 		<!-- Status History Section -->

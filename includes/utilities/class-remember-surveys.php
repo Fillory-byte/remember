@@ -422,6 +422,62 @@ class Remember_Surveys {
 	}
 
 	/**
+	 * Survey answers submitted with an application.
+	 *
+	 * Follow-up surveys are left out. Those are answered later, not on the application.
+	 *
+	 * @param int $application_id Application.
+	 * @return array<int,array{title:string,submitted_at:string,answers:array<int,array{label:string,value:string}>}>
+	 */
+	public static function answers_for_application( $application_id ) {
+		global $wpdb;
+		$application_id = absint( $application_id );
+		if ( $application_id < 1 ) {
+			return array();
+		}
+		$responses = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT r.response_id, r.submitted_at, s.title
+				FROM ' . self::responses_table() . ' r
+				INNER JOIN ' . self::surveys_table() . ' s ON s.survey_id = r.survey_id
+				WHERE r.application_id = %d AND s.placement = %s
+				ORDER BY r.submitted_at ASC, r.response_id ASC',
+				$application_id,
+				self::PLACEMENT_APPLICATION
+			)
+		);
+		if ( ! is_array( $responses ) || empty( $responses ) ) {
+			return array();
+		}
+		$out = array();
+		foreach ( $responses as $response ) {
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT q.label, q.field_type, q.options_text, a.value_text
+					FROM ' . self::answers_table() . ' a
+					INNER JOIN ' . self::questions_table() . ' q ON q.question_id = a.question_id
+					WHERE a.response_id = %d
+					ORDER BY q.sort_order ASC, q.question_id ASC',
+					(int) $response->response_id
+				)
+			);
+			$answers = array();
+			foreach ( (array) $rows as $row ) {
+				$answers[] = array(
+					'label' => (string) $row->label,
+					'value' => self::answer_display( $row, (string) $row->value_text ),
+				);
+			}
+			$out[] = array(
+				'title'        => (string) $response->title,
+				'submitted_at' => (string) $response->submitted_at,
+				'answers'      => $answers,
+			);
+		}
+		return $out;
+	}
+
+	/**
 	 * Whether this member was accepted to the event.
 	 *
 	 * @param int $event_id      Event.
@@ -1485,9 +1541,38 @@ class Remember_Surveys {
 	}
 
 	/**
-	 * @param object|null  $question Parent question.
-	 * @param mixed        $raw      Posted parent value.
-	 * @param string       $expected Expected value.
+	 * Human text for a stored answer. Option keys become their labels.
+	 *
+	 * @param object $question Question row. Needs field_type and options_text.
+	 * @param string $stored   Stored value_text.
+	 * @return string Empty when nothing was answered.
+	 */
+	private static function answer_display( $question, $stored ) {
+		$stored = trim( (string) $stored );
+		if ( '' === $stored ) {
+			return '';
+		}
+		$labels = array();
+		foreach ( self::option_pairs( $question ) as $pair ) {
+			$labels[ $pair['key'] ] = $pair['label'];
+		}
+		if ( 'multiselect' === $question->field_type ) {
+			$picked = array();
+			foreach ( self::decode_list( $stored ) as $key ) {
+				$picked[] = isset( $labels[ $key ] ) ? $labels[ $key ] : $key;
+			}
+			return implode( ', ', $picked );
+		}
+		if ( isset( $labels[ $stored ] ) && in_array( $question->field_type, array( 'select', 'boolean' ), true ) ) {
+			return $labels[ $stored ];
+		}
+		return $stored;
+	}
+
+	/**
+	 * @param object|null $question Parent question.
+	 * @param mixed       $raw      Posted parent value.
+	 * @param string      $expected Expected value.
 	 * @return bool
 	 */
 	private static function answer_matches( $question, $raw, $expected ) {
