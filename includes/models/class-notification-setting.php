@@ -68,8 +68,9 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 		$query = "SELECT * FROM {$this->get_table()}";
 		
 		if ( ! empty( $args['orderby'] ) ) {
-			$order = ! empty( $args['order'] ) ? strtoupper( $args['order'] ) : 'ASC';
-			$query .= " ORDER BY {$args['orderby']} {$order}";
+			$orderby = $this->sanitize_orderby( $args['orderby'] );
+			$order   = $this->sanitize_order( $args['order'] );
+			$query  .= " ORDER BY `{$orderby}` {$order}";
 		}
 		
 		return $wpdb->get_results( $query );

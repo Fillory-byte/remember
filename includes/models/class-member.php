@@ -66,7 +66,9 @@ class Remember_Member extends Remember_Base_Model {
 		}
 
 		if ( ! empty( $args['orderby'] ) ) {
-			$query .= " ORDER BY {$args['orderby']} {$args['order']}";
+			$orderby = $this->sanitize_orderby( $args['orderby'] );
+			$order   = $this->sanitize_order( $args['order'] );
+			$query  .= " ORDER BY `{$orderby}` {$order}";
 		}
 
 		if ( $args['limit'] > 0 ) {
@@ -394,7 +396,9 @@ class Remember_Member extends Remember_Base_Model {
 			WHERE (m.status IS NULL OR m.status != 'merged')";
 
 		if ( ! empty( $args['orderby'] ) ) {
-			$query .= " ORDER BY m.{$args['orderby']} {$args['order']}";
+			$orderby = $this->sanitize_orderby( $args['orderby'] );
+			$order   = $this->sanitize_order( $args['order'] );
+			$query  .= " ORDER BY m.`{$orderby}` {$order}";
 		}
 
 		if ( $args['limit'] > 0 ) {
@@ -435,7 +439,9 @@ class Remember_Member extends Remember_Base_Model {
 		}
 
 		if ( ! empty( $args['orderby'] ) ) {
-			$query .= " ORDER BY {$args['orderby']} {$args['order']}";
+			$orderby = $this->sanitize_orderby( $args['orderby'] );
+			$order   = $this->sanitize_order( $args['order'] );
+			$query  .= " ORDER BY `{$orderby}` {$order}";
 		}
 
 		if ( $args['limit'] > 0 ) {
