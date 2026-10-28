@@ -568,6 +568,7 @@ class Remember_Notifications {
 	 *
 	 * Public registration, a member added in wp-admin, and a WordPress user
 	 * converted into a member all use this. The new member is not a recipient.
+	 * Public registration sends that member member_profile_saved on its own.
 	 *
 	 * @param int $member_id Member / WordPress user ID.
 	 * @return void
@@ -605,6 +606,43 @@ class Remember_Notifications {
 					)
 				);
 			}
+		}
+	}
+
+	/**
+	 * Email the member that the public registration form saved their profile.
+	 *
+	 * The message says the profile was saved and that vetting or event invitation emails may follow. Later edits do not send it.
+	 *
+	 * @param int $member_id Member / WordPress user ID.
+	 * @return void
+	 */
+	public static function notify_member_profile_saved( $member_id ) {
+		$member_id = absint( $member_id );
+		if ( $member_id < 1 ) {
+			return;
+		}
+
+		$user = get_userdata( $member_id );
+		if ( ! $user || ! is_email( $user->user_email ) ) {
+			require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
+			Remember_Logger::warning(
+				'Profile saved email had no recipient',
+				array( 'member_id' => $member_id )
+			);
+			return;
+		}
+
+		$result = self::send( 'member_profile_saved', self::context_for_member( $member_id ), $user->user_email );
+		if ( is_wp_error( $result ) ) {
+			require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
+			Remember_Logger::warning(
+				'Profile saved email failed',
+				array(
+					'member_id' => $member_id,
+					'error'     => $result->get_error_message(),
+				)
+			);
 		}
 	}
 

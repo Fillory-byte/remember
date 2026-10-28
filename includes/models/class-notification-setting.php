@@ -112,6 +112,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'member_vetted'                 => __( 'Member Vetted', 'remember' ),
 			'member_rejected'               => __( 'Member Rejected', 'remember' ),
 			'member_registered'             => __( 'New Member Registration (Admin)', 'remember' ),
+			'member_profile_saved'          => __( 'Profile Saved', 'remember' ),
 			'event_application_submitted'   => __( 'Event Application Submitted', 'remember' ),
 			'event_application_accepted'     => __( 'Event Application Accepted', 'remember' ),
 			'event_application_declined'    => __( 'Event Application Declined', 'remember' ),
@@ -149,6 +150,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'member_vetted'                 => __( 'Sent to the member when their vetting case is accepted.', 'remember' ),
 			'member_rejected'               => __( 'Sent to the member when their vetting case is rejected.', 'remember' ),
 			'member_registered'             => __( 'Sent to reMember System Administrators when a new member registers or is added.', 'remember' ),
+			'member_profile_saved'          => __( 'Sent to the member when the public registration form saves their profile. It says the profile was saved and that vetting or event invitation emails may follow.', 'remember' ),
 			'event_application_submitted'   => __( 'Sent to member when they submit an event application.', 'remember' ),
 			'event_application_accepted'     => __( 'Sent to member when their event application is accepted (includes ticket link).', 'remember' ),
 			'event_application_declined'    => __( 'Sent to member when their event application is declined.', 'remember' ),
@@ -231,6 +233,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'member_vetted'                 => __( 'Welcome! You\'ve Been Vetted - {member_name}', 'remember' ),
 			'member_rejected'               => __( 'Vetting update for {member_name}', 'remember' ),
 			'member_registered'             => __( 'New member registration - {member_name}', 'remember' ),
+			'member_profile_saved'          => __( 'Your profile was saved', 'remember' ),
 			'event_application_submitted'   => __( 'Application Submitted for {event_name}', 'remember' ),
 			'event_application_accepted'     => __( 'Application Accepted for {event_name}', 'remember' ),
 			'event_application_declined'    => __( 'Application Update for {event_name}', 'remember' ),
@@ -291,6 +294,8 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'member_rejected' => __( "Hello {member_name},\n\nThank you for your interest. Your vetting process has been completed, and we are unable to accept your membership at this time.\n\nIf you have questions, please contact us.\n\nThe Team", 'remember' ),
 
 			'member_registered' => __( "Hello,\n\nA new member has registered.\n\nName: {member_name}\nEmail: {member_email}\nUsername: {username}\nStatus: {status}\nDate: {date}\n\nView profile:\n{profile_url}\n\nVetting queue:\n{vetting_url}", 'remember' ),
+
+			'member_profile_saved' => __( "Hello {member_name},\n\nYour new profile was saved. Please look for vetting or event invitation notifications which may soon follow.", 'remember' ),
 			
 			'event_application_submitted' => __( "Hello {member_name},\n\nThank you for submitting your application for {event_name}.\n\nApplication ID: {application_id}\nDate: {date}\n\nWe have received your application and will review it shortly. You will be notified once a decision has been made.\n\nThank you,\nThe Team", 'remember' ),
 			

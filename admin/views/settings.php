@@ -905,7 +905,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 							?>
 						</fieldset>
 						<p class="description">
-							<?php esc_html_e( 'Who is emailed when someone registers, when a member is added in wp-admin, or when a WordPress user is turned into a member. The new member is not emailed about their own profile. Until you save this, System Administrators are emailed, and WordPress administrators are emailed only when no System Administrator has an email address. After you save, only the checked roles are emailed. Clearing every box turns the email off.', 'remember' ); ?>
+							<?php esc_html_e( 'Who is emailed when someone registers, when a member is added in wp-admin, or when a WordPress user is turned into a member. The new member is left off this list. Someone who registers on the public form also receives Profile Saved, which says the profile was saved and that vetting or event invitation emails may follow. Until you save this, System Administrators are emailed, and WordPress administrators are emailed only when no System Administrator has an email address. After you save, only the checked roles are emailed. Clearing every box turns this staff email off.', 'remember' ); ?>
 						</p>
 					</td>
 				</tr>

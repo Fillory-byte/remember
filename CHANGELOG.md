@@ -4,6 +4,7 @@ All notable changes to reMember are listed here. The current plugin version is i
 
 ## 2.2.8
 
+- **Feature:** A member who finishes the public registration form is emailed that their new profile was saved, and that vetting or event invitation emails may follow. The message uses their public display name. Saving the profile again later does not send it. Staff still receive the separate registration email.
 - **Fix:** An admission ticket prints the member's legal first and last name. The public display name is left off the ticket. If the legal name is blank, the ticket uses the WordPress first and last name, and the display name only when those are blank too. [#125](https://github.com/ctucker1984/remember/issues/125)
 
 ## 2.2.7
