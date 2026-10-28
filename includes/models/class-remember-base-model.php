@@ -50,6 +50,13 @@ abstract class Remember_Base_Model {
 	protected $primary_key = 'id';
 
 	/**
+	 * Cached column names for this table.
+	 *
+	 * @var string[]|null
+	 */
+	protected $columns_cache = null;
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct() {
@@ -65,6 +72,44 @@ abstract class Remember_Base_Model {
 	 */
 	protected function get_table() {
 		return $this->prefix . $this->table_name;
+	}
+
+	/**
+	 * Real column names for this table, cached per instance.
+	 *
+	 * @return string[]
+	 */
+	protected function get_columns() {
+		if ( null === $this->columns_cache ) {
+			$columns = $this->wpdb->get_col( 'SHOW COLUMNS FROM `' . esc_sql( $this->get_table() ) . '`' ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name is internal.
+			$this->columns_cache = is_array( $columns ) ? $columns : array();
+		}
+		return $this->columns_cache;
+	}
+
+	/**
+	 * Resolve an ORDER BY column to a real column of this table.
+	 *
+	 * Protects ORDER BY against injection: any value that is not an actual
+	 * column name falls back to the primary key. Callers no longer have to
+	 * whitelist before passing request input.
+	 *
+	 * @param string $orderby Requested column.
+	 * @return string Safe column name.
+	 */
+	protected function sanitize_orderby( $orderby ) {
+		$orderby = (string) $orderby;
+		return in_array( $orderby, $this->get_columns(), true ) ? $orderby : $this->primary_key;
+	}
+
+	/**
+	 * Coerce a sort direction to ASC or DESC.
+	 *
+	 * @param string $order Requested direction.
+	 * @return string 'ASC' or 'DESC'.
+	 */
+	protected function sanitize_order( $order ) {
+		return ( 'DESC' === strtoupper( (string) $order ) ) ? 'DESC' : 'ASC';
 	}
 
 	/**
@@ -100,7 +145,9 @@ abstract class Remember_Base_Model {
 		$query = "SELECT * FROM {$this->get_table()}";
 
 		if ( ! empty( $args['orderby'] ) ) {
-			$query .= " ORDER BY {$args['orderby']} {$args['order']}";
+			$orderby = $this->sanitize_orderby( $args['orderby'] );
+			$order   = $this->sanitize_order( $args['order'] );
+			$query  .= " ORDER BY `{$orderby}` {$order}";
 		}
 
 		if ( $args['limit'] > 0 ) {
