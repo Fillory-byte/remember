@@ -2,7 +2,7 @@
 
 WordPress membership communities: **members**, **events**, **locations**, **applications**, **vetting**, **admission tickets**, and **billing** with **QuickBooks Online** or **Xero**. Extends WordPress users with custom tables, an admin UI under **reMember**, and front-end pages via shortcodes.
 
-**Version:** 2.2.7  
+**Version:** 2.2.8  
 **Requires:** WordPress 5.0+  
 **License:** [GPL v2 or later](https://www.gnu.org/licenses/gpl-2.0.html)  
 **Source:** [github.com/ctucker1984/remember](https://github.com/ctucker1984/remember)

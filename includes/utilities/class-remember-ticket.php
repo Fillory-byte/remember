@@ -308,7 +308,7 @@ class Remember_Ticket {
 			'ticket_voided'      => ! empty( $application->ticket_voided ),
 			'application_status' => $application->status,
 			'member_id'          => (int) $application->member_id,
-			'member_name'        => $user ? $user->display_name : __( 'Unknown Member', 'remember' ),
+			'member_name'        => self::attendee_name( $user ),
 			'member_email'       => $user ? $user->user_email : '',
 			'event_id'           => $event ? (int) $event->event_id : 0,
 			'event_name'         => $event ? $event->event_name : __( 'Unknown Event', 'remember' ),
@@ -333,6 +333,42 @@ class Remember_Ticket {
 		$data['stamp'] = self::get_stamp( $data );
 
 		return $data;
+	}
+
+	/**
+	 * Name printed on a ticket: legal first and last, not the public display name.
+	 *
+	 * A blank legal name falls back to the WordPress first and last name, then the display name, so the ticket is never blank.
+	 *
+	 * @param WP_User|false $user Member user.
+	 * @return string
+	 */
+	private static function attendee_name( $user ) {
+		if ( ! $user ) {
+			return __( 'Unknown Member', 'remember' );
+		}
+
+		global $wpdb;
+		$profile = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT legal_first_name, legal_last_name FROM {$wpdb->prefix}remember_member_profiles WHERE member_id = %d",
+				$user->ID
+			)
+		);
+		$legal = '';
+		if ( $profile ) {
+			$legal = trim( trim( (string) $profile->legal_first_name ) . ' ' . trim( (string) $profile->legal_last_name ) );
+		}
+		if ( '' === $legal ) {
+			$legal = trim(
+				trim( (string) get_user_meta( $user->ID, 'first_name', true ) ) . ' ' . trim( (string) get_user_meta( $user->ID, 'last_name', true ) )
+			);
+		}
+		if ( '' !== $legal ) {
+			return $legal;
+		}
+
+		return $user->display_name ? $user->display_name : __( 'Unknown Member', 'remember' );
 	}
 
 	/**

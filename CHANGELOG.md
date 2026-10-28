@@ -2,6 +2,10 @@
 
 All notable changes to reMember are listed here. The current plugin version is in `remember.php` (`REMEMBER_VERSION`) and [GitHub Releases](https://github.com/ctucker1984/remember/releases).
 
+## 2.2.8
+
+- **Fix:** An admission ticket prints the member's legal first and last name. The public display name is left off the ticket. If the legal name is blank, the ticket uses the WordPress first and last name, and the display name only when those are blank too. [#125](https://github.com/ctucker1984/remember/issues/125)
+
 ## 2.2.7
 
 - **Fix:** A ticket shows the discount that reduced the role price, including a 100% discount that brings the total to $0.00. A role whose price in reMember is $0.00 is marked paid, so the applications list does not say Not invoiced and the ticket does not say payment is due. A $0.00 invoice is sent when the role is mapped. When it cannot be sent, no invoice is sent and the application is still marked paid.
