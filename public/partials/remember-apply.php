@@ -148,8 +148,27 @@ if ( isset( $_POST['remember_apply_action'] ) && check_admin_referer( 'remember_
 				require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-notifications.php';
 				Remember_Notifications::notify_application_submitted( $new_application_id );
 
+				require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-logger.php';
+				Remember_Logger::info(
+					'Public application submitted',
+					array(
+						'application_id' => (int) $new_application_id,
+						'event_id'       => $event_id,
+						'member_id'      => $member_id,
+					)
+				);
+
 				$submission_success = true;
 			} else {
+				require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-logger.php';
+				Remember_Logger::error(
+					'Public application submission failed to save',
+					array(
+						'event_id'      => $event_id,
+						'member_id'     => $member_id,
+						'event_role_id' => $event_role_id,
+					)
+				);
 				$submission_error = __( 'Failed to submit application. Please try again.', 'remember' );
 				$keep_form        = true;
 			}
