@@ -624,6 +624,7 @@ class Remember_Seeder {
 			'member_vetted',
 			'member_rejected',
 			'member_registered',
+			'member_profile_saved',
 			'event_application_submitted',
 			'event_application_accepted',
 			'event_application_declined',

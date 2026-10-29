@@ -66,7 +66,9 @@ class Remember_Member extends Remember_Base_Model {
 		}
 
 		if ( ! empty( $args['orderby'] ) ) {
-			$query .= " ORDER BY {$args['orderby']} {$args['order']}";
+			$orderby = $this->sanitize_orderby( $args['orderby'] );
+			$order   = $this->sanitize_order( $args['order'] );
+			$query  .= " ORDER BY `{$orderby}` {$order}";
 		}
 
 		if ( $args['limit'] > 0 ) {
@@ -266,6 +268,107 @@ class Remember_Member extends Remember_Base_Model {
 	}
 
 	/**
+	 * Paginated, searchable, sorted member list for the admin screen.
+	 *
+	 * Filtering, searching and sorting all happen in SQL (joined to wp_users and
+	 * the profiles table) so only one page of rows is returned regardless of how
+	 * many members exist.
+	 *
+	 * @param array $args {
+	 *     @type string   $status     Status filter, or '' for all.
+	 *     @type int      $role_id    Role filter, or 0 for all.
+	 *     @type string   $search     Name / email / login / member-number search.
+	 *     @type string   $orderby    One of name|status|roles|joined|updated.
+	 *     @type string   $order      ASC or DESC.
+	 *     @type int      $per_page   Rows per page.
+	 *     @type int      $paged      1-based page number.
+	 *     @type int[]|null $member_ids Restrict to these member IDs (e.g. attendees-only).
+	 * }
+	 * @return array { @type object[] $items Member rows for this page. @type int $total Total matches. }
+	 */
+	public function query_for_list( $args = array() ) {
+		global $wpdb;
+		$defaults = array(
+			'status'     => '',
+			'role_id'    => 0,
+			'search'     => '',
+			'orderby'    => 'name',
+			'order'      => 'ASC',
+			'per_page'   => 25,
+			'paged'      => 1,
+			'member_ids' => null,
+		);
+		$args = wp_parse_args( $args, $defaults );
+
+		$members_table  = $this->get_table();
+		$profiles_table = $wpdb->prefix . 'remember_member_profiles';
+		$roles_j_table  = $wpdb->prefix . 'remember_member_roles';
+		$roles_table    = $wpdb->prefix . 'remember_roles';
+
+		$from = " FROM {$members_table} m
+			INNER JOIN {$wpdb->users} u ON u.ID = m.member_id
+			LEFT JOIN {$profiles_table} p ON p.member_id = m.member_id";
+
+		$where  = array( "(m.status IS NULL OR m.status != 'merged')" );
+		$params = array();
+
+		if ( '' !== (string) $args['status'] ) {
+			$where[]  = 'm.status = %s';
+			$params[] = (string) $args['status'];
+		}
+		if ( absint( $args['role_id'] ) > 0 ) {
+			$where[]  = "EXISTS (SELECT 1 FROM {$roles_j_table} mr WHERE mr.member_id = m.member_id AND mr.role_id = %d)";
+			$params[] = absint( $args['role_id'] );
+		}
+		if ( '' !== trim( (string) $args['search'] ) ) {
+			$like     = '%' . $wpdb->esc_like( trim( (string) $args['search'] ) ) . '%';
+			$where[]  = '(u.display_name LIKE %s OR u.user_email LIKE %s OR u.user_login LIKE %s OR p.member_number LIKE %s)';
+			$params[] = $like;
+			$params[] = $like;
+			$params[] = $like;
+			$params[] = $like;
+		}
+		if ( is_array( $args['member_ids'] ) ) {
+			if ( empty( $args['member_ids'] ) ) {
+				return array(
+					'items' => array(),
+					'total' => 0,
+				);
+			}
+			$ids     = array_map( 'absint', $args['member_ids'] );
+			$where[] = 'm.member_id IN (' . implode( ',', $ids ) . ')';
+		}
+
+		$where_sql = ' WHERE ' . implode( ' AND ', $where );
+
+		$count_sql = 'SELECT COUNT(*)' . $from . $where_sql;
+		$total     = (int) $wpdb->get_var( $params ? $wpdb->prepare( $count_sql, $params ) : $count_sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- placeholders prepared with $params.
+
+		$order_cols = array(
+			'name'    => 'u.display_name',
+			'status'  => 'm.status',
+			'joined'  => 'm.created_at',
+			'updated' => 'COALESCE(p.updated_at, m.updated_at)',
+			'roles'   => "(SELECT GROUP_CONCAT(r2.role_name ORDER BY r2.role_name SEPARATOR ', ') FROM {$roles_j_table} mr2 INNER JOIN {$roles_table} r2 ON r2.role_id = mr2.role_id WHERE mr2.member_id = m.member_id)",
+		);
+		$orderby = isset( $order_cols[ $args['orderby'] ] ) ? $order_cols[ $args['orderby'] ] : $order_cols['name'];
+		$order   = ( 'DESC' === strtoupper( (string) $args['order'] ) ) ? 'DESC' : 'ASC';
+
+		$per_page = max( 1, (int) $args['per_page'] );
+		$paged    = max( 1, (int) $args['paged'] );
+		$offset   = ( $paged - 1 ) * $per_page;
+
+		$select_sql    = 'SELECT m.*' . $from . $where_sql . " ORDER BY {$orderby} {$order}, m.member_id ASC LIMIT %d OFFSET %d";
+		$select_params = array_merge( $params, array( $per_page, $offset ) );
+		$items         = $wpdb->get_results( $wpdb->prepare( $select_sql, $select_params ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- placeholders prepared with $select_params.
+
+		return array(
+			'items' => is_array( $items ) ? $items : array(),
+			'total' => $total,
+		);
+	}
+
+	/**
 	 * Get attendees (members with accepted applications) for events where the current user is working.
 	 * A user is "working" on an event if they have an accepted application for that event.
 	 *
@@ -394,7 +497,9 @@ class Remember_Member extends Remember_Base_Model {
 			WHERE (m.status IS NULL OR m.status != 'merged')";
 
 		if ( ! empty( $args['orderby'] ) ) {
-			$query .= " ORDER BY m.{$args['orderby']} {$args['order']}";
+			$orderby = $this->sanitize_orderby( $args['orderby'] );
+			$order   = $this->sanitize_order( $args['order'] );
+			$query  .= " ORDER BY m.`{$orderby}` {$order}";
 		}
 
 		if ( $args['limit'] > 0 ) {
@@ -435,7 +540,9 @@ class Remember_Member extends Remember_Base_Model {
 		}
 
 		if ( ! empty( $args['orderby'] ) ) {
-			$query .= " ORDER BY {$args['orderby']} {$args['order']}";
+			$orderby = $this->sanitize_orderby( $args['orderby'] );
+			$order   = $this->sanitize_order( $args['order'] );
+			$query  .= " ORDER BY `{$orderby}` {$order}";
 		}
 
 		if ( $args['limit'] > 0 ) {

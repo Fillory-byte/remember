@@ -105,6 +105,8 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 					Remember_Vetting_Workflow::open_automatic_case( $member_id, 'first_application', $is_first );
 					
 					Remember_Logger::info( 'Application created', array( 'application_id' => $new_application_id ) );
+					require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-notifications.php';
+					Remember_Notifications::notify_application_submitted( $new_application_id );
 					echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Application created successfully.', 'remember' ) . '</p></div>';
 				} else {
 					Remember_Logger::error( 'Failed to create application' );
@@ -576,15 +578,23 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 // Get filter parameters
 $filter_event = isset( $_GET['filter_event'] ) ? absint( $_GET['filter_event'] ) : 0;
 $filter_status = isset( $_GET['filter_status'] ) ? sanitize_text_field( $_GET['filter_status'] ) : '';
+$filter_search = isset( $_GET['filter_search'] ) ? sanitize_text_field( wp_unslash( $_GET['filter_search'] ) ) : '';
+$applications_per_page = 25;
+$applications_paged    = isset( $_GET['paged'] ) ? max( 1, absint( wp_unslash( $_GET['paged'] ) ) ) : 1;
 
-// Get applications
-if ( $filter_event > 0 ) {
-	$applications = $application_model->get_by_event( $filter_event );
-} elseif ( ! empty( $filter_status ) ) {
-	$applications = $application_model->get_by_status( $filter_status );
-} else {
-	$applications = $application_model->get_all();
-}
+// Get applications: one SQL query handles the event/status filters, search and pagination.
+$applications_result = $application_model->query_for_list(
+	array(
+		'event_id' => $filter_event,
+		'status'   => $filter_status,
+		'search'   => $filter_search,
+		'per_page' => $applications_per_page,
+		'paged'    => $applications_paged,
+	)
+);
+$applications       = $applications_result['items'];
+$applications_total = (int) $applications_result['total'];
+$applications_pages = (int) ceil( $applications_total / max( 1, $applications_per_page ) );
 
 // Get events for filter
 $events = $event_model->get_all();
@@ -811,8 +821,11 @@ $status_colors = array(
 				<?php endforeach; ?>
 			</select>
 
+			<label for="filter_search" class="screen-reader-text"><?php esc_html_e( 'Search applications', 'remember' ); ?></label>
+			<input type="search" id="filter_search" name="filter_search" value="<?php echo esc_attr( $filter_search ); ?>" placeholder="<?php esc_attr_e( 'Search member or event', 'remember' ); ?>" style="margin-right: 10px; min-width: 220px;">
+
 			<input type="submit" class="button" value="<?php esc_attr_e( 'Filter', 'remember' ); ?>">
-			<?php if ( $filter_event > 0 || ! empty( $filter_status ) ) : ?>
+			<?php if ( $filter_event > 0 || ! empty( $filter_status ) || '' !== $filter_search ) : ?>
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-applications' ) ); ?>" class="button"><?php esc_html_e( 'Clear Filters', 'remember' ); ?></a>
 			<?php endif; ?>
 		</form>
@@ -829,6 +842,49 @@ $status_colors = array(
 
 	<!-- Applications List -->
 	<?php if ( ! empty( $applications ) ) : ?>
+		<?php
+		// Batch-fetch the display data for just the applications on this page.
+		$app_event_ids  = array();
+		$app_member_ids = array();
+		$app_role_ids   = array();
+		foreach ( $applications as $app_row ) {
+			$app_event_ids[]  = (int) $app_row->event_id;
+			$app_member_ids[] = (int) $app_row->member_id;
+			$app_role_ids[]   = (int) $app_row->event_role_id;
+		}
+		$app_event_ids  = array_values( array_unique( array_filter( $app_event_ids ) ) );
+		$app_member_ids = array_values( array_unique( array_filter( $app_member_ids ) ) );
+		$app_role_ids   = array_values( array_unique( array_filter( $app_role_ids ) ) );
+		$app_events = array();
+		$app_users  = array();
+		$app_roles  = array();
+		global $wpdb;
+		if ( $app_event_ids ) {
+			$ph        = implode( ',', array_fill( 0, count( $app_event_ids ), '%d' ) );
+			$event_rows = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}remember_events WHERE event_id IN ($ph)", $app_event_ids ) );
+			foreach ( (array) $event_rows as $event_row ) {
+				$app_events[ (int) $event_row->event_id ] = $event_row;
+			}
+		}
+		if ( $app_member_ids ) {
+			$app_user_objs = get_users(
+				array(
+					'include' => $app_member_ids,
+					'fields'  => array( 'ID', 'display_name', 'user_email' ),
+				)
+			);
+			foreach ( $app_user_objs as $app_user_obj ) {
+				$app_users[ (int) $app_user_obj->ID ] = $app_user_obj;
+			}
+		}
+		if ( $app_role_ids ) {
+			$ph        = implode( ',', array_fill( 0, count( $app_role_ids ), '%d' ) );
+			$role_rows = $wpdb->get_results( $wpdb->prepare( "SELECT er.event_role_id, r.role_name FROM {$wpdb->prefix}remember_event_roles er INNER JOIN {$wpdb->prefix}remember_roles r ON r.role_id = er.role_id WHERE er.event_role_id IN ($ph)", $app_role_ids ) );
+			foreach ( (array) $role_rows as $role_row ) {
+				$app_roles[ (int) $role_row->event_role_id ] = $role_row;
+			}
+		}
+		?>
 		<div class="remember-table-scroll">
 		<table class="wp-list-table widefat striped remember-responsive-table remember-list-cards">
 			<thead>
@@ -845,19 +901,10 @@ $status_colors = array(
 				</tr>
 			</thead>
 			<tbody>
-				<?php foreach ( $applications as $application ) : 
-					$event = $event_model->get( $application->event_id );
-					$member = $member_model->get( $application->member_id );
-					$user = $member ? get_user_by( 'ID', $application->member_id ) : null;
-					
-					// Get role info (we'll need to add this to the model later)
-					global $wpdb;
-					$event_role = $wpdb->get_row( $wpdb->prepare(
-						"SELECT er.*, r.role_name FROM {$wpdb->prefix}remember_event_roles er 
-						JOIN {$wpdb->prefix}remember_roles r ON er.role_id = r.role_id 
-						WHERE er.event_role_id = %d",
-						$application->event_role_id
-					) );
+				<?php foreach ( $applications as $application ) :
+					$event      = isset( $app_events[ (int) $application->event_id ] ) ? $app_events[ (int) $application->event_id ] : null;
+					$user       = isset( $app_users[ (int) $application->member_id ] ) ? $app_users[ (int) $application->member_id ] : null;
+					$event_role = isset( $app_roles[ (int) $application->event_role_id ] ) ? $app_roles[ (int) $application->event_role_id ] : null;
 					$application_payment = $payment_model->get_by_application( $application->application_id );
 					$billing_label = __( 'Not invoiced', 'remember' );
 					$billing_color = '#72777c';
@@ -965,11 +1012,65 @@ $status_colors = array(
 		</table>
 		</div>
 		
-		<p class="description" style="margin-top: 15px;">
-			<?php echo esc_html( sprintf( __( 'Showing %d application(s)', 'remember' ), count( $applications ) ) ); ?>
-		</p>
+		<?php
+		$applications_range_start = $applications_total > 0 ? ( ( $applications_paged - 1 ) * $applications_per_page ) + 1 : 0;
+		$applications_range_end   = min( $applications_total, $applications_paged * $applications_per_page );
+		$applications_pagination_args = array( 'page' => 'remember-applications' );
+		if ( $filter_event > 0 ) {
+			$applications_pagination_args['filter_event'] = $filter_event;
+		}
+		if ( '' !== $filter_status ) {
+			$applications_pagination_args['filter_status'] = $filter_status;
+		}
+		if ( '' !== $filter_search ) {
+			$applications_pagination_args['filter_search'] = $filter_search;
+		}
+		$applications_pagination_base = add_query_arg( array_merge( $applications_pagination_args, array( 'paged' => '%#%' ) ), admin_url( 'admin.php' ) );
+		?>
+		<div class="tablenav bottom">
+			<div class="tablenav-pages">
+				<span class="displaying-num">
+					<?php
+					echo esc_html(
+						sprintf(
+							/* translators: 1: first row number, 2: last row number, 3: total applications */
+							__( 'Showing %1$d-%2$d of %3$d', 'remember' ),
+							$applications_range_start,
+							$applications_range_end,
+							$applications_total
+						)
+					);
+					?>
+				</span>
+				<?php
+				if ( $applications_pages > 1 ) {
+					echo wp_kses_post(
+						paginate_links(
+							array(
+								'base'     => $applications_pagination_base,
+								'format'   => '',
+								'current'  => $applications_paged,
+								'total'    => $applications_pages,
+								'add_args' => false,
+							)
+						)
+					);
+				}
+				?>
+			</div>
+		</div>
 		<?php else : ?>
-			<p><?php esc_html_e( 'No applications found.', 'remember' ); ?></p>
+			<p class="description" style="margin-top: 15px;">
+				<?php
+				echo esc_html(
+					sprintf(
+						/* translators: %d: total applications matching the filters */
+						__( 'No applications found (%d match the current filters).', 'remember' ),
+						$applications_total
+					)
+				);
+				?>
+			</p>
 		<?php endif; ?>
 	<?php endif; ?>
 </div>

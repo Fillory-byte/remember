@@ -122,7 +122,7 @@ $status_colors = array(
 				?>
 				<div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
 					<a class="button button-primary" href="<?php echo esc_url( $ticket_url ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'View / Print Ticket', 'remember' ); ?></a>
-					<a class="button" href="<?php echo esc_url( add_query_arg( 'download', '1', $ticket_url ) ); ?>"><?php esc_html_e( 'Download Ticket', 'remember' ); ?></a>
+					<a class="button" href="<?php echo esc_url( add_query_arg( 'download', '1', $ticket_url ) ); ?>"><?php esc_html_e( 'Download PDF', 'remember' ); ?></a>
 					<?php if ( current_user_can( 'remember_update_applications' ) ) : ?>
 					<form method="post" action="" style="margin: 0;">
 						<?php wp_nonce_field( 'remember_application_action', 'remember_application_nonce' ); ?>
@@ -287,7 +287,7 @@ $status_colors = array(
 		<!-- Itemized Charges Section -->
 		<div class="remember-application-detail-section">
 			<h3><?php esc_html_e( 'Itemized Charges (Subtotal)', 'remember' ); ?></h3>
-			<table class="wp-list-table widefat striped" style="margin: 0;">
+			<table class="wp-list-table widefat striped remember-charges-table" style="margin: 0;">
 				<thead>
 					<tr>
 						<th><?php esc_html_e( 'Item', 'remember' ); ?></th>
@@ -304,9 +304,9 @@ $status_colors = array(
 							echo esc_html( $role_label );
 							?>
 						</td>
-						<td>1</td>
-						<td>$<?php echo esc_html( number_format( $viewing_event_role ? (float) $viewing_event_role->cost : 0, 2 ) ); ?></td>
-						<td>$<?php echo esc_html( number_format( $viewing_event_role ? (float) $viewing_event_role->cost : 0, 2 ) ); ?></td>
+						<td data-label="<?php esc_attr_e( 'Qty', 'remember' ); ?>">1</td>
+						<td data-label="<?php esc_attr_e( 'Unit Price', 'remember' ); ?>">$<?php echo esc_html( number_format( $viewing_event_role ? (float) $viewing_event_role->cost : 0, 2 ) ); ?></td>
+						<td data-label="<?php esc_attr_e( 'Line Subtotal', 'remember' ); ?>">$<?php echo esc_html( number_format( $viewing_event_role ? (float) $viewing_event_role->cost : 0, 2 ) ); ?></td>
 					</tr>
 					<?php if ( ! empty( $viewing_application_addons ) ) : ?>
 						<?php foreach ( $viewing_application_addons as $addon_item ) : ?>
@@ -314,9 +314,9 @@ $status_colors = array(
 								<td>
 									<?php echo esc_html( ! empty( $addon_item->merchandise_name ) ? $addon_item->merchandise_name : __( 'Add-on', 'remember' ) ); ?>
 								</td>
-								<td><?php echo esc_html( intval( $addon_item->quantity ) ); ?></td>
-								<td>$<?php echo esc_html( number_format( (float) $addon_item->unit_cost, 2 ) ); ?></td>
-								<td>$<?php echo esc_html( number_format( (float) $addon_item->total_cost, 2 ) ); ?></td>
+								<td data-label="<?php esc_attr_e( 'Qty', 'remember' ); ?>"><?php echo esc_html( intval( $addon_item->quantity ) ); ?></td>
+								<td data-label="<?php esc_attr_e( 'Unit Price', 'remember' ); ?>">$<?php echo esc_html( number_format( (float) $addon_item->unit_cost, 2 ) ); ?></td>
+								<td data-label="<?php esc_attr_e( 'Line Subtotal', 'remember' ); ?>">$<?php echo esc_html( number_format( (float) $addon_item->total_cost, 2 ) ); ?></td>
 							</tr>
 						<?php endforeach; ?>
 					<?php endif; ?>
@@ -328,7 +328,7 @@ $status_colors = array(
 						}
 					}
 					?>
-					<tr>
+					<tr class="remember-charges-total">
 						<th colspan="3" style="text-align:right;"><?php esc_html_e( 'Subtotal', 'remember' ); ?></th>
 						<th>$<?php echo esc_html( number_format( $itemized_subtotal, 2 ) ); ?></th>
 					</tr>

@@ -358,22 +358,24 @@ class Remember_Profile_Audit {
 	/**
 	 * Render the profile-currency confirmation field (apply / dashboard edit).
 	 *
-	 * @param string $input_id HTML id for the input.
+	 * @param string $input_id            HTML id for the input.
+	 * @param bool   $resume_application  When true, profile review stays in this tab and returns to the application.
 	 * @return void
 	 */
-	public static function render_confirm_field( $input_id = 'remember_profile_currency_confirm' ) {
+	public static function render_confirm_field( $input_id = 'remember_profile_currency_confirm', $resume_application = false ) {
 		$input_id = sanitize_html_class( $input_id );
 		if ( '' === $input_id ) {
 			$input_id = 'remember_profile_currency_confirm';
 		}
-		$phrase      = self::CONFIRM_PHRASE;
-		$event_id    = isset( $_GET['event_id'] ) ? absint( wp_unslash( $_GET['event_id'] ) ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- form context.
-		$profile_url = $event_id > 0
-			? self::get_profile_edit_url_for_apply( $event_id )
-			: self::get_profile_edit_url();
-		$member_id   = get_current_user_id();
-		$updated_at  = self::get_profile_updated_at( $member_id );
-		$is_fresh    = self::is_profile_fresh( $member_id );
+		$phrase         = self::CONFIRM_PHRASE;
+		$event_id       = isset( $_GET['event_id'] ) ? absint( wp_unslash( $_GET['event_id'] ) ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- form context.
+		$profile_url    = self::get_profile_edit_url();
+		$return_url     = self::get_profile_edit_url_for_apply( $event_id );
+		$resume         = (bool) $resume_application && '' !== $profile_url && '' !== $return_url;
+		$member_id      = get_current_user_id();
+		$updated_at     = self::get_profile_updated_at( $member_id );
+		$is_fresh       = self::is_profile_fresh( $member_id );
+		$link_url       = ( $resume || '' === $return_url ) ? $profile_url : ( $event_id > 0 ? $return_url : $profile_url );
 		?>
 		<div
 			class="remember-form-group remember-profile-currency-confirm"
@@ -385,8 +387,12 @@ class Remember_Profile_Audit {
 				<span class="remember-required">*</span>
 			</label>
 			<p class="remember-form-help remember-profile-currency-confirm__help">
-				<?php if ( $profile_url ) : ?>
-					<a href="<?php echo esc_url( $profile_url ); ?>" target="_blank" rel="noopener noreferrer">
+				<?php if ( $resume ) : ?>
+					<a href="<?php echo esc_url( $profile_url ); ?>" data-remember-profile-return="<?php echo esc_url( $return_url ); ?>">
+						<?php esc_html_e( 'Check your profile and confirm that it is current and accurate, then click save. You will return here with this application still filled in.', 'remember' ); ?>
+					</a>
+				<?php elseif ( $link_url ) : ?>
+					<a href="<?php echo esc_url( $link_url ); ?>" target="_blank" rel="noopener noreferrer">
 						<?php esc_html_e( 'Check your profile and confirm that it is current and accurate, then click save on it (required). Saving with or without changes is enough.', 'remember' ); ?>
 					</a>
 				<?php else : ?>

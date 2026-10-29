@@ -72,6 +72,60 @@
 	border-radius: 3px;
 }
 
+.remember-notify-roles {
+	margin: 0 0 12px 25px;
+	padding: 0;
+	border: 0;
+	min-width: 0;
+}
+
+.remember-settings .form-table .remember-notify-roles {
+	margin-left: 0;
+}
+
+.remember-notify-roles__groups {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 8px 20px;
+}
+
+.remember-notify-roles__label {
+	display: block;
+	margin: 0 0 4px;
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.4;
+}
+
+.remember-notify-roles__list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px 12px;
+}
+
+.remember-notify-roles__list label {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin: 0;
+	line-height: 1.6;
+	white-space: nowrap;
+}
+
+.remember-notify-roles .description {
+	margin: 4px 0 0;
+}
+
+@media screen and (max-width: 782px) {
+	.remember-notify-roles {
+		margin-left: 0;
+	}
+
+	.remember-notify-roles__groups {
+		grid-template-columns: 1fr;
+	}
+}
+
 /* Role capability matrix: modules as rows, Create / Read / Edit / Delete as columns. */
 .remember-cap-matrix-wrap {
 	margin-top: 10px;
@@ -483,7 +537,8 @@
 		grid-row: 2;
 	}
 
-	.remember-event-applications .remember-responsive-table tbody tr {
+	.remember-event-applications .remember-responsive-table tbody tr,
+	.remember-event-attendees .remember-responsive-table tbody tr {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: baseline;
@@ -493,7 +548,8 @@
 		margin-bottom: 8px;
 	}
 
-	.remember-event-applications .remember-responsive-table tbody td {
+	.remember-event-applications .remember-responsive-table tbody td,
+	.remember-event-attendees .remember-responsive-table tbody td {
 		display: block;
 		flex: 0 0 auto;
 		width: auto !important;
@@ -501,33 +557,52 @@
 		padding: 0;
 	}
 
-	.remember-event-applications .remember-responsive-table tbody td::before {
+	.remember-event-applications .remember-responsive-table tbody td::before,
+	.remember-event-attendees .remember-responsive-table tbody td::before,
+	.remember-event-attendees .remember-responsive-table tbody th::before {
 		content: none;
 	}
 
-	.remember-event-applications .remember-responsive-table td.column-member {
+	.remember-event-attendees table.remember-responsive-table.wp-list-table tr:not(.inline-edit-row) td:not(.check-column)::before {
+		content: none;
+		display: none;
+		position: static;
+		width: auto;
+	}
+
+	.remember-event-applications .remember-responsive-table td.column-member,
+	.remember-event-attendees .remember-responsive-table td.column-member {
 		order: 0;
 		flex: 1 0 100%;
 		width: 100% !important;
 	}
 
-	.remember-event-applications .remember-responsive-table td.column-member br {
+	.remember-event-applications .remember-responsive-table td.column-member br,
+	.remember-event-attendees .remember-responsive-table td.column-member br {
 		display: none;
 	}
 
-	.remember-event-applications .remember-responsive-table td.column-member .description {
+	.remember-event-applications .remember-responsive-table td.column-member .description,
+	.remember-event-attendees .remember-responsive-table td.column-member .description {
 		margin-left: 12px;
 	}
 
 	.remember-event-applications .remember-responsive-table td.column-role,
 	.remember-event-applications .remember-responsive-table td.column-status,
 	.remember-event-applications .remember-responsive-table td.column-date,
-	.remember-event-applications .remember-responsive-table td.column-actions {
+	.remember-event-applications .remember-responsive-table td.column-actions,
+	.remember-event-attendees .remember-responsive-table td.column-role,
+	.remember-event-attendees .remember-responsive-table td.column-actions {
 		order: 1;
 	}
 
-	.remember-event-applications .remember-responsive-table td.column-actions {
+	.remember-event-applications .remember-responsive-table td.column-actions,
+	.remember-event-attendees .remember-responsive-table td.column-actions {
 		margin-left: auto;
+	}
+
+	.remember-event-attendees .remember-responsive-table thead {
+		display: none;
 	}
 }
 
@@ -610,6 +685,97 @@
 @media (max-width: 1200px) {
 	.remember-application-detail-grid {
 		grid-template-columns: 1fr;
+	}
+}
+
+/* Itemized charges: one card per line, not the list-table flex wrap. */
+@media screen and (max-width: 782px) {
+	.remember-application-detail-section table.remember-charges-table.wp-list-table,
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tbody,
+	.remember-application-detail-section table.remember-charges-table.wp-list-table thead,
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tr,
+	.remember-application-detail-section table.remember-charges-table.wp-list-table td,
+	.remember-application-detail-section table.remember-charges-table.wp-list-table th {
+		display: block;
+		width: auto !important;
+		min-width: 0;
+		flex: none;
+		float: none;
+		position: static;
+		box-sizing: border-box;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table thead {
+		display: none;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tr {
+		padding: 8px 0 4px;
+		border-bottom: 1px solid #dcdcde;
+		box-shadow: none;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tr:last-child {
+		border-bottom: 0;
+		padding-bottom: 0;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table td,
+	.remember-application-detail-section table.remember-charges-table.wp-list-table th {
+		padding: 2px 0;
+		text-align: left !important;
+		border: 0;
+		background: transparent;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tr:not(.inline-edit-row) td::before,
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tr:not(.inline-edit-row) th::before {
+		content: none;
+		display: none;
+		position: static;
+		width: auto;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tr:not(.inline-edit-row) td[data-label] {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 16px;
+		padding: 1px 0;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tr:not(.inline-edit-row) td[data-label]::before {
+		content: attr(data-label);
+		display: block;
+		position: static;
+		width: auto;
+		flex: 0 1 auto;
+		overflow: visible;
+		margin: 0;
+		font-size: 13px;
+		font-weight: 400;
+		line-height: 1.4;
+		color: #646970;
+		white-space: normal;
+		text-overflow: clip;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table td:first-child {
+		font-weight: 600;
+		padding: 0 0 2px;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tr.remember-charges-total {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 12px;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tr.remember-charges-total th {
+		width: auto !important;
+		padding: 0;
+		font-size: 14px;
 	}
 }
 

@@ -107,6 +107,10 @@
 			}
 		});
 
+		$(document).on('change', '.remember-notify-roles--keep input[type="checkbox"]', function() {
+			$(this).closest('.remember-notify-roles').find('.remember-notify-roles-touched').val('1');
+		});
+
 		// Handle URL hash on page load
 		if (window.location.hash) {
 			var hash = window.location.hash;

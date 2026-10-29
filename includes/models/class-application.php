@@ -188,6 +188,79 @@ class Remember_Application extends Remember_Base_Model {
 	}
 
 	/**
+	 * Paginated, searchable application list for the admin screen.
+	 *
+	 * The event/status filters, the member/event search, ordering and paging all
+	 * run in SQL (joined to wp_users and the events table) so only one page of
+	 * rows is returned regardless of how many applications exist.
+	 *
+	 * @param array $args {
+	 *     @type int    $event_id Event filter, or 0 for all.
+	 *     @type string $status   Status filter, or '' for all.
+	 *     @type string $search   Member name / email / login / event-name search.
+	 *     @type int    $per_page Rows per page.
+	 *     @type int    $paged    1-based page number.
+	 * }
+	 * @return array { @type object[] $items Application rows for this page. @type int $total Total matches. }
+	 */
+	public function query_for_list( $args = array() ) {
+		global $wpdb;
+		$defaults = array(
+			'event_id' => 0,
+			'status'   => '',
+			'search'   => '',
+			'per_page' => 25,
+			'paged'    => 1,
+		);
+		$args = wp_parse_args( $args, $defaults );
+
+		$apps_table   = $this->get_table();
+		$events_table = $wpdb->prefix . 'remember_events';
+
+		$from = " FROM {$apps_table} a
+			INNER JOIN {$wpdb->users} u ON u.ID = a.member_id
+			LEFT JOIN {$events_table} e ON e.event_id = a.event_id";
+
+		$where  = array();
+		$params = array();
+
+		if ( absint( $args['event_id'] ) > 0 ) {
+			$where[]  = 'a.event_id = %d';
+			$params[] = absint( $args['event_id'] );
+		}
+		if ( '' !== (string) $args['status'] ) {
+			$where[]  = 'a.status = %s';
+			$params[] = (string) $args['status'];
+		}
+		if ( '' !== trim( (string) $args['search'] ) ) {
+			$like     = '%' . $wpdb->esc_like( trim( (string) $args['search'] ) ) . '%';
+			$where[]  = '(u.display_name LIKE %s OR u.user_email LIKE %s OR u.user_login LIKE %s OR e.event_name LIKE %s)';
+			$params[] = $like;
+			$params[] = $like;
+			$params[] = $like;
+			$params[] = $like;
+		}
+
+		$where_sql = $where ? ' WHERE ' . implode( ' AND ', $where ) : '';
+
+		$count_sql = 'SELECT COUNT(*)' . $from . $where_sql;
+		$total     = (int) $wpdb->get_var( $params ? $wpdb->prepare( $count_sql, $params ) : $count_sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- placeholders prepared with $params.
+
+		$per_page = max( 1, (int) $args['per_page'] );
+		$paged    = max( 1, (int) $args['paged'] );
+		$offset   = ( $paged - 1 ) * $per_page;
+
+		$select_sql    = 'SELECT a.*' . $from . $where_sql . ' ORDER BY a.applied_at DESC, a.application_id DESC LIMIT %d OFFSET %d';
+		$select_params = array_merge( $params, array( $per_page, $offset ) );
+		$items         = $wpdb->get_results( $wpdb->prepare( $select_sql, $select_params ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- placeholders prepared with $select_params.
+
+		return array(
+			'items' => is_array( $items ) ? $items : array(),
+			'total' => $total,
+		);
+	}
+
+	/**
 	 * Check if member already has an active (non-superseded) application for event role.
 	 *
 	 * Superseded rows are kept for history after an admin allows reapply.

@@ -473,6 +473,7 @@ class Remember_Public {
 
 		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-notifications.php';
 		Remember_Notifications::notify_member_registered( $user_id );
+		Remember_Notifications::notify_member_profile_saved( $user_id );
 
 		$registered_user = get_user_by( 'id', $user_id );
 		if ( $registered_user instanceof WP_User ) {

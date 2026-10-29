@@ -677,6 +677,9 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 // Get filter parameters
 $filter_status = isset( $_GET['filter_status'] ) ? sanitize_text_field( $_GET['filter_status'] ) : '';
 $filter_role = isset( $_GET['filter_role'] ) ? absint( $_GET['filter_role'] ) : 0;
+$filter_search = isset( $_GET['filter_search'] ) ? sanitize_text_field( wp_unslash( $_GET['filter_search'] ) ) : '';
+$members_per_page = 25;
+$members_paged    = isset( $_GET['paged'] ) ? max( 1, absint( wp_unslash( $_GET['paged'] ) ) ) : 1;
 
 $member_sort_columns = array( 'name', 'status', 'roles', 'joined', 'updated' );
 $member_sort_meta_key = 'remember_members_list_sort';
@@ -719,7 +722,7 @@ if ( ! function_exists( 'remember_members_sort_header' ) ) {
 	 * @param int    $filter_role   Role filter.
 	 * @return void
 	 */
-	function remember_members_sort_header( $column, $label, $orderby, $order, $filter_status, $filter_role ) {
+	function remember_members_sort_header( $column, $label, $orderby, $order, $filter_status, $filter_role, $filter_search = '' ) {
 		$is_current = ( $column === $orderby );
 		$next       = ( $is_current && 'ASC' === $order ) ? 'DESC' : 'ASC';
 		$class      = $is_current
@@ -739,6 +742,9 @@ if ( ! function_exists( 'remember_members_sort_header' ) ) {
 		}
 		if ( (int) $filter_role > 0 ) {
 			$args['filter_role'] = (int) $filter_role;
+		}
+		if ( '' !== (string) $filter_search ) {
+			$args['filter_search'] = (string) $filter_search;
 		}
 		$hint = ( 'ASC' === $next )
 			? __( 'Sort ascending.', 'remember' )
@@ -767,23 +773,30 @@ if ( $filter_role > 0 ) {
 // Check capabilities - if user has attendees access but not full members access, show only attendees
 // ($has_members_access / $has_attendees_access / $is_attendees_only / $current_user_id set earlier.)
 
-// Get members
+// Get members: one SQL query handles the status/role filters, search, sort and pagination.
+$members_query_args = array(
+	'status'   => $filter_status,
+	'role_id'  => $filter_role,
+	'search'   => $filter_search,
+	'orderby'  => '' !== $member_orderby ? $member_orderby : 'name',
+	'order'    => '' !== $member_orderby ? $member_order : 'ASC',
+	'per_page' => $members_per_page,
+	'paged'    => $members_paged,
+);
 if ( $is_attendees_only ) {
-	// User can only see attendees (members with accepted applications for events they're working on)
-	$members = $member_model->get_attendees_for_guard( $current_user_id );
-	// Apply status filter if provided
-	if ( ! empty( $filter_status ) && ! empty( $members ) ) {
-		$members = array_filter( $members, function( $member ) use ( $filter_status ) {
-			return $member->status === $filter_status;
-		} );
+	// Attendees-only staff see only their event attendees, and have no role filter.
+	$attendee_rows = $member_model->get_attendees_for_guard( $current_user_id );
+	$attendee_ids  = array();
+	foreach ( (array) $attendee_rows as $attendee_row ) {
+		$attendee_ids[] = (int) $attendee_row->member_id;
 	}
-} elseif ( $filter_role > 0 ) {
-	$members = $member_model->get_by_role( $filter_role );
-} elseif ( ! empty( $filter_status ) ) {
-	$members = $member_model->get_by_status( $filter_status );
-} else {
-	$members = $member_model->get_all();
+	$members_query_args['role_id']    = 0;
+	$members_query_args['member_ids'] = $attendee_ids;
 }
+$members_result = $member_model->query_for_list( $members_query_args );
+$members        = $members_result['items'];
+$members_total  = (int) $members_result['total'];
+$members_pages  = (int) ceil( $members_total / max( 1, $members_per_page ) );
 
 // Status labels and colors defined earlier (before form handlers).
 
@@ -1419,8 +1432,11 @@ if ( $view_member_id > 0 ) {
 					</select>
 				<?php } ?>
 
+				<label for="filter_search" class="screen-reader-text"><?php esc_html_e( 'Search members', 'remember' ); ?></label>
+				<input type="search" id="filter_search" name="filter_search" value="<?php echo esc_attr( $filter_search ); ?>" placeholder="<?php esc_attr_e( 'Search name, email, member #', 'remember' ); ?>" style="margin-right: 10px; min-width: 220px;">
+
 				<input type="submit" class="button" value="<?php esc_attr_e( 'Filter', 'remember' ); ?>">
-				<?php if ( ! empty( $filter_status ) || $filter_role > 0 ) : ?>
+				<?php if ( ! empty( $filter_status ) || $filter_role > 0 || '' !== $filter_search ) : ?>
 					<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-members' ) ); ?>" class="button"><?php esc_html_e( 'Clear Filters', 'remember' ); ?></a>
 				<?php endif; ?>
 			</form>
@@ -1437,9 +1453,12 @@ if ( $view_member_id > 0 ) {
 	<!-- Members List -->
 	<?php if ( ! empty( $members ) ) : ?>
 		<?php
-		$list_roles = array();
-		$list_profile_updated = array();
-		$list_names = array();
+		// Sorting and the status/role/search filters already ran in SQL; here we only
+		// batch-fetch the display data for the rows actually on this page.
+		$list_roles      = array();
+		$list_updated    = array();
+		$list_users      = array();
+		$list_profiles   = array();
 		$list_member_ids = array();
 		foreach ( $members as $list_member ) {
 			$list_member_ids[] = (int) $list_member->member_id;
@@ -1465,105 +1484,58 @@ if ( $view_member_id > 0 ) {
 			}
 			$profile_rows = $wpdb->get_results(
 				$wpdb->prepare(
-					"SELECT member_id, updated_at FROM {$wpdb->prefix}remember_member_profiles WHERE member_id IN ($placeholders)",
+					"SELECT * FROM {$wpdb->prefix}remember_member_profiles WHERE member_id IN ($placeholders)",
 					$list_member_ids
 				)
 			);
 			if ( is_array( $profile_rows ) ) {
 				foreach ( $profile_rows as $profile_row ) {
-					$list_profile_updated[ (int) $profile_row->member_id ] = (string) $profile_row->updated_at;
+					$list_profiles[ (int) $profile_row->member_id ] = $profile_row;
 				}
 			}
-			$name_users = get_users(
+			$list_user_objs = get_users(
 				array(
 					'include' => $list_member_ids,
-					'fields'  => array( 'ID', 'display_name' ),
+					'fields'  => array( 'ID', 'display_name', 'user_email' ),
 				)
 			);
-			foreach ( $name_users as $name_user ) {
-				$list_names[ (int) $name_user->ID ] = (string) $name_user->display_name;
+			foreach ( $list_user_objs as $list_user_obj ) {
+				$list_users[ (int) $list_user_obj->ID ] = $list_user_obj;
 			}
 		}
-		$list_updated = array();
-		$list_role_text = array();
 		foreach ( $members as $list_member ) {
-			$sort_id = (int) $list_member->member_id;
-			$profile_updated = isset( $list_profile_updated[ $sort_id ] ) ? $list_profile_updated[ $sort_id ] : '';
+			$sort_id         = (int) $list_member->member_id;
+			$profile_updated = isset( $list_profiles[ $sort_id ] ) ? (string) $list_profiles[ $sort_id ]->updated_at : '';
 			if ( '' === $profile_updated || '0000-00-00 00:00:00' === $profile_updated ) {
 				$profile_updated = isset( $list_member->updated_at ) ? (string) $list_member->updated_at : '';
 			}
 			$list_updated[ $sort_id ] = ( '0000-00-00 00:00:00' === $profile_updated ) ? '' : $profile_updated;
-			$role_names = array();
-			if ( isset( $list_roles[ $sort_id ] ) ) {
-				foreach ( $list_roles[ $sort_id ] as $sort_role ) {
-					$role_names[] = (string) $sort_role->role_name;
-				}
-			}
-			$list_role_text[ $sort_id ] = implode( ', ', $role_names );
-		}
-		if ( '' !== $member_orderby ) {
-			$sort_direction = ( 'DESC' === $member_order ) ? -1 : 1;
-			usort(
-				$members,
-				static function ( $a, $b ) use ( $member_orderby, $sort_direction, $list_names, $list_role_text, $list_updated, $status_labels ) {
-					$id_a = (int) $a->member_id;
-					$id_b = (int) $b->member_id;
-					switch ( $member_orderby ) {
-						case 'name':
-							$cmp = strcasecmp( isset( $list_names[ $id_a ] ) ? $list_names[ $id_a ] : '', isset( $list_names[ $id_b ] ) ? $list_names[ $id_b ] : '' );
-							break;
-						case 'status':
-							$label_a = isset( $status_labels[ $a->status ] ) ? $status_labels[ $a->status ] : (string) $a->status;
-							$label_b = isset( $status_labels[ $b->status ] ) ? $status_labels[ $b->status ] : (string) $b->status;
-							$cmp     = strcasecmp( $label_a, $label_b );
-							break;
-						case 'roles':
-							$cmp = strcasecmp( isset( $list_role_text[ $id_a ] ) ? $list_role_text[ $id_a ] : '', isset( $list_role_text[ $id_b ] ) ? $list_role_text[ $id_b ] : '' );
-							break;
-						case 'joined':
-							$cmp = strcmp( (string) $a->created_at, (string) $b->created_at );
-							break;
-						case 'updated':
-							$cmp = strcmp( isset( $list_updated[ $id_a ] ) ? $list_updated[ $id_a ] : '', isset( $list_updated[ $id_b ] ) ? $list_updated[ $id_b ] : '' );
-							break;
-						default:
-							$cmp = 0;
-					}
-					if ( 0 === $cmp ) {
-						return $id_a <=> $id_b;
-					}
-					return $cmp * $sort_direction;
-				}
-			);
 		}
 		?>
 		<div class="remember-table-scroll">
 		<table class="wp-list-table widefat striped remember-responsive-table">
 			<thead>
 				<tr>
-					<?php remember_members_sort_header( 'name', __( 'Name', 'remember' ), $member_orderby, $member_order, $filter_status, $filter_role ); ?>
+					<?php remember_members_sort_header( 'name', __( 'Name', 'remember' ), $member_orderby, $member_order, $filter_status, $filter_role, $filter_search ); ?>
 					<th class="column-email" scope="col"><?php esc_html_e( 'Contact', 'remember' ); ?></th>
-					<?php remember_members_sort_header( 'status', __( 'Status', 'remember' ), $member_orderby, $member_order, $filter_status, $filter_role ); ?>
-					<?php remember_members_sort_header( 'roles', __( 'Roles', 'remember' ), $member_orderby, $member_order, $filter_status, $filter_role ); ?>
-					<?php remember_members_sort_header( 'joined', __( 'Joined', 'remember' ), $member_orderby, $member_order, $filter_status, $filter_role ); ?>
-					<?php remember_members_sort_header( 'updated', __( 'Updated', 'remember' ), $member_orderby, $member_order, $filter_status, $filter_role ); ?>
+					<?php remember_members_sort_header( 'status', __( 'Status', 'remember' ), $member_orderby, $member_order, $filter_status, $filter_role, $filter_search ); ?>
+					<?php remember_members_sort_header( 'roles', __( 'Roles', 'remember' ), $member_orderby, $member_order, $filter_status, $filter_role, $filter_search ); ?>
+					<?php remember_members_sort_header( 'joined', __( 'Joined', 'remember' ), $member_orderby, $member_order, $filter_status, $filter_role, $filter_search ); ?>
+					<?php remember_members_sort_header( 'updated', __( 'Updated', 'remember' ), $member_orderby, $member_order, $filter_status, $filter_role, $filter_search ); ?>
 					<th class="column-actions" scope="col"><?php esc_html_e( 'Actions', 'remember' ); ?></th>
 				</tr>
 			</thead>
 			<tbody>
-				<?php foreach ( $members as $member ) : 
-						$user = get_user_by( 'ID', $member->member_id );
+				<?php foreach ( $members as $member ) :
+						$member_id_row = (int) $member->member_id;
+						$user = isset( $list_users[ $member_id_row ] ) ? $list_users[ $member_id_row ] : get_user_by( 'ID', $member_id_row );
 					if ( ! $user ) {
 						continue; // Skip if user doesn't exist
 					}
-					
-					// Get profile info
-					global $wpdb;
-					$profile = $wpdb->get_row( $wpdb->prepare(
-						"SELECT * FROM {$wpdb->prefix}remember_member_profiles WHERE member_id = %d",
-						$member->member_id
-					) );
-					
+
+					// Profile info (batch-fetched for this page above).
+					$profile = isset( $list_profiles[ $member_id_row ] ) ? $list_profiles[ $member_id_row ] : null;
+
 					// Get vetting info
 					$vetting = $vetting_model->get_by_member( $member->member_id );
 						?>
@@ -1640,11 +1612,69 @@ if ( $view_member_id > 0 ) {
 		</table>
 		</div>
 		
-		<p class="description" style="margin-top: 15px;">
-			<?php echo esc_html( sprintf( __( 'Showing %d member(s)', 'remember' ), count( $members ) ) ); ?>
-		</p>
+		<?php
+		$members_range_start = $members_total > 0 ? ( ( $members_paged - 1 ) * $members_per_page ) + 1 : 0;
+		$members_range_end   = min( $members_total, $members_paged * $members_per_page );
+		$members_pagination_args = array( 'page' => 'remember-members' );
+		if ( '' !== $filter_status ) {
+			$members_pagination_args['filter_status'] = $filter_status;
+		}
+		if ( $filter_role > 0 ) {
+			$members_pagination_args['filter_role'] = $filter_role;
+		}
+		if ( '' !== $filter_search ) {
+			$members_pagination_args['filter_search'] = $filter_search;
+		}
+		if ( '' !== $member_orderby ) {
+			$members_pagination_args['orderby'] = $member_orderby;
+			$members_pagination_args['order']   = $member_order;
+		}
+		$members_pagination_base = add_query_arg( array_merge( $members_pagination_args, array( 'paged' => '%#%' ) ), admin_url( 'admin.php' ) );
+		?>
+		<div class="tablenav bottom">
+			<div class="tablenav-pages">
+				<span class="displaying-num">
+					<?php
+					echo esc_html(
+						sprintf(
+							/* translators: 1: first row number, 2: last row number, 3: total members */
+							__( 'Showing %1$d-%2$d of %3$d', 'remember' ),
+							$members_range_start,
+							$members_range_end,
+							$members_total
+						)
+					);
+					?>
+				</span>
+				<?php
+				if ( $members_pages > 1 ) {
+					echo wp_kses_post(
+						paginate_links(
+							array(
+								'base'     => $members_pagination_base,
+								'format'   => '',
+								'current'  => $members_paged,
+								'total'    => $members_pages,
+								'add_args' => false,
+							)
+						)
+					);
+				}
+				?>
+			</div>
+		</div>
 	<?php else : ?>
-		<p><?php esc_html_e( 'No members found.', 'remember' ); ?></p>
+		<p class="description" style="margin-top: 15px;">
+			<?php
+			echo esc_html(
+				sprintf(
+					/* translators: %d: total members matching the filters */
+					__( 'No members found (%d match the current filters).', 'remember' ),
+					$members_total
+				)
+			);
+			?>
+		</p>
 	<?php endif; ?>
 	<?php endif; ?>
 </div>
