@@ -319,6 +319,38 @@ class Remember_Capabilities {
 	}
 
 	/**
+	 * Whether the current user may administer a given WordPress account.
+	 *
+	 * A user may always administer their own account, and administrators (users
+	 * with manage_options) may administer anyone. Everyone else may act only on
+	 * non-privileged accounts: never on administrators, users who can edit other
+	 * users, or network super admins. This guards reMember actions that write to
+	 * WordPress credentials (email, password) so delegated staff cannot take over
+	 * a higher-privileged account. It deliberately does NOT use the edit_user meta
+	 * cap, which maps to the admin-only edit_users capability and would block every
+	 * delegated staff user from managing ordinary members.
+	 *
+	 * @param int $target_id Target WordPress user ID.
+	 * @return bool
+	 */
+	public static function current_user_can_administer_account( $target_id ) {
+		$target_id = absint( $target_id );
+		if ( $target_id < 1 ) {
+			return false;
+		}
+		if ( get_current_user_id() === $target_id ) {
+			return true;
+		}
+		if ( current_user_can( 'manage_options' ) ) {
+			return true;
+		}
+		if ( user_can( $target_id, 'manage_options' ) || user_can( $target_id, 'edit_users' ) || is_super_admin( $target_id ) ) {
+			return false;
+		}
+		return true;
+	}
+
+	/**
 	 * Filter a list of role IDs down to those the current user may assign.
 	 *
 	 * @param array $role_ids Role IDs.
