@@ -245,6 +245,15 @@
 			ctx.imageSmoothingQuality = 'high';
 			ctx.drawImage($img[0], sx, sy, sSize, sSize, 0, 0, outputSize, outputSize);
 
+			// Synchronous data URL of the same crop, used for client-side retention
+			// across a failed registration re-render (see initRegistrationPhotoRetention).
+			var dataUrl = '';
+			try {
+				dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+			} catch (err) {
+				dataUrl = '';
+			}
+
 			canvas.toBlob(function(blob) {
 				if (!blob) {
 					callback(null);
@@ -255,7 +264,7 @@
 				if (original) {
 					name = original.replace(/\.[^.]+$/, '') + '-cropped.jpg';
 				}
-				callback(new File([blob], name, { type: 'image/jpeg', lastModified: Date.now() }));
+				callback(new File([blob], name, { type: 'image/jpeg', lastModified: Date.now() }), dataUrl);
 			}, 'image/jpeg', 0.92);
 		}
 
@@ -345,12 +354,17 @@
 			e.preventDefault();
 			$form.addClass('remember-photo-cropping');
 
-			cropToFile(function(file) {
+			cropToFile(function(file, dataUrl) {
 				$form.removeClass('remember-photo-cropping');
 				if (file && typeof DataTransfer !== 'undefined') {
 					var dt = new DataTransfer();
 					dt.items.add(file);
 					$file[0].files = dt.files;
+				}
+				// Keep the cropped photo so a failed registration submit does not
+				// make the member re-select and re-frame it (registration form only).
+				if (dataUrl && window.rememberRegPhotoSave && $form.find('input[name="remember_register_submit"]').length) {
+					window.rememberRegPhotoSave(dataUrl);
 				}
 				$form.data('rememberPhotoCropped', true);
 				// Native submit after replacing the file.
@@ -807,9 +821,119 @@
 		});
 	}
 
+	/**
+	 * Rebuild a File from a data URL (for restoring a kept registration photo).
+	 *
+	 * @param {string} dataUrl
+	 * @param {string} name
+	 * @return {File|null}
+	 */
+	function rememberDataUrlToFile(dataUrl, name) {
+		try {
+			var parts = String(dataUrl || '').split(',');
+			if (parts.length < 2) {
+				return null;
+			}
+			var mime = (parts[0].match(/:(.*?);/) || [])[1] || 'image/jpeg';
+			var bstr = window.atob(parts[1]);
+			var n = bstr.length;
+			var u8 = new Uint8Array(n);
+			while (n--) {
+				u8[n] = bstr.charCodeAt(n);
+			}
+			return new File([u8], name, { type: mime });
+		} catch (e) {
+			return null;
+		}
+	}
+
+	/**
+	 * Keep the member's uploaded+framed registration photo across a failed submit,
+	 * so a validation error elsewhere on the form does not discard it. The cropper
+	 * saves the cropped photo to sessionStorage on submit (window.rememberRegPhotoSave);
+	 * on the error re-render we re-attach it to the file input and show a "kept" note.
+	 * Purely client-side — no server changes, and sessionStorage is cleared on success.
+	 *
+	 * @return {void}
+	 */
+	function initRegistrationPhotoRetention() {
+		var KEY = 'rememberRegPhotoV1';
+		function clearStore() {
+			try {
+				window.sessionStorage.removeItem(KEY);
+			} catch (e) {}
+		}
+
+		// Success splash: the registration completed, so drop any kept photo.
+		if (document.querySelector('[data-remember-register-splash]')) {
+			clearStore();
+			return;
+		}
+
+		var $form = $('form.remember-register-form__inner');
+		if (!$form.length) {
+			return;
+		}
+		var $file = $form.find('#remember_reg_photo_file');
+		var $wrap = $form.find('.remember-profile-photo-edit');
+
+		// Synchronous save the cropper calls at submit time.
+		window.rememberRegPhotoSave = function(dataUrl) {
+			if (!dataUrl || dataUrl.length > 4500000) {
+				return; // Too large for sessionStorage; fall back to normal behaviour.
+			}
+			try {
+				window.sessionStorage.setItem(KEY, dataUrl);
+			} catch (e) {}
+		};
+
+		var hasError = $('.remember-register .remember-notice.remember-error').length > 0;
+		var stored = '';
+		try {
+			stored = window.sessionStorage.getItem(KEY) || '';
+		} catch (e) {
+			stored = '';
+		}
+
+		// Restore only right after a failed submit (error shown) with nothing selected.
+		var alreadySelected = $file.length && $file[0].files && $file[0].files.length;
+		if (!hasError || !stored || alreadySelected) {
+			if (!hasError) {
+				clearStore(); // Fresh visit: drop any stale photo.
+			}
+			return;
+		}
+
+		var file = rememberDataUrlToFile(stored, 'profile-photo.jpg');
+		if (!file || typeof DataTransfer === 'undefined' || !$file.length) {
+			return;
+		}
+		try {
+			var dt = new DataTransfer();
+			dt.items.add(file);
+			$file[0].files = dt.files;
+		} catch (e) {
+			return;
+		}
+
+		// Show a "photo kept" note. The cropper stays hidden, so on submit the kept
+		// (already-cropped) file is sent as-is.
+		if ($wrap.length && !$wrap.find('.remember-register-photo-kept').length) {
+			var $kept = $('<div class="remember-profile-photo-current remember-register-photo-kept"></div>');
+			$('<div class="remember-profile-photo-preview"></div>')
+				.append($('<img>', { src: stored, alt: '' }))
+				.appendTo($kept);
+			$('<p class="remember-register-help"></p>')
+				.text('Photo received — you do not need to select it again. Upload a new one only if you want to replace it.')
+				.appendTo($kept);
+			$wrap.prepend($kept);
+		}
+	}
+
 	$(function() {
 		initDisplayNameNicknameSync();
 		initProfilePhotoCropper();
+		initRegistrationPhotoRetention();
 		initRequireOneCheckboxGroups();
 		initAlwaysRequiredPqMultiselects();
 		initAllergyReactionFields();
