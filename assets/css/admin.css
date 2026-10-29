@@ -667,6 +667,97 @@
 	}
 }
 
+/* Itemized charges: one card per line, not the list-table flex wrap. */
+@media screen and (max-width: 782px) {
+	.remember-application-detail-section table.remember-charges-table.wp-list-table,
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tbody,
+	.remember-application-detail-section table.remember-charges-table.wp-list-table thead,
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tr,
+	.remember-application-detail-section table.remember-charges-table.wp-list-table td,
+	.remember-application-detail-section table.remember-charges-table.wp-list-table th {
+		display: block;
+		width: auto !important;
+		min-width: 0;
+		flex: none;
+		float: none;
+		position: static;
+		box-sizing: border-box;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table thead {
+		display: none;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tr {
+		padding: 8px 0 4px;
+		border-bottom: 1px solid #dcdcde;
+		box-shadow: none;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tr:last-child {
+		border-bottom: 0;
+		padding-bottom: 0;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table td,
+	.remember-application-detail-section table.remember-charges-table.wp-list-table th {
+		padding: 2px 0;
+		text-align: left !important;
+		border: 0;
+		background: transparent;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tr:not(.inline-edit-row) td::before,
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tr:not(.inline-edit-row) th::before {
+		content: none;
+		display: none;
+		position: static;
+		width: auto;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tr:not(.inline-edit-row) td[data-label] {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 16px;
+		padding: 1px 0;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tr:not(.inline-edit-row) td[data-label]::before {
+		content: attr(data-label);
+		display: block;
+		position: static;
+		width: auto;
+		flex: 0 1 auto;
+		overflow: visible;
+		margin: 0;
+		font-size: 13px;
+		font-weight: 400;
+		line-height: 1.4;
+		color: #646970;
+		white-space: normal;
+		text-overflow: clip;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table td:first-child {
+		font-weight: 600;
+		padding: 0 0 2px;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tr.remember-charges-total {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 12px;
+	}
+
+	.remember-application-detail-section table.remember-charges-table.wp-list-table tr.remember-charges-total th {
+		width: auto !important;
+		padding: 0;
+		font-size: 14px;
+	}
+}
+
 /* Responsive table actions for Members and Vetting */
 @media (max-width: 782px) {
 	.wp-list-table tr[id^="member-status-"] td form,
