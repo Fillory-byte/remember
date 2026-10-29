@@ -167,7 +167,7 @@ class Remember_Waitlist {
 	 */
 	private static function email_staff( $event_id, $context ) {
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-notifications.php';
-		foreach ( self::staff_emails( $event_id ) as $email ) {
+		foreach ( Remember_Notifications::emails_for_staff_type( 'waitlist_spot_opened', array( 'event_id' => $event_id ) ) as $email ) {
 			Remember_Notifications::send( 'waitlist_spot_opened', $context, $email );
 		}
 	}
@@ -206,7 +206,7 @@ class Remember_Waitlist {
 	 * @param int $event_id Event ID.
 	 * @return string[]
 	 */
-	private static function staff_emails( $event_id ) {
+	public static function accepted_event_administrator_emails( $event_id ) {
 		global $wpdb;
 		$member_ids = $wpdb->get_col(
 			$wpdb->prepare(

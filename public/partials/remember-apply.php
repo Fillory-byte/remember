@@ -145,6 +145,9 @@ if ( isset( $_POST['remember_apply_action'] ) && check_admin_referer( 'remember_
 				// A member who already has a vetting case is left alone. A first application opens a case only when they have none.
 				Remember_Vetting_Workflow::open_automatic_case( $member_id, 'first_application', $is_first );
 
+				require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-notifications.php';
+				Remember_Notifications::notify_application_submitted( $new_application_id );
+
 				$submission_success = true;
 			} else {
 				$submission_error = __( 'Failed to submit application. Please try again.', 'remember' );

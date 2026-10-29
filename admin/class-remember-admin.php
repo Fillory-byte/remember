@@ -157,6 +157,8 @@ class Remember_Admin {
 			return;
 		}
 		if ( strpos( $screen->id, 'remember' ) !== false ) {
+			$admin_js     = plugin_dir_path( __FILE__ ) . '../assets/js/admin.js';
+			$admin_js_ver = is_readable( $admin_js ) ? (string) filemtime( $admin_js ) : $this->version;
 			wp_enqueue_script(
 				$this->plugin_name . '-timezone',
 				plugin_dir_url( __FILE__ ) . '../assets/js/timezone-picker.js',
@@ -164,7 +166,7 @@ class Remember_Admin {
 				$this->version,
 				true
 			);
-			wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . '../assets/js/admin.js', array( 'jquery', $this->plugin_name . '-timezone' ), $this->version, true );
+			wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . '../assets/js/admin.js', array( 'jquery', $this->plugin_name . '-timezone' ), $admin_js_ver, true );
 			// Localize script for AJAX
 			wp_localize_script( $this->plugin_name, 'rememberAjax', array(
 				'ajaxurl' => admin_url( 'admin-ajax.php' ),

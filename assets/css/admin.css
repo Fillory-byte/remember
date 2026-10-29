@@ -72,6 +72,60 @@
 	border-radius: 3px;
 }
 
+.remember-notify-roles {
+	margin: 0 0 12px 25px;
+	padding: 0;
+	border: 0;
+	min-width: 0;
+}
+
+.remember-settings .form-table .remember-notify-roles {
+	margin-left: 0;
+}
+
+.remember-notify-roles__groups {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 8px 20px;
+}
+
+.remember-notify-roles__label {
+	display: block;
+	margin: 0 0 4px;
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.4;
+}
+
+.remember-notify-roles__list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px 12px;
+}
+
+.remember-notify-roles__list label {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin: 0;
+	line-height: 1.6;
+	white-space: nowrap;
+}
+
+.remember-notify-roles .description {
+	margin: 4px 0 0;
+}
+
+@media screen and (max-width: 782px) {
+	.remember-notify-roles {
+		margin-left: 0;
+	}
+
+	.remember-notify-roles__groups {
+		grid-template-columns: 1fr;
+	}
+}
+
 /* Role capability matrix: modules as rows, Create / Read / Edit / Delete as columns. */
 .remember-cap-matrix-wrap {
 	margin-top: 10px;

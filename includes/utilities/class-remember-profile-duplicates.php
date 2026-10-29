@@ -646,7 +646,7 @@ class Remember_Profile_Duplicates {
 		}
 		$reason_list = implode( ', ', array_unique( $labels ) );
 
-		foreach ( self::admin_emails() as $email ) {
+		foreach ( Remember_Notifications::admin_broadcast_emails( 'duplicate_hit_admin' ) as $email ) {
 			Remember_Notifications::send(
 				'duplicate_hit_admin',
 				array(

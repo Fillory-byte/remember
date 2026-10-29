@@ -105,6 +105,8 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 					Remember_Vetting_Workflow::open_automatic_case( $member_id, 'first_application', $is_first );
 					
 					Remember_Logger::info( 'Application created', array( 'application_id' => $new_application_id ) );
+					require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-notifications.php';
+					Remember_Notifications::notify_application_submitted( $new_application_id );
 					echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Application created successfully.', 'remember' ) . '</p></div>';
 				} else {
 					Remember_Logger::error( 'Failed to create application' );

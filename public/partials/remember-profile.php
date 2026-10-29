@@ -244,6 +244,9 @@ if ( isset( $_POST['remember_profile_action'] ) && check_admin_referer( 'remembe
 		);
 	}
 	
+	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-notifications.php';
+	Remember_Notifications::save_staff_email_prefs_from_request( $user->ID );
+
 	// Save timezone to WP user meta (not member_profiles)
 	if ( isset( $_POST['timezone_string'] ) ) {
 		$timezone_string = sanitize_text_field( wp_unslash( $_POST['timezone_string'] ) );
@@ -1072,6 +1075,31 @@ if ( $remember_sticky ) {
 					</label>
 				</div>
 			</div>
+
+			<?php
+			require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-notifications.php';
+			require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-notification-setting.php';
+			if ( Remember_Notifications::user_manages_staff_email_prefs( $user->ID ) ) :
+				if ( $remember_sticky && isset( $_POST['remember_notify_prefs_set'] ) ) {
+					$remember_staff_opt_outs = Remember_Notifications::staff_email_opt_outs_from_request();
+				} else {
+					$remember_staff_opt_outs = Remember_Notifications::user_opted_out_types( $user->ID );
+				}
+				?>
+			<div class="remember-form-section">
+				<h3 class="remember-form-section-title"><?php esc_html_e( 'Staff emails', 'remember' ); ?></h3>
+				<p class="remember-form-help"><?php esc_html_e( 'Uncheck a staff message to stop receiving it. These choices do not change what other attendees can see.', 'remember' ); ?></p>
+				<input type="hidden" name="remember_notify_prefs_set" value="1">
+				<div class="remember-privacy-checkboxes">
+					<?php foreach ( Remember_Notifications::admin_notification_types() as $notify_type ) : ?>
+						<label class="remember-checkbox-label">
+							<input type="checkbox" name="remember_notify_receive[]" value="<?php echo esc_attr( $notify_type ); ?>" <?php checked( ! in_array( $notify_type, $remember_staff_opt_outs, true ) ); ?>>
+							<span><?php echo esc_html( Remember_Notification_Setting::get_type_label( $notify_type ) ); ?></span>
+						</label>
+					<?php endforeach; ?>
+				</div>
+			</div>
+			<?php endif; ?>
 
 			<div class="remember-form-actions">
 				<button type="submit" class="remember-button remember-button-primary">
