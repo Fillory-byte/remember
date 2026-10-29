@@ -122,7 +122,7 @@ $status_colors = array(
 				?>
 				<div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
 					<a class="button button-primary" href="<?php echo esc_url( $ticket_url ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'View / Print Ticket', 'remember' ); ?></a>
-					<a class="button" href="<?php echo esc_url( add_query_arg( 'download', '1', $ticket_url ) ); ?>"><?php esc_html_e( 'Download Ticket', 'remember' ); ?></a>
+					<a class="button" href="<?php echo esc_url( add_query_arg( 'download', '1', $ticket_url ) ); ?>"><?php esc_html_e( 'Download PDF', 'remember' ); ?></a>
 					<?php if ( current_user_can( 'remember_update_applications' ) ) : ?>
 					<form method="post" action="" style="margin: 0;">
 						<?php wp_nonce_field( 'remember_application_action', 'remember_application_nonce' ); ?>

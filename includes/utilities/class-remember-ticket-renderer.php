@@ -33,15 +33,13 @@ class Remember_Ticket_Renderer {
 		}
 
 		if ( $download ) {
-			nocache_headers();
-			header( 'Content-Type: text/html; charset=utf-8' );
-			header(
-				'Content-Disposition: attachment; filename="ticket-' . sanitize_file_name( $data['ticket_id'] ) . '.html"'
-			);
-		} else {
-			nocache_headers();
-			header( 'Content-Type: text/html; charset=utf-8' );
+			require_once plugin_dir_path( __FILE__ ) . 'class-remember-ticket-pdf.php';
+			Remember_Ticket_Pdf::output( $data );
+			return;
 		}
+
+		nocache_headers();
+		header( 'Content-Type: text/html; charset=utf-8' );
 
 		echo self::render_document( $data ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside renderer.
 	}
@@ -136,7 +134,7 @@ class Remember_Ticket_Renderer {
 		<div class="remember-ticket-toolbar no-print">
 			<button type="button" id="remember-ticket-print" class="remember-ticket-btn"><?php esc_html_e( 'Print ticket', 'remember' ); ?></button>
 			<?php if ( ! empty( $args['standalone'] ) ) : ?>
-				<a class="remember-ticket-btn remember-ticket-btn-secondary" href="<?php echo esc_url( add_query_arg( 'download', '1' ) ); ?>"><?php esc_html_e( 'Download', 'remember' ); ?></a>
+				<a class="remember-ticket-btn remember-ticket-btn-secondary" href="<?php echo esc_url( add_query_arg( 'download', '1' ) ); ?>"><?php esc_html_e( 'Download PDF', 'remember' ); ?></a>
 			<?php endif; ?>
 		</div>
 
@@ -242,21 +240,7 @@ class Remember_Ticket_Renderer {
 						<tr>
 							<th colspan="3">
 								<?php
-								$discount_percent = isset( $data['discount_percent'] ) ? (float) $data['discount_percent'] : 0;
-								if ( $discount_percent > 0 ) {
-									$percent_label = ( abs( $discount_percent - round( $discount_percent ) ) < 0.05 )
-										? (string) (int) round( $discount_percent )
-										: rtrim( rtrim( number_format( $discount_percent, 2, '.', '' ), '0' ), '.' );
-									echo esc_html(
-										sprintf(
-											/* translators: %s: discount percent */
-											__( 'Discount (%s%%)', 'remember' ),
-											$percent_label
-										)
-									);
-								} else {
-									esc_html_e( 'Discount', 'remember' );
-								}
+								echo esc_html( self::discount_label( $data ) );
 								?>
 							</th>
 							<th><?php echo esc_html( self::money( 0 - (float) $data['discount_amount'] ) ); ?></th>
@@ -522,7 +506,7 @@ class Remember_Ticket_Renderer {
 	 * @param float $amount Amount.
 	 * @return string
 	 */
-	private static function money( $amount ) {
+	public static function money( $amount ) {
 		$amount = (float) $amount;
 		$formatted = '$' . number_format( abs( $amount ), 2 );
 		return $amount < 0 ? '-' . $formatted : $formatted;
@@ -532,7 +516,7 @@ class Remember_Ticket_Renderer {
 	 * @param string $status Payment status.
 	 * @return string
 	 */
-	private static function payment_status_label( $status ) {
+	public static function payment_status_label( $status ) {
 		$labels = array(
 			'pending'   => __( 'Pending', 'remember' ),
 			'partial'   => __( 'Partial', 'remember' ),
@@ -547,10 +531,31 @@ class Remember_Ticket_Renderer {
 	}
 
 	/**
+	 * Discount row label, including the percent when it is known.
+	 *
+	 * @param array $data Ticket data.
+	 * @return string
+	 */
+	public static function discount_label( $data ) {
+		$discount_percent = isset( $data['discount_percent'] ) ? (float) $data['discount_percent'] : 0;
+		if ( $discount_percent > 0 ) {
+			$percent_label = ( abs( $discount_percent - round( $discount_percent ) ) < 0.05 )
+				? (string) (int) round( $discount_percent )
+				: rtrim( rtrim( number_format( $discount_percent, 2, '.', '' ), '0' ), '.' );
+			return sprintf(
+				/* translators: %s: discount percent */
+				__( 'Discount (%s%%)', 'remember' ),
+				$percent_label
+			);
+		}
+		return __( 'Discount', 'remember' );
+	}
+
+	/**
 	 * @param string $status Application status.
 	 * @return string
 	 */
-	private static function application_status_label( $status ) {
+	public static function application_status_label( $status ) {
 		$labels = array(
 			'pending'    => __( 'Pending', 'remember' ),
 			'accepted'   => __( 'Accepted', 'remember' ),
