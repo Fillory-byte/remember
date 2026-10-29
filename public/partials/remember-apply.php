@@ -330,7 +330,7 @@ $restore['addons'] = (object) $restore['addons'];
 				</div>
 			</div>
 
-			<?php Remember_Profile_Audit::render_confirm_field( 'remember_apply_profile_currency_confirm' ); ?>
+			<?php Remember_Profile_Audit::render_confirm_field( 'remember_apply_profile_currency_confirm', true ); ?>
 
 			<div class="remember-form-group">
 				<button type="submit" class="remember-button remember-button-primary" disabled>
@@ -354,6 +354,12 @@ $restore['addons'] = (object) $restore['addons'];
 		var $surveyFields = $('#remember-event-survey-fields');
 		var restore = <?php echo wp_json_encode( $restore ); ?>;
 		var pendingAddons = restore.addons || {};
+		var draftFields = [];
+		var draftKept = [];
+		var waitingAgreements = false;
+		var draftNoted = false;
+		var draftKey = 'rememberApplyDraft';
+		var keptNotice = <?php echo wp_json_encode( __( 'Your application was kept while you updated your profile.', 'remember' ) ); ?>;
 
 		function currentEventId() {
 			var fromSelect = $eventSelect.val();
@@ -364,10 +370,13 @@ $restore['addons'] = (object) $restore['addons'];
 			return hidden || eventId || '';
 		}
 
-		function loadEventSurvey(selectedEventId, selectedRoleId) {
+		function loadEventSurvey(selectedEventId, selectedRoleId, done) {
 			if (!selectedEventId || !selectedRoleId) {
 				$surveyFields.empty();
 				$surveyWrap.prop('hidden', true);
+				if (typeof done === 'function') {
+					done();
+				}
 				return;
 			}
 			$.ajax({
@@ -390,6 +399,14 @@ $restore['addons'] = (object) $restore['addons'];
 					} else {
 						$surveyFields.empty();
 						$surveyWrap.prop('hidden', true);
+					}
+					if (typeof done === 'function') {
+						done();
+					}
+				},
+				error: function() {
+					if (typeof done === 'function') {
+						done();
 					}
 				}
 			});
@@ -415,9 +432,24 @@ $restore['addons'] = (object) $restore['addons'];
 					} else {
 						$agreementsContainer.html('<p class="remember-form-help"><?php echo esc_js( __( 'No agreements are required for this event.', 'remember' ) ); ?></p>');
 					}
+					if (draftKept.length) {
+						applyDraft(draftKept);
+					}
+					if (waitingAgreements) {
+						waitingAgreements = false;
+						draftKept = [];
+						clearDraft();
+						showKeptNotice();
+					}
 				},
 				error: function() {
 					$agreementsContainer.html('<p class="remember-form-help"><?php echo esc_js( __( 'Error loading agreements.', 'remember' ) ); ?></p>');
+					if (waitingAgreements) {
+						waitingAgreements = false;
+						draftKept = [];
+						clearDraft();
+						showKeptNotice();
+					}
 				}
 			});
 		}
@@ -458,10 +490,126 @@ $restore['addons'] = (object) $restore['addons'];
 		}
 
 		// Re-select the role from a failed submit once. The survey for it is already rendered with the posted answers.
+		function readDraft() {
+			try {
+				return JSON.parse(sessionStorage.getItem(draftKey) || 'null');
+			} catch (err) {
+				return null;
+			}
+		}
+
+		function clearDraft() {
+			try {
+				sessionStorage.removeItem(draftKey);
+			} catch (err) {}
+		}
+
+		function applyDraft(fields) {
+			var $form = $('.remember-apply-form form');
+			$.each(fields, function(index, field) {
+				if (!field || !field.name || field.name === 'remember_profile_currency_confirm') {
+					return;
+				}
+				var $els = $form.find('input, select, textarea').filter(function() {
+					return this.name === field.name;
+				});
+				if (!$els.length) {
+					return;
+				}
+				if (field.check) {
+					$els.filter(function() {
+						return this.value === String(field.value);
+					}).prop('checked', true);
+					return;
+				}
+				$els.val(field.value);
+			});
+			$form.find('.remember-addon-toggle:checked').trigger('change');
+			$form.find('[data-remember-survey]').each(function() {
+				$(this).find(':input').first().trigger('input');
+			});
+		}
+
+		function showKeptNotice() {
+			if (draftNoted) {
+				return;
+			}
+			draftNoted = true;
+			$('.remember-apply-form h2').first().after(
+				$('<div>', { 'class': 'remember-notice remember-success', role: 'status' }).append(
+					$('<p>').text(keptNotice)
+				)
+			);
+		}
+
+		function finishDraft() {
+			if (!draftFields.length) {
+				return;
+			}
+			draftKept = draftFields;
+			draftFields = [];
+			applyDraft(draftKept);
+			if (waitingAgreements) {
+				return;
+			}
+			draftKept = [];
+			clearDraft();
+			showKeptNotice();
+		}
+
+		function absorbDraft() {
+			if (restore.roleId) {
+				clearDraft();
+				return;
+			}
+			var draft = readDraft();
+			if (!draft || !draft.fields || !draft.fields.length) {
+				return;
+			}
+			if (!draft.savedAt || (Date.now() - draft.savedAt) > (2 * 60 * 60 * 1000)) {
+				clearDraft();
+				return;
+			}
+			var pageEvent = String(eventId || '');
+			var draftEvent = String(draft.eventId || '');
+			if (!draftEvent || (pageEvent && pageEvent !== '0' && pageEvent !== draftEvent)) {
+				return;
+			}
+			draftFields = draft.fields;
+			if (!pageEvent || pageEvent === '0') {
+				eventId = parseInt(draftEvent, 10) || 0;
+				if ($eventSelect.length) {
+					$eventSelect.val(String(eventId));
+				}
+				waitingAgreements = true;
+				loadEventAgreements(eventId);
+			}
+			var selected = {};
+			$.each(draft.fields, function(index, field) {
+				if (!field || !field.name) {
+					return;
+				}
+				if (field.name === 'event_role_id' && field.value) {
+					restore.roleId = parseInt(field.value, 10) || 0;
+				}
+				var chosen = /^event_addons\[(\d+)\]\[selected\]$/.exec(field.name);
+				if (chosen && field.check) {
+					selected[chosen[1]] = true;
+				}
+			});
+			$.each(draft.fields, function(index, field) {
+				var qty = field && field.name ? /^event_addons\[(\d+)\]\[quantity\]$/.exec(field.name) : null;
+				if (qty && selected[qty[1]] && !field.check) {
+					pendingAddons[qty[1]] = parseInt(field.value, 10) || 1;
+				}
+			});
+		}
+
 		function restoreRole() {
 			var roleId = restore.roleId ? String(restore.roleId) : '';
 			restore.roleId = 0;
 			if (!roleId) {
+				finishDraft();
 				return;
 			}
 			var offered = $roleSelect.find('option').filter(function() {
@@ -469,11 +617,14 @@ $restore['addons'] = (object) $restore['addons'];
 			}).length > 0;
 			if (!offered) {
 				pendingAddons = {};
-				loadEventSurvey('', '');
+				loadEventSurvey('', '', finishDraft);
 				return;
 			}
 			$roleSelect.val(roleId);
 			loadEventAddons(currentEventId(), roleId);
+			if (draftFields.length) {
+				loadEventSurvey(currentEventId(), roleId, finishDraft);
+			}
 		}
 
 		function renderAddons(addons) {
@@ -589,6 +740,8 @@ $restore['addons'] = (object) $restore['addons'];
 			});
 		}
 
+		absorbDraft();
+
 		// Load roles if event is pre-selected
 		if (eventId > 0) {
 			loadEventRoles(eventId);
@@ -615,6 +768,43 @@ $restore['addons'] = (object) $restore['addons'];
 			var addonId = $(this).data('addon-id');
 			var $qtyInput = $('.remember-addon-qty[name="event_addons[' + addonId + '][quantity]"]');
 			$qtyInput.prop('disabled', !$(this).is(':checked'));
+		});
+
+		$('.remember-apply-form').on('click', 'a[data-remember-profile-return]', function(e) {
+			if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.which === 2) {
+				return;
+			}
+			var $form = $(this).closest('form');
+			var fields = [];
+			$form.find('input, select, textarea').each(function() {
+				if (!this.name || this.name === 'remember_apply_nonce' || this.name === 'remember_apply_action' || this.name === 'remember_profile_currency_confirm') {
+					return;
+				}
+				if ((this.type === 'checkbox' || this.type === 'radio') && !this.checked) {
+					return;
+				}
+				if (this.disabled) {
+					return;
+				}
+				fields.push({
+					name: this.name,
+					value: $(this).val(),
+					check: this.type === 'checkbox' || this.type === 'radio'
+				});
+			});
+			try {
+				sessionStorage.setItem(draftKey, JSON.stringify({
+					eventId: String(currentEventId() || ''),
+					fields: fields,
+					savedAt: Date.now()
+				}));
+			} catch (err) {}
+			e.preventDefault();
+			window.location.href = $(this).attr('data-remember-profile-return');
+		});
+
+		$('.remember-apply-form form').on('submit', function() {
+			clearDraft();
 		});
 	});
 	</script>
