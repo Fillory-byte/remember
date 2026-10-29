@@ -5,6 +5,7 @@ All notable changes to reMember are listed here. The current plugin version is i
 ## 2.2.8
 
 - **Fix:** On a phone, each line in an application's itemized charges keeps the item name, then shows the quantity, unit price, and line subtotal on their own rows with the label on the left and the amount on the right. The subtotal stays on one line. [#134](https://github.com/ctucker1984/remember/issues/134)
+- **Fix:** On a phone, an event's attendee list puts the name and email on one line, and the role and profile link on the next.
 - **Fix:** Downloading an admission ticket saves a PDF. The ticket shown on screen is unchanged. The saved file is no longer an HTML page that can be opened in a text editor and changed. [#127](https://github.com/ctucker1984/remember/issues/127)
 - **Feature:** The Members list and the Applications list can be searched and show 25 rows at a time. Members search matches the display name, email, login, and member number. Applications search matches the member's name, email, login, and the event name.
 - **Fix:** Creating an event application emails the member that it was received and emails staff that an application arrived. That includes an application submitted on the public form and one created in wp-admin. The applicant is left off the staff email. These two templates were already in Settings and were not being sent. [#130](https://github.com/ctucker1984/remember/issues/130)
