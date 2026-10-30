@@ -2,6 +2,10 @@
 
 All notable changes to reMember are listed here. The current plugin version is in `remember.php` (`REMEMBER_VERSION`) and [GitHub Releases](https://github.com/ctucker1984/remember/releases).
 
+## 2.2.9
+
+- **Fix:** Saving a public application uses the same role list as the apply form. A role the member does not hold, or a role hidden from the front end, is not saved. Staff creating an application in wp-admin still see every role on the event. [#141](https://github.com/ctucker1984/remember/issues/141) Noted by [@Fillory-byte](https://github.com/Fillory-byte) ([PR #140](https://github.com/ctucker1984/remember/pull/140)).
+
 ## 2.2.8
 
 - **Fix:** The plugin's own log records the main member actions once the log level is set to Info: an email that was sent and one that was not, a public application submitted, a profile saved, a ticket downloaded, and a check-in that was rejected or already done. A failed email is an error and carries the recipient address so it can be matched to the mail server's log; an email not sent because its template is off, because there was no recipient, or because a staff member turned that email off is noted with the reason. Only ids and the result are written — never names, message contents, codes, or (except on a failure) an address. The default log level is unchanged, so a normal site stays quiet, and the event-role lookup no longer writes the request to the log. [#137](https://github.com/ctucker1984/remember/issues/137)

@@ -1784,59 +1784,13 @@ class Remember_Admin {
 		
 		$event_model = new Remember_Event();
 
-		global $wpdb;
-		
-		// Check if show_in_frontend column exists
-		$columns = $wpdb->get_col( "SHOW COLUMNS FROM {$wpdb->prefix}remember_roles" );
-		$has_show_in_frontend = in_array( 'show_in_frontend', $columns, true );
-
 		if ( $is_admin_path ) {
 			// Staff creating/editing applications in wp-admin: all event roles.
 			$event_roles = $event_model->get_event_roles( $event_id );
+		} elseif ( is_user_logged_in() ) {
+			$event_roles = $event_model->get_offered_event_roles( $event_id, get_current_user_id() );
 		} else {
-			// For non-admin users, filter at the SQL level:
-			// 1. Only roles the member has assigned (join with member_roles)
-			// 2. Only roles with show_in_frontend != 0
-			// 3. Only event roles (role_type = 'event')
-			if ( is_user_logged_in() ) {
-				$member_id = get_current_user_id();
-
-				if ( $has_show_in_frontend ) {
-					// Filter by member roles AND show_in_frontend
-					$query = $wpdb->prepare(
-						"SELECT DISTINCT er.*, r.role_name, r.show_in_frontend 
-						FROM {$wpdb->prefix}remember_event_roles er 
-						JOIN {$wpdb->prefix}remember_roles r ON er.role_id = r.role_id 
-						JOIN {$wpdb->prefix}remember_member_roles mr ON r.role_id = mr.role_id 
-						WHERE er.event_id = %d 
-						AND mr.member_id = %d 
-						AND r.role_type = 'event'
-						AND COALESCE(r.show_in_frontend, 1) != 0
-						ORDER BY r.role_name ASC",
-						$event_id,
-						$member_id
-					);
-					$event_roles = $wpdb->get_results( $query );
-				} else {
-					// Column doesn't exist yet - filter by member roles only
-					$query = $wpdb->prepare(
-						"SELECT DISTINCT er.*, r.role_name 
-						FROM {$wpdb->prefix}remember_event_roles er 
-						JOIN {$wpdb->prefix}remember_roles r ON er.role_id = r.role_id 
-						JOIN {$wpdb->prefix}remember_member_roles mr ON r.role_id = mr.role_id 
-						WHERE er.event_id = %d 
-						AND mr.member_id = %d 
-						AND r.role_type = 'event'
-						ORDER BY r.role_name ASC",
-						$event_id,
-						$member_id
-					);
-					$event_roles = $wpdb->get_results( $query );
-				}
-			} else {
-				// Not logged in - return empty (can't apply without being logged in)
-				$event_roles = array();
-			}
+			$event_roles = array();
 		}
 		
 		// Format for response - return event_role_id and role_name

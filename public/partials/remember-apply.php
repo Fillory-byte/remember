@@ -56,6 +56,18 @@ if ( isset( $_POST['remember_apply_action'] ) && check_admin_referer( 'remember_
 		}
 		if ( $registration_block ) {
 			$submission_error = $registration_block;
+		} elseif ( ! $event_model->member_offered_event_role( $event_id, $member_id, $event_role_id ) ) {
+			require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-logger.php';
+			Remember_Logger::warning(
+				'Public application rejected for a role the member was not offered',
+				array(
+					'event_id'      => $event_id,
+					'member_id'     => $member_id,
+					'event_role_id' => $event_role_id,
+				)
+			);
+			$submission_error = __( 'Please choose a role from the list.', 'remember' );
+			$keep_form        = true;
 		} else {
 		// Check if application already exists
 		$existing = $application_model->get_existing_application( $event_id, $member_id, $event_role_id );

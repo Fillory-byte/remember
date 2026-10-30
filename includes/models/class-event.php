@@ -137,6 +137,70 @@ class Remember_Event extends Remember_Base_Model {
 	}
 
 	/**
+	 * Event roles this member may choose on the public apply form.
+	 *
+	 * The member holds the role, it is an event role, and it is shown on the front end.
+	 * Staff loading every role for wp-admin use get_event_roles() instead.
+	 *
+	 * @param int $event_id  Event ID.
+	 * @param int $member_id Member / WordPress user ID.
+	 * @return array
+	 */
+	public function get_offered_event_roles( $event_id, $member_id ) {
+		global $wpdb;
+
+		$event_id  = absint( $event_id );
+		$member_id = absint( $member_id );
+		if ( $event_id < 1 || $member_id < 1 ) {
+			return array();
+		}
+
+		$columns              = $wpdb->get_col( "SHOW COLUMNS FROM {$wpdb->prefix}remember_roles" );
+		$has_show_in_frontend = in_array( 'show_in_frontend', $columns, true );
+		$show_sql             = $has_show_in_frontend ? 'AND COALESCE(r.show_in_frontend, 1) != 0' : '';
+		$show_select          = $has_show_in_frontend ? ', r.show_in_frontend' : '';
+
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT DISTINCT er.*, r.role_name{$show_select}
+				FROM {$wpdb->prefix}remember_event_roles er
+				JOIN {$wpdb->prefix}remember_roles r ON er.role_id = r.role_id
+				JOIN {$wpdb->prefix}remember_member_roles mr ON r.role_id = mr.role_id
+				WHERE er.event_id = %d
+				AND mr.member_id = %d
+				AND r.role_type = 'event'
+				{$show_sql}
+				ORDER BY r.role_name ASC",
+				$event_id,
+				$member_id
+			)
+		);
+
+		return is_array( $rows ) ? $rows : array();
+	}
+
+	/**
+	 * Whether the public apply form would offer this event role to the member.
+	 *
+	 * @param int $event_id       Event ID.
+	 * @param int $member_id      Member / WordPress user ID.
+	 * @param int $event_role_id  Event role row ID.
+	 * @return bool
+	 */
+	public function member_offered_event_role( $event_id, $member_id, $event_role_id ) {
+		$event_role_id = absint( $event_role_id );
+		if ( $event_role_id < 1 ) {
+			return false;
+		}
+		foreach ( $this->get_offered_event_roles( $event_id, $member_id ) as $role ) {
+			if ( isset( $role->event_role_id ) && (int) $role->event_role_id === $event_role_id ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * Set event roles for an event (replaces existing).
 	 *
 	 * @param int   $event_id Event ID.
