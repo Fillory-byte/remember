@@ -277,7 +277,7 @@ class Remember_Member extends Remember_Base_Model {
 	 * @param array $args {
 	 *     @type string   $status     Status filter, or '' for all.
 	 *     @type int      $role_id    Role filter, or 0 for all.
-	 *     @type string   $search     Name / email / login / member-number search.
+	 *     @type string   $search     Name (display or legal) / email / login / phone / member-number search.
 	 *     @type string   $orderby    One of name|status|roles|joined|updated.
 	 *     @type string   $order      ASC or DESC.
 	 *     @type int      $per_page   Rows per page.
@@ -321,12 +321,11 @@ class Remember_Member extends Remember_Base_Model {
 			$params[] = absint( $args['role_id'] );
 		}
 		if ( '' !== trim( (string) $args['search'] ) ) {
-			$like     = '%' . $wpdb->esc_like( trim( (string) $args['search'] ) ) . '%';
-			$where[]  = '(u.display_name LIKE %s OR u.user_email LIKE %s OR u.user_login LIKE %s OR p.member_number LIKE %s)';
-			$params[] = $like;
-			$params[] = $like;
-			$params[] = $like;
-			$params[] = $like;
+			$search       = $this->person_search_clauses( $args['search'] );
+			$conditions   = $search['conditions'];
+			$conditions[] = 'p.member_number LIKE %s';
+			$where[]      = '(' . implode( ' OR ', $conditions ) . ')';
+			$params       = array_merge( $params, $search['params'], array( '%' . $wpdb->esc_like( trim( (string) $args['search'] ) ) . '%' ) );
 		}
 		if ( is_array( $args['member_ids'] ) ) {
 			if ( empty( $args['member_ids'] ) ) {
