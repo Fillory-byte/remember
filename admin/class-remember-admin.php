@@ -1758,8 +1758,6 @@ class Remember_Admin {
 	 */
 	public function ajax_get_event_roles() {
 		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-logger.php';
-		
-		Remember_Logger::debug( 'ajax_get_event_roles: Starting', array( 'POST' => $_POST ) );
 
 		// Admin vs front use different nonces so a front-end nonce cannot unlock the full role list.
 		$context       = isset( $_POST['context'] ) ? sanitize_key( wp_unslash( $_POST['context'] ) ) : 'front';
@@ -1775,8 +1773,7 @@ class Remember_Admin {
 		}
 		
 		$event_id = isset( $_POST['event_id'] ) ? absint( $_POST['event_id'] ) : 0;
-		Remember_Logger::debug( 'ajax_get_event_roles: Event ID', array( 'event_id' => $event_id ) );
-		
+
 		if ( $event_id <= 0 ) {
 			Remember_Logger::error( 'ajax_get_event_roles: Invalid event ID' );
 			wp_send_json_error( array( 'message' => __( 'Invalid event ID.', 'remember' ) ) );
@@ -1786,40 +1783,16 @@ class Remember_Admin {
 		require_once plugin_dir_path( __FILE__ ) . '../includes/models/class-member.php';
 		
 		$event_model = new Remember_Event();
-		$member_model = new Remember_Member();
-		
+
 		global $wpdb;
 		
 		// Check if show_in_frontend column exists
 		$columns = $wpdb->get_col( "SHOW COLUMNS FROM {$wpdb->prefix}remember_roles" );
 		$has_show_in_frontend = in_array( 'show_in_frontend', $columns, true );
-		Remember_Logger::debug( 'ajax_get_event_roles: Column check', array( 
-			'has_show_in_frontend' => $has_show_in_frontend,
-			'columns' => $columns 
-		) );
 
-		Remember_Logger::debug( 'ajax_get_event_roles: Path check', array(
-			'context'       => $context,
-			'is_admin_path' => $is_admin_path,
-			'user_id'       => get_current_user_id(),
-			'is_logged_in'  => is_user_logged_in(),
-		) );
-		
 		if ( $is_admin_path ) {
 			// Staff creating/editing applications in wp-admin: all event roles.
-			Remember_Logger::debug( 'ajax_get_event_roles: Admin path - getting all roles' );
 			$event_roles = $event_model->get_event_roles( $event_id );
-			Remember_Logger::debug( 'ajax_get_event_roles: Admin results', array( 
-				'count' => count( $event_roles ),
-				'roles' => array_map( function( $r ) { 
-					return array( 
-						'event_role_id' => $r->event_role_id, 
-						'role_id' => $r->role_id,
-						'role_name' => $r->role_name,
-						'show_in_frontend' => isset( $r->show_in_frontend ) ? $r->show_in_frontend : 'not set'
-					); 
-				}, $event_roles )
-			) );
 		} else {
 			// For non-admin users, filter at the SQL level:
 			// 1. Only roles the member has assigned (join with member_roles)
@@ -1827,15 +1800,7 @@ class Remember_Admin {
 			// 3. Only event roles (role_type = 'event')
 			if ( is_user_logged_in() ) {
 				$member_id = get_current_user_id();
-				Remember_Logger::debug( 'ajax_get_event_roles: Non-admin logged in user', array( 'member_id' => $member_id ) );
-				
-				// Get member's assigned event role IDs for logging
-				$member_event_role_ids = $member_model->get_member_event_role_ids( $member_id );
-				Remember_Logger::debug( 'ajax_get_event_roles: Member event role IDs', array( 
-					'member_id' => $member_id,
-					'role_ids' => $member_event_role_ids 
-				) );
-				
+
 				if ( $has_show_in_frontend ) {
 					// Filter by member roles AND show_in_frontend
 					$query = $wpdb->prepare(
@@ -1851,24 +1816,7 @@ class Remember_Admin {
 						$event_id,
 						$member_id
 					);
-					Remember_Logger::debug( 'ajax_get_event_roles: Executing SQL with show_in_frontend filter', array( 
-						'query' => $query,
-						'event_id' => $event_id,
-						'member_id' => $member_id
-					) );
 					$event_roles = $wpdb->get_results( $query );
-					Remember_Logger::debug( 'ajax_get_event_roles: Query results', array( 
-						'count' => count( $event_roles ),
-						'roles' => array_map( function( $r ) { 
-							return array( 
-								'event_role_id' => $r->event_role_id, 
-								'role_id' => $r->role_id,
-								'role_name' => $r->role_name,
-								'show_in_frontend' => isset( $r->show_in_frontend ) ? $r->show_in_frontend : 'not set'
-							); 
-						}, $event_roles ),
-						'wpdb_last_error' => $wpdb->last_error
-					) );
 				} else {
 					// Column doesn't exist yet - filter by member roles only
 					$query = $wpdb->prepare(
@@ -1883,27 +1831,10 @@ class Remember_Admin {
 						$event_id,
 						$member_id
 					);
-					Remember_Logger::debug( 'ajax_get_event_roles: Executing SQL without show_in_frontend filter', array( 
-						'query' => $query,
-						'event_id' => $event_id,
-						'member_id' => $member_id
-					) );
 					$event_roles = $wpdb->get_results( $query );
-					Remember_Logger::debug( 'ajax_get_event_roles: Query results', array( 
-						'count' => count( $event_roles ),
-						'roles' => array_map( function( $r ) { 
-							return array( 
-								'event_role_id' => $r->event_role_id, 
-								'role_id' => $r->role_id,
-								'role_name' => $r->role_name
-							); 
-						}, $event_roles ),
-						'wpdb_last_error' => $wpdb->last_error
-					) );
 				}
 			} else {
 				// Not logged in - return empty (can't apply without being logged in)
-				Remember_Logger::debug( 'ajax_get_event_roles: User not logged in, returning empty' );
 				$event_roles = array();
 			}
 		}
@@ -1917,11 +1848,16 @@ class Remember_Admin {
 			);
 		}
 		
-		Remember_Logger::debug( 'ajax_get_event_roles: Final formatted response', array( 
-			'count' => count( $formatted_roles ),
-			'roles' => $formatted_roles
-		) );
-		
+		// Ids and the result count only — never the request body or the role rows.
+		Remember_Logger::debug(
+			'ajax_get_event_roles',
+			array(
+				'event_id' => $event_id,
+				'context'  => $context,
+				'count'    => count( $formatted_roles ),
+			)
+		);
+
 		wp_send_json_success( $formatted_roles );
 	}
 

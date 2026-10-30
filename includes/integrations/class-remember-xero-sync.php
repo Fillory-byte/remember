@@ -482,6 +482,10 @@ class Remember_Xero_Sync {
 			if ( $quoted_amount <= 0.001 ) {
 				return self::record_zero_charge_payment( $application_id, $member_id, $event_role ? floatval( $event_role->cost ) : 0 );
 			}
+			Remember_Logger::warning(
+				'Xero invoice skipped: no mapped line items',
+				array( 'application_id' => (int) $application_id )
+			);
 			return new WP_Error( 'no_line_items', __( 'No line items available. Map event roles and catalog products to Xero under Settings → Xero.', 'remember' ) );
 		}
 

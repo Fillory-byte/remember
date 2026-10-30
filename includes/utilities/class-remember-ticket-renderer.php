@@ -26,14 +26,23 @@ class Remember_Ticket_Renderer {
 	 * @return void
 	 */
 	public static function output_standalone( $application_id, $download = false ) {
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
 		$data = Remember_Ticket::get_data( $application_id );
 		if ( is_wp_error( $data ) ) {
+			Remember_Logger::error(
+				'Ticket could not be built',
+				array(
+					'application_id' => (int) $application_id,
+					'error'          => $data->get_error_code(),
+				)
+			);
 			status_header( 404 );
 			wp_die( esc_html( $data->get_error_message() ), esc_html__( 'Ticket', 'remember' ), array( 'response' => 404 ) );
 		}
 
 		if ( $download ) {
 			require_once plugin_dir_path( __FILE__ ) . 'class-remember-ticket-pdf.php';
+			Remember_Logger::info( 'Ticket PDF downloaded', array( 'application_id' => (int) $application_id ) );
 			Remember_Ticket_Pdf::output( $data );
 			return;
 		}
