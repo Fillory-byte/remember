@@ -469,9 +469,9 @@ class Remember_Event extends Remember_Base_Model {
 	}
 
 	/**
-	 * Why a member cannot apply right now. Empty when the window allows it.
+	 * Why a member cannot apply right now. Empty when the event is open and the window allows it.
 	 *
-	 * Blank open or close means that side is unlimited. Existing events stay open.
+	 * The event status must be Open. Blank open or close means that side is unlimited.
 	 *
 	 * @param object $event Event row.
 	 * @return string
@@ -479,6 +479,10 @@ class Remember_Event extends Remember_Base_Model {
 	public static function registration_block_reason( $event ) {
 		if ( ! is_object( $event ) ) {
 			return '';
+		}
+
+		if ( ! isset( $event->status ) || 'open' !== (string) $event->status ) {
+			return __( 'This event is not open for applications.', 'remember' );
 		}
 
 		$now    = current_time( 'mysql' );
