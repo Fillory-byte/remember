@@ -169,7 +169,12 @@ class Remember_Profile_Fields {
 
 		$im_type = self::post_text( array( 'im_type', 'remember_reg_im_type' ) );
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-im-platforms.php';
-		$im_type = Remember_Im_Platforms::sanitize_key_value( $im_type );
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-platform-handles.php';
+		$im_type   = Remember_Im_Platforms::sanitize_key_value( $im_type );
+		$im_handle = Remember_Platform_Handles::im_handle_for_storage(
+			$im_type,
+			self::post_text( array( 'im_handle', 'remember_reg_im_handle' ) )
+		);
 
 		$country = self::post_text( array( 'address_country', 'remember_reg_address_country' ) );
 		if ( '' === $country ) {
@@ -192,7 +197,7 @@ class Remember_Profile_Fields {
 			'address_postal'                 => self::post_text( array( 'address_postal', 'remember_reg_address_postal' ) ),
 			'address_country'                => $country,
 			'cell_phone'                     => self::post_text( array( 'cell_phone', 'remember_reg_cell_phone' ) ),
-			'im_handle'                      => self::post_text( array( 'im_handle', 'remember_reg_im_handle' ) ),
+			'im_handle'                      => $im_handle,
 			'im_type'                        => $im_type,
 			'interests'                      => $interests,
 			'allergy_reaction'               => self::allergy_reaction_for_storage(),
@@ -705,13 +710,19 @@ class Remember_Profile_Fields {
 
 		$wpdb->delete( $wpdb->prefix . 'remember_member_social_media', array( 'member_id' => $member_id ), array( '%d' ) );
 		if ( isset( $_POST['social_media'] ) && is_array( $_POST['social_media'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			require_once plugin_dir_path( __FILE__ ) . 'class-remember-platform-handles.php';
 			$social_count = 0;
 			foreach ( $_POST['social_media'] as $social_data ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
-				if ( $social_count >= 3 ) {
-					break;
+				if ( $social_count >= 3 || ! is_array( $social_data ) ) {
+					continue;
 				}
 				$platform_id = isset( $social_data['platform_id'] ) ? absint( $social_data['platform_id'] ) : 0;
 				$handle      = isset( $social_data['handle'] ) ? sanitize_text_field( wp_unslash( $social_data['handle'] ) ) : '';
+				$handle      = Remember_Platform_Handles::social_handle_for_storage( $platform_id, $handle );
+				$social_row  = Remember_Platform_Handles::social_platform( $platform_id );
+				if ( $social_row && ! empty( $social_row->show_at ) && false !== strpos( $handle, '@' ) ) {
+					continue;
+				}
 				if ( $platform_id > 0 && '' !== $handle ) {
 					$wpdb->insert(
 						$wpdb->prefix . 'remember_member_social_media',

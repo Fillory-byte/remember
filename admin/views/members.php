@@ -268,6 +268,7 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 
 		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-clothing-sizes.php';
 		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-im-platforms.php';
+		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-platform-handles.php';
 		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-fields.php';
 		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-questions.php';
 
@@ -314,6 +315,8 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( $member_number_error ) . '</p></div>';
 		} elseif ( '' !== $remember_email_error ) {
 			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( Remember_Profile_Fields::user_email_change_message( $remember_email_error ) ) . '</p></div>';
+		} elseif ( ! empty( Remember_Platform_Handles::at_errors_from_request() ) ) {
+			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( Remember_Platform_Handles::at_message() ) . '</p></div>';
 		} else {
 		
 		global $wpdb;
@@ -414,8 +417,8 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 			'address_postal' => isset( $_POST['address_postal'] ) ? sanitize_text_field( wp_unslash( $_POST['address_postal'] ) ) : '',
 			'address_country' => isset( $_POST['address_country'] ) ? sanitize_text_field( wp_unslash( $_POST['address_country'] ) ) : '',
 			'cell_phone' => isset( $_POST['cell_phone'] ) ? sanitize_text_field( wp_unslash( $_POST['cell_phone'] ) ) : '',
-			'im_handle' => isset( $_POST['im_handle'] ) ? sanitize_text_field( wp_unslash( $_POST['im_handle'] ) ) : '',
-			'im_type' => isset( $_POST['im_type'] ) ? Remember_Im_Platforms::sanitize_key_value( wp_unslash( $_POST['im_type'] ) ) : Remember_Im_Platforms::default_key(),
+			'im_handle' => $profile_check['im_handle'],
+			'im_type' => $profile_check['im_type'],
 			'interests' => isset( $_POST['interests'] ) ? Remember_Profile_Fields::sanitize_interests( wp_unslash( $_POST['interests'] ) ) : '',
 			'shirt_size' => isset( $_POST['shirt_size'] ) ? Remember_Clothing_Sizes::sanitize( 'shirt', wp_unslash( $_POST['shirt_size'] ) ) : '',
 			'pants_size' => isset( $_POST['pants_size'] ) ? Remember_Clothing_Sizes::sanitize( 'pants', wp_unslash( $_POST['pants_size'] ) ) : '',
@@ -472,7 +475,12 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 			$wpdb->delete( $wpdb->prefix . 'remember_member_social_media', array( 'member_id' => $member_id ) );
 			if ( isset( $_POST['social_media'] ) && is_array( $_POST['social_media'] ) ) {
 				foreach ( $_POST['social_media'] as $platform_id => $handle ) {
-					$handle = sanitize_text_field( $handle );
+					$platform_id = absint( $platform_id );
+					$handle      = Remember_Platform_Handles::social_handle_for_storage( $platform_id, sanitize_text_field( wp_unslash( $handle ) ) );
+					$social_row  = Remember_Platform_Handles::social_platform( $platform_id );
+					if ( $social_row && ! empty( $social_row->show_at ) && false !== strpos( $handle, '@' ) ) {
+						continue;
+					}
 					if ( ! empty( $handle ) ) {
 						$wpdb->insert(
 							$wpdb->prefix . 'remember_member_social_media',

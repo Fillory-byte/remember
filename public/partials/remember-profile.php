@@ -17,6 +17,7 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remem
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-image-uploader.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-clothing-sizes.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-fields.php';
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-platform-handles.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-audit.php';
 
 $user = wp_get_current_user();
@@ -88,6 +89,15 @@ if ( isset( $_POST['remember_profile_action'] ) && check_admin_referer( 'remembe
 		$remember_invalid_fields[] = 'interests';
 		$remember_field_messages['interests'] = Remember_Profile_Fields::interests_too_long_message();
 		$banner_extras[] = $remember_field_messages['interests'];
+	}
+	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-platform-handles.php';
+	$remember_at_errors = Remember_Platform_Handles::at_errors_from_request();
+	if ( ! empty( $remember_at_errors ) ) {
+		foreach ( $remember_at_errors as $remember_at_key => $remember_at_message ) {
+			$remember_invalid_fields[]                   = $remember_at_key;
+			$remember_field_messages[ $remember_at_key ] = $remember_at_message;
+		}
+		$banner_extras[] = Remember_Platform_Handles::at_message();
 	}
 	if ( isset( $_POST['timezone_string'] ) ) {
 		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-timezone.php';
@@ -829,7 +839,7 @@ if ( $remember_sticky ) {
 								<?php foreach ( $social_platforms as $platform ) : 
 									$selected = $social_profiles[ $i ] && $social_profiles[ $i ]->platform_id == $platform->platform_id;
 								?>
-									<option value="<?php echo esc_attr( $platform->platform_id ); ?>" <?php selected( $selected ); ?>>
+									<option value="<?php echo esc_attr( $platform->platform_id ); ?>" <?php selected( $selected ); ?> data-remember-show-at="<?php echo empty( $platform->show_at ) ? '0' : '1'; ?>">
 										<?php echo esc_html( $platform->platform_name ); ?>
 									</option>
 								<?php endforeach; ?>
@@ -840,9 +850,22 @@ if ( $remember_sticky ) {
 								<?php esc_html_e( 'Handle/Username', 'remember' ); ?>
 							</label>
 							<input type="text" id="social_handle_<?php echo esc_attr( $i ); ?>" name="social_media[<?php echo esc_attr( $i ); ?>][handle]" 
-								class="remember-form-control" 
+								class="<?php echo esc_attr( $remember_ifc( 'social_handle_' . $i ) ); ?>" 
 								value="<?php echo esc_attr( $social_profiles[ $i ] ? $social_profiles[ $i ]->handle : '' ); ?>" 
-								placeholder="<?php esc_attr_e( 'e.g., @username', 'remember' ); ?>">
+								placeholder="<?php esc_attr_e( 'Name only', 'remember' ); ?>"<?php echo $remember_ifa( 'social_handle_' . $i ); ?>>
+							<?php
+							$remember_social_show_at = false;
+							if ( $social_profiles[ $i ] ) {
+								foreach ( $social_platforms as $platform ) {
+									if ( (int) $platform->platform_id === (int) $social_profiles[ $i ]->platform_id && ! empty( $platform->show_at ) ) {
+										$remember_social_show_at = true;
+										break;
+									}
+								}
+							}
+							Remember_Platform_Handles::render_help( $remember_social_show_at, 'remember-form-help remember-at-help' );
+							Remember_Profile_Fields::render_field_error( 'social_handle_' . $i, $remember_invalid_fields, $remember_field_messages );
+							?>
 						</div>
 					</div>
 				<?php endfor; ?>
@@ -936,8 +959,12 @@ if ( $remember_sticky ) {
 					<div class="remember-form-col">
 						<label for="im_handle" class="remember-form-label"><?php esc_html_e( 'Handle', 'remember' ); ?> <span class="remember-required">*</span></label>
 						<input type="text" id="im_handle" name="im_handle" class="<?php echo esc_attr( $remember_ifc( 'im_handle' ) ); ?>" required<?php echo $remember_ifa( 'im_handle' ); ?>
-							value="<?php echo esc_attr( $profile ? $profile->im_handle : '' ); ?>" placeholder="<?php esc_attr_e( 'Handle', 'remember' ); ?>">
-						<?php Remember_Profile_Fields::render_field_error( 'im_handle', $remember_invalid_fields, $remember_field_messages ); ?>
+							value="<?php echo esc_attr( $profile ? $profile->im_handle : '' ); ?>" placeholder="<?php esc_attr_e( 'Name only', 'remember' ); ?>">
+						<?php
+						$remember_im_row = Remember_Platform_Handles::im_platform( $im_selected );
+						Remember_Platform_Handles::render_help( $remember_im_row && ! empty( $remember_im_row->show_at ), 'remember-form-help remember-at-help' );
+						Remember_Profile_Fields::render_field_error( 'im_handle', $remember_invalid_fields, $remember_field_messages );
+						?>
 					</div>
 				</div>
 			</div>
@@ -1288,7 +1315,7 @@ if ( $remember_sticky ) {
 							<?php foreach ( $social_profiles as $social ) : ?>
 								<div class="remember-profile-view-item">
 									<strong class="remember-profile-view-label"><?php echo esc_html( $social->platform_name ); ?></strong>
-									<span class="remember-profile-view-value"><?php echo esc_html( $social->handle ); ?></span>
+									<span class="remember-profile-view-value"><?php echo Remember_Platform_Handles::social_html( $social->platform_id, $social->handle ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- social_html() escapes the name and address. ?></span>
 								</div>
 							<?php endforeach; ?>
 						</div>
@@ -1364,7 +1391,7 @@ if ( $remember_sticky ) {
 							</div>
 							<div class="remember-profile-view-item">
 								<strong class="remember-profile-view-label"><?php esc_html_e( 'Handle', 'remember' ); ?></strong>
-								<span class="remember-profile-view-value"><?php echo esc_html( $profile->im_handle ); ?></span>
+								<span class="remember-profile-view-value"><?php echo Remember_Platform_Handles::im_html( $profile->im_type, $profile->im_handle ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- im_html() escapes the name and address. ?></span>
 							</div>
 						</div>
 					</div>
@@ -1468,3 +1495,4 @@ if ( $remember_sticky ) {
 		<?php endif; ?>
 	<?php endif; ?>
 </div>
+<?php Remember_Platform_Handles::print_toggle_script(); ?>

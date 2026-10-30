@@ -334,6 +334,16 @@ class Remember_Public {
 			$photo_max_bytes = 2097152;
 		}
 
+		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-platform-handles.php';
+		$at_errors = Remember_Platform_Handles::at_errors_from_request();
+		if ( ! empty( $at_errors ) ) {
+			foreach ( $at_errors as $at_key => $at_message ) {
+				$invalid_fields[]         = $at_key;
+				$field_messages[ $at_key ] = $at_message;
+			}
+			$banner_extras[] = Remember_Platform_Handles::at_message();
+		}
+
 		$has_photo = ! empty( $_FILES['photo_file']['name'] );
 		if ( ! $has_photo ) {
 			$invalid_fields[] = 'photo_file';

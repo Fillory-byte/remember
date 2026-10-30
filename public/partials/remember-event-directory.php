@@ -183,8 +183,9 @@ foreach ( $event_roles as $event_role ) {
 								<strong><?php esc_html_e( 'IM:', 'remember' ); ?></strong><br>
 								<?php
 								require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-im-platforms.php';
+								require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-platform-handles.php';
 								echo esc_html( Remember_Im_Platforms::get_label( $profile->im_type ) );
-								?>: <?php echo esc_html( $profile->im_handle ); ?>
+								?>: <?php echo Remember_Platform_Handles::im_html( $profile->im_type, $profile->im_handle ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- im_html() escapes the name and address. ?>
 							</p>
 						<?php endif; ?>
 

@@ -375,8 +375,9 @@ $remember_print_sensitive = ! empty( Remember_Sensitive_Profile::print_topics() 
 							<?php if ( $view_profile && $view_profile->im_handle ) : ?>
 								<?php
 								require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-im-platforms.php';
+								require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-platform-handles.php';
 								echo esc_html( Remember_Im_Platforms::get_label( $view_profile->im_type ?: Remember_Im_Platforms::default_key() ) );
-								?>: <?php echo esc_html( $view_profile->im_handle ); ?>
+								?>: <?php echo Remember_Platform_Handles::im_html( $view_profile->im_type, $view_profile->im_handle ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- im_html() escapes the name and address. ?>
 							<?php else : ?>
 								<span class="description"><?php esc_html_e( 'Not provided', 'remember' ); ?></span>
 							<?php endif; ?>
