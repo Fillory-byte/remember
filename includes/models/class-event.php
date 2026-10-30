@@ -201,6 +201,48 @@ class Remember_Event extends Remember_Base_Model {
 	}
 
 	/**
+	 * Roles a member may pick when editing their own pending application.
+	 *
+	 * The apply-form list, plus the role already stored on the application when
+	 * that role would no longer be offered, so the member can keep it.
+	 *
+	 * @param int $event_id              Event ID.
+	 * @param int $member_id             Member / WordPress user ID.
+	 * @param int $current_event_role_id Event role already on the application.
+	 * @return array
+	 */
+	public function get_member_application_role_choices( $event_id, $member_id, $current_event_role_id ) {
+		$choices               = $this->get_offered_event_roles( $event_id, $member_id );
+		$current_event_role_id = absint( $current_event_role_id );
+		$listed                = false;
+
+		foreach ( $choices as $role ) {
+			if ( isset( $role->event_role_id ) && (int) $role->event_role_id === $current_event_role_id ) {
+				$listed = true;
+				break;
+			}
+		}
+
+		if ( ! $listed && $current_event_role_id > 0 ) {
+			foreach ( $this->get_event_roles( $event_id ) as $role ) {
+				if ( isset( $role->event_role_id ) && (int) $role->event_role_id === $current_event_role_id ) {
+					$choices[] = $role;
+					break;
+				}
+			}
+		}
+
+		usort(
+			$choices,
+			static function ( $a, $b ) {
+				return strcasecmp( (string) $a->role_name, (string) $b->role_name );
+			}
+		);
+
+		return $choices;
+	}
+
+	/**
 	 * Set event roles for an event (replaces existing).
 	 *
 	 * @param int   $event_id Event ID.
@@ -469,9 +511,9 @@ class Remember_Event extends Remember_Base_Model {
 	}
 
 	/**
-	 * Why a member cannot apply right now. Empty when the window allows it.
+	 * Why a member cannot apply right now. Empty when the event is open and the window allows it.
 	 *
-	 * Blank open or close means that side is unlimited. Existing events stay open.
+	 * The event status must be Open. Blank open or close means that side is unlimited.
 	 *
 	 * @param object $event Event row.
 	 * @return string
@@ -479,6 +521,10 @@ class Remember_Event extends Remember_Base_Model {
 	public static function registration_block_reason( $event ) {
 		if ( ! is_object( $event ) ) {
 			return '';
+		}
+
+		if ( ! isset( $event->status ) || 'open' !== (string) $event->status ) {
+			return __( 'This event is not open for applications.', 'remember' );
 		}
 
 		$now    = current_time( 'mysql' );

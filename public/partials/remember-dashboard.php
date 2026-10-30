@@ -17,6 +17,7 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-vetting.
 require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-location.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-merchandise.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-addon-role-limits.php';
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-event-invites.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-timezone.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-payment.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-billing-template.php';
@@ -49,21 +50,28 @@ if ( isset( $_POST['remember_member_application_action'] ) && check_admin_refere
 				(int) $member_id_for_queries
 			);
 			if ( '' !== $currency_error ) {
-				echo '<div class="remember-notice remember-error"><p>' . esc_html( $currency_error ) . '</p></div>';
+				echo '<div class="remember-notice remember-error" role="alert"><p>' . esc_html( $currency_error ) . '</p></div>';
 			} else {
 			global $wpdb;
 			$new_event_role_id = isset( $_POST['event_role_id'] ) ? absint( $_POST['event_role_id'] ) : 0;
-			if ( $new_event_role_id > 0 ) {
-				$event_role_exists = $wpdb->get_var(
-					$wpdb->prepare(
-						"SELECT COUNT(*) FROM {$wpdb->prefix}remember_event_roles WHERE event_role_id = %d AND event_id = %d",
-						$new_event_role_id,
-						$application->event_id
-					)
-				);
-				if ( $event_role_exists ) {
-					$application_model->update( $application_id, array( 'event_role_id' => $new_event_role_id ) );
+			$role_error        = '';
+			// A role change is a fresh choice: the event must still be open to this member and the role offered to them.
+			if ( $new_event_role_id > 0 && $new_event_role_id !== absint( $application->event_role_id ) ) {
+				$application_event = $event_model->get( absint( $application->event_id ) );
+				if ( ! $application_event || ! Remember_Event_Invites::member_can_apply( $application_event, (int) $member_id_for_queries ) ) {
+					$role_error = __( 'This event is by invitation only.', 'remember' );
+				} else {
+					$role_error = Remember_Event::registration_block_reason( $application_event );
 				}
+				if ( '' === $role_error && ! $event_model->member_offered_event_role( absint( $application->event_id ), (int) $member_id_for_queries, $new_event_role_id ) ) {
+					$role_error = __( 'Please choose a role from the list.', 'remember' );
+				}
+			}
+			if ( '' !== $role_error ) {
+				echo '<div class="remember-notice remember-error" role="alert"><p>' . esc_html( $role_error ) . '</p></div>';
+			} else {
+			if ( $new_event_role_id > 0 && $new_event_role_id !== absint( $application->event_role_id ) ) {
+				$application_model->update( $application_id, array( 'event_role_id' => $new_event_role_id ) );
 			}
 
 			// Replace add-ons with current selection (role-aware max qty).
@@ -72,7 +80,7 @@ if ( isset( $_POST['remember_member_application_action'] ) && check_admin_refere
 				array( 'event_application_id' => $application_id ),
 				array( '%d' )
 			);
-			$effective_role_id = isset( $_POST['event_role_id'] ) ? absint( $_POST['event_role_id'] ) : absint( $application->event_role_id );
+			$effective_role_id = $new_event_role_id;
 			if ( $effective_role_id < 1 ) {
 				$effective_role_id = absint( $application->event_role_id );
 			}
@@ -115,7 +123,8 @@ if ( isset( $_POST['remember_member_application_action'] ) && check_admin_refere
 				}
 			}
 			Remember_Profile_Audit::touch_updated( (int) $member_id_for_queries, get_current_user_id() );
-			echo '<div class="remember-notice remember-notice-success"><p>' . esc_html__( 'Application updated. Your profile currency confirmation was recorded.', 'remember' ) . '</p></div>';
+			echo '<div class="remember-notice remember-success" role="status"><p>' . esc_html__( 'Application updated. Your profile currency confirmation was recorded.', 'remember' ) . '</p></div>';
+			}
 			}
 		} elseif ( 'withdraw_application' === $member_action && 'accepted' === $application->status ) {
 			require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-billing-unwind.php';
@@ -127,7 +136,7 @@ if ( isset( $_POST['remember_member_application_action'] ) && check_admin_refere
 					'leave',
 					sprintf( __( 'Member cancelled application #%d', 'remember' ), $application_id )
 				);
-				echo '<div class="remember-notice remember-notice-success"><p>' . esc_html__( 'Application cancelled. Your ticket is marked VOID.', 'remember' ) . '</p></div>';
+				echo '<div class="remember-notice remember-success" role="status"><p>' . esc_html__( 'Application cancelled. Your ticket is marked VOID.', 'remember' ) . '</p></div>';
 			}
 		}
 	}
@@ -242,7 +251,11 @@ if ( $selected_application_id > 0 ) {
 	$selected_application = $application_model->get( $selected_application_id );
 	if ( $selected_application && absint( $selected_application->member_id ) === absint( $member_id_for_queries ) ) {
 		$selected_event = $event_model->get( $selected_application->event_id );
-		$selected_event_roles = $event_model->get_event_roles( $selected_application->event_id );
+		$selected_event_roles = $event_model->get_member_application_role_choices(
+			$selected_application->event_id,
+			$member_id_for_queries,
+			$selected_application->event_role_id
+		);
 		foreach ( $selected_event_roles as $role_option ) {
 			if ( absint( $role_option->event_role_id ) === absint( $selected_application->event_role_id ) ) {
 				$selected_event_role = $role_option;
