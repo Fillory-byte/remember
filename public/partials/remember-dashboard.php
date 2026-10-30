@@ -49,7 +49,7 @@ if ( isset( $_POST['remember_member_application_action'] ) && check_admin_refere
 				(int) $member_id_for_queries
 			);
 			if ( '' !== $currency_error ) {
-				echo '<div class="remember-notice remember-error"><p>' . esc_html( $currency_error ) . '</p></div>';
+				echo '<div class="remember-notice remember-error" role="alert"><p>' . esc_html( $currency_error ) . '</p></div>';
 			} else {
 			global $wpdb;
 			$new_event_role_id = isset( $_POST['event_role_id'] ) ? absint( $_POST['event_role_id'] ) : 0;
@@ -115,7 +115,7 @@ if ( isset( $_POST['remember_member_application_action'] ) && check_admin_refere
 				}
 			}
 			Remember_Profile_Audit::touch_updated( (int) $member_id_for_queries, get_current_user_id() );
-			echo '<div class="remember-notice remember-notice-success"><p>' . esc_html__( 'Application updated. Your profile currency confirmation was recorded.', 'remember' ) . '</p></div>';
+			echo '<div class="remember-notice remember-success" role="status"><p>' . esc_html__( 'Application updated. Your profile currency confirmation was recorded.', 'remember' ) . '</p></div>';
 			}
 		} elseif ( 'withdraw_application' === $member_action && 'accepted' === $application->status ) {
 			require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-billing-unwind.php';
@@ -127,7 +127,7 @@ if ( isset( $_POST['remember_member_application_action'] ) && check_admin_refere
 					'leave',
 					sprintf( __( 'Member cancelled application #%d', 'remember' ), $application_id )
 				);
-				echo '<div class="remember-notice remember-notice-success"><p>' . esc_html__( 'Application cancelled. Your ticket is marked VOID.', 'remember' ) . '</p></div>';
+				echo '<div class="remember-notice remember-success" role="status"><p>' . esc_html__( 'Application cancelled. Your ticket is marked VOID.', 'remember' ) . '</p></div>';
 			}
 		}
 	}
