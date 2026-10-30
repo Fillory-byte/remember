@@ -4,6 +4,7 @@ All notable changes to reMember are listed here. The current plugin version is i
 
 ## 2.2.9
 
+- **Fix:** The apply form loads agreements, survey questions, and add-ons only for an event the member is allowed to see. A survey or add-on list also requires a role the form would offer that member. The wp-admin role list for staff is unchanged. [#143](https://github.com/ctucker1984/remember/issues/143) Noted by [@Fillory-byte](https://github.com/Fillory-byte) ([PR #140](https://github.com/ctucker1984/remember/pull/140)).
 - **Fix:** The setup wizard changes an existing page only when that person is allowed to edit it in WordPress. A page they cannot edit is left as it is, and the wizard says so. Creating a new page is unchanged. [#142](https://github.com/ctucker1984/remember/issues/142) Noted by [@Fillory-byte](https://github.com/Fillory-byte) ([PR #140](https://github.com/ctucker1984/remember/pull/140)).
 - **Fix:** Saving a public application uses the same role list as the apply form. A role the member does not hold, or a role hidden from the front end, is not saved. Staff creating an application in wp-admin still see every role on the event. [#141](https://github.com/ctucker1984/remember/issues/141) Noted by [@Fillory-byte](https://github.com/Fillory-byte) ([PR #140](https://github.com/ctucker1984/remember/pull/140)).
 

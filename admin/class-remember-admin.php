@@ -1839,6 +1839,53 @@ class Remember_Admin {
 	}
 
 	/**
+	 * Whether the logged-in member may see this event the way the public event list does.
+	 *
+	 * @param int $event_id Event ID.
+	 * @return bool
+	 */
+	private function member_can_read_apply_event( $event_id ) {
+		if ( ! is_user_logged_in() ) {
+			return false;
+		}
+		require_once plugin_dir_path( __FILE__ ) . '../includes/models/class-event.php';
+		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-event-invites.php';
+		$event = ( new Remember_Event() )->get( absint( $event_id ) );
+		return Remember_Event_Invites::member_can_see( $event, get_current_user_id() );
+	}
+
+	/**
+	 * Whether the public apply form would offer this role to the current member.
+	 *
+	 * @param int $event_id      Event ID.
+	 * @param int $event_role_id Event role row ID.
+	 * @return bool
+	 */
+	private function member_offered_apply_role( $event_id, $event_role_id ) {
+		require_once plugin_dir_path( __FILE__ ) . '../includes/models/class-event.php';
+		return ( new Remember_Event() )->member_offered_event_role( $event_id, get_current_user_id(), $event_role_id );
+	}
+
+	/**
+	 * Log a refused apply-form lookup. Ids only.
+	 *
+	 * @param int    $event_id Event ID.
+	 * @param string $lookup   addons, agreements, or survey.
+	 * @return void
+	 */
+	private function log_apply_lookup_denied( $event_id, $lookup ) {
+		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-logger.php';
+		Remember_Logger::warning(
+			'Apply lookup refused',
+			array(
+				'lookup'    => $lookup,
+				'event_id'  => absint( $event_id ),
+				'member_id' => get_current_user_id(),
+			)
+		);
+	}
+
+	/**
 	 * AJAX handler to get event add-ons for an event.
 	 *
 	 * @since    1.0.0
@@ -1850,6 +1897,14 @@ class Remember_Admin {
 		$event_role_id = isset( $_POST['event_role_id'] ) ? absint( $_POST['event_role_id'] ) : 0;
 		if ( $event_id <= 0 ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid event ID.', 'remember' ) ) );
+		}
+		if ( ! is_user_logged_in() || ! $this->member_can_read_apply_event( $event_id ) ) {
+			$this->log_apply_lookup_denied( $event_id, 'addons' );
+			wp_send_json_error( array( 'message' => __( 'You cannot view this event.', 'remember' ) ) );
+		}
+		if ( $event_role_id > 0 && ! $this->member_offered_apply_role( $event_id, $event_role_id ) ) {
+			$this->log_apply_lookup_denied( $event_id, 'addons' );
+			wp_send_json_error( array( 'message' => __( 'That role is not available.', 'remember' ) ) );
 		}
 
 		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-addon-role-limits.php';
@@ -1887,8 +1942,9 @@ class Remember_Admin {
 		if ( $event_id <= 0 ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid event ID.', 'remember' ) ) );
 		}
-		if ( ! is_user_logged_in() ) {
-			wp_send_json_error( array( 'message' => __( 'You must be logged in.', 'remember' ) ) );
+		if ( ! is_user_logged_in() || ! $this->member_can_read_apply_event( $event_id ) ) {
+			$this->log_apply_lookup_denied( $event_id, 'agreements' );
+			wp_send_json_error( array( 'message' => __( 'You cannot view this event.', 'remember' ) ) );
 		}
 
 		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-agreements.php';
@@ -1911,6 +1967,16 @@ class Remember_Admin {
 		$event_role_id = isset( $_POST['event_role_id'] ) ? absint( $_POST['event_role_id'] ) : 0;
 		if ( $event_id <= 0 || ! is_user_logged_in() ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid event.', 'remember' ) ) );
+		}
+		if ( ! $this->member_can_read_apply_event( $event_id ) ) {
+			$this->log_apply_lookup_denied( $event_id, 'survey' );
+			wp_send_json_error( array( 'message' => __( 'You cannot view this event.', 'remember' ) ) );
+		}
+		if ( $event_role_id < 1 || ! $this->member_offered_apply_role( $event_id, $event_role_id ) ) {
+			if ( $event_role_id > 0 ) {
+				$this->log_apply_lookup_denied( $event_id, 'survey' );
+			}
+			wp_send_json_success( array( 'html' => '' ) );
 		}
 
 		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-surveys.php';
