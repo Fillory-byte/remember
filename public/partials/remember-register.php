@@ -263,7 +263,7 @@ if ( '' === $remember_reg_im_type ) {
 			<div class="remember-register-row remember-register-row--photo">
 				<span class="remember-register-label"><?php esc_html_e( 'Photo', 'remember' ); ?> <span class="required">*</span></span>
 				<div class="remember-profile-photo-edit" data-output-size="<?php echo esc_attr( (string) $photo_max_dimensions ); ?>">
-					<p class="remember-register-help"><?php esc_html_e( 'Required. Drag to recenter and use zoom to frame the photo.', 'remember' ); ?></p>
+					<p class="remember-register-help remember-register-photo-framing"><?php esc_html_e( 'Required. Drag to recenter and use zoom to frame the photo.', 'remember' ); ?></p>
 					<div class="remember-profile-photo-cropper" hidden>
 						<div class="remember-profile-photo-cropper-viewport" aria-label="<?php esc_attr_e( 'Photo framing preview', 'remember' ); ?>">
 							<img src="" alt="" class="remember-profile-photo-cropper-image" draggable="false">

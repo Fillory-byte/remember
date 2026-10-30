@@ -928,6 +928,12 @@
 				.appendTo($kept);
 			$wrap.prepend($kept);
 		}
+
+		// The page was drawn with an empty file field. The photo is back in the
+		// field, so the framing prompt and a leftover Required error are stale.
+		$wrap.find('.remember-register-photo-framing').hide();
+		$wrap.find('.remember-field-error').remove();
+		$file.removeClass('remember-field-invalid').removeAttr('aria-invalid');
 	}
 
 	$(function() {
