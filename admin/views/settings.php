@@ -423,9 +423,12 @@ if ( isset( $_POST['remember_settings_action'] ) && check_admin_referer( 'rememb
 	}
 	
 	// Handle social media platform management
+	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-platform-handles.php';
 	if ( 'add_social_platform' === $action ) {
 		global $wpdb;
 		$platform_name = isset( $_POST['new_platform_name'] ) ? sanitize_text_field( wp_unslash( $_POST['new_platform_name'] ) ) : '';
+		$platform_url  = isset( $_POST['new_platform_url'] ) ? Remember_Platform_Handles::sanitize_template( wp_unslash( $_POST['new_platform_url'] ) ) : '';
+		$platform_at   = empty( $_POST['new_platform_show_at'] ) ? 0 : 1;
 		if ( ! empty( $platform_name ) ) {
 			$existing = $wpdb->get_var( $wpdb->prepare(
 				"SELECT platform_id FROM {$wpdb->prefix}remember_social_media_platforms WHERE platform_name = %s",
@@ -436,6 +439,8 @@ if ( isset( $_POST['remember_settings_action'] ) && check_admin_referer( 'rememb
 					$wpdb->prefix . 'remember_social_media_platforms',
 					array(
 						'platform_name' => $platform_name,
+						'url_template'  => $platform_url,
+						'show_at'       => $platform_at,
 						'is_active'     => 1,
 						'sort_order'    => 999,
 						'created_at'    => current_time( 'mysql' ),
@@ -497,16 +502,26 @@ if ( isset( $_POST['remember_settings_action'] ) && check_admin_referer( 'rememb
 				$sort_order = isset( $platform_data['sort_order'] ) && $platform_data['sort_order'] !== '' 
 					? absint( $platform_data['sort_order'] ) 
 					: 0;
+				$posted_url = isset( $platform_data['url_template'] ) ? wp_unslash( $platform_data['url_template'] ) : '';
+				$url_template = Remember_Platform_Handles::sanitize_template( $posted_url );
+				if ( '' !== trim( (string) $posted_url ) && '' === $url_template ) {
+					$error_count++;
+					Remember_Logger::warning( 'Skipped social platform with an invalid profile URL', array( 'platform_id' => $platform_id ) );
+					continue;
+				}
+				$show_at = empty( $platform_data['show_at'] ) ? 0 : 1;
 				
 				$result = $wpdb->update(
 					$wpdb->prefix . 'remember_social_media_platforms',
 					array(
 						'platform_name' => $platform_name,
+						'url_template'  => $url_template,
+						'show_at'       => $show_at,
 						'is_active'     => $is_active,
 						'sort_order'    => $sort_order,
 					),
 					array( 'platform_id' => $platform_id ),
-					array( '%s', '%d', '%d' ),
+					array( '%s', '%s', '%d', '%d', '%d' ),
 					array( '%d' )
 				);
 				
@@ -564,6 +579,8 @@ if ( isset( $_POST['remember_settings_action'] ) && check_admin_referer( 'rememb
 		global $wpdb;
 		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-im-platforms.php';
 		$platform_name = isset( $_POST['new_im_platform_name'] ) ? sanitize_text_field( wp_unslash( $_POST['new_im_platform_name'] ) ) : '';
+		$platform_url  = isset( $_POST['new_im_platform_url'] ) ? Remember_Platform_Handles::sanitize_template( wp_unslash( $_POST['new_im_platform_url'] ) ) : '';
+		$platform_at   = empty( $_POST['new_im_platform_show_at'] ) ? 0 : 1;
 		$platform_key  = isset( $_POST['new_im_platform_key'] ) ? sanitize_key( wp_unslash( $_POST['new_im_platform_key'] ) ) : '';
 		if ( '' === $platform_key && '' !== $platform_name ) {
 			$platform_key = sanitize_key( $platform_name );
@@ -581,11 +598,13 @@ if ( isset( $_POST['remember_settings_action'] ) && check_admin_referer( 'rememb
 					array(
 						'platform_key'  => $platform_key,
 						'platform_name' => $platform_name,
+						'url_template'  => $platform_url,
+						'show_at'       => $platform_at,
 						'is_active'     => 1,
 						'sort_order'    => 999,
 						'created_at'    => current_time( 'mysql' ),
 					),
-					array( '%s', '%s', '%d', '%d', '%s' )
+					array( '%s', '%s', '%s', '%d', '%d', '%d', '%s' )
 				);
 				echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Instant messenger platform added successfully.', 'remember' ) . '</p></div>';
 			} else {
@@ -600,6 +619,7 @@ if ( isset( $_POST['remember_settings_action'] ) && check_admin_referer( 'rememb
 		global $wpdb;
 		if ( isset( $_POST['im_platforms'] ) && is_array( $_POST['im_platforms'] ) ) {
 			$updated = 0;
+			$bad_url = 0;
 			foreach ( $_POST['im_platforms'] as $platform_id => $row ) {
 				$platform_id = absint( $platform_id );
 				if ( $platform_id <= 0 || ! is_array( $row ) ) {
@@ -608,25 +628,37 @@ if ( isset( $_POST['remember_settings_action'] ) && check_admin_referer( 'rememb
 				$name = isset( $row['name'] ) ? sanitize_text_field( wp_unslash( $row['name'] ) ) : '';
 				$sort = isset( $row['sort_order'] ) ? absint( $row['sort_order'] ) : 0;
 				$active = ! empty( $row['is_active'] ) ? 1 : 0;
-				if ( '' === $name ) {
+				$posted_url = isset( $row['url_template'] ) ? wp_unslash( $row['url_template'] ) : '';
+				$url_template = Remember_Platform_Handles::sanitize_template( $posted_url );
+				if ( '' === $name || ( '' !== trim( (string) $posted_url ) && '' === $url_template ) ) {
+					if ( '' !== trim( (string) $posted_url ) && '' === $url_template ) {
+						++$bad_url;
+					}
 					continue;
 				}
+				$show_at = empty( $row['show_at'] ) ? 0 : 1;
 				$ok = $wpdb->update(
 					$wpdb->prefix . 'remember_im_platforms',
 					array(
 						'platform_name' => $name,
+						'url_template'  => $url_template,
+						'show_at'       => $show_at,
 						'sort_order'    => $sort,
 						'is_active'     => $active,
 					),
 					array( 'platform_id' => $platform_id ),
-					array( '%s', '%d', '%d' ),
+					array( '%s', '%s', '%d', '%d', '%d' ),
 					array( '%d' )
 				);
 				if ( false !== $ok ) {
 					++$updated;
 				}
 			}
-			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Instant messenger platforms updated successfully.', 'remember' ) . '</p></div>';
+			if ( $bad_url > 0 ) {
+				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'A profile URL must start with http:// or https:// and contain {handle} once. That row was left unchanged.', 'remember' ) . '</p></div>';
+			} else {
+				echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Instant messenger platforms updated successfully.', 'remember' ) . '</p></div>';
+			}
 		}
 	}
 
@@ -1182,7 +1214,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 		<!-- Social + Instant Messenger Platforms -->
 		<div id="platforms" class="remember-settings-tab" style="display: none;">
 			<h2><?php esc_html_e( 'Platforms', 'remember' ); ?></h2>
-			<p class="description"><?php esc_html_e( 'Social media and instant messenger options members can use on registration and their profile.', 'remember' ); ?></p>
+			<p class="description"><?php esc_html_e( 'Social media and instant messenger options members can use on registration and their profile. A profile URL uses {handle} for the name the member types, such as https://t.me/{handle}. Leave it blank when the name should stay plain text. When Show @ is on, the name is shown with @ in front, and a save that includes @ is refused.', 'remember' ); ?></p>
 
 			<div class="remember-platforms-columns">
 				<div class="remember-platforms-column">
@@ -1195,6 +1227,16 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						<p>
 							<label for="new_platform_name" class="screen-reader-text"><?php esc_html_e( 'Platform Name', 'remember' ); ?></label>
 							<input type="text" id="new_platform_name" name="new_platform_name" class="regular-text" required placeholder="<?php esc_attr_e( 'e.g. Mastodon', 'remember' ); ?>">
+						</p>
+						<p>
+							<label for="new_platform_url" class="screen-reader-text"><?php esc_html_e( 'Profile URL', 'remember' ); ?></label>
+							<input type="text" id="new_platform_url" name="new_platform_url" class="regular-text" placeholder="<?php esc_attr_e( 'https://example.com/{handle}', 'remember' ); ?>">
+						</p>
+						<p>
+							<label>
+								<input type="checkbox" name="new_platform_show_at" value="1">
+								<?php esc_html_e( 'Show @', 'remember' ); ?>
+							</label>
 						</p>
 						<p class="submit" style="margin-top:0;">
 							<input type="submit" class="button button-primary" value="<?php esc_attr_e( 'Add Platform', 'remember' ); ?>">
@@ -1210,6 +1252,8 @@ $im_platforms = Remember_Im_Platforms::get_all();
 								<thead>
 									<tr>
 										<th><?php esc_html_e( 'Platform Name', 'remember' ); ?></th>
+										<th><?php esc_html_e( 'Profile URL', 'remember' ); ?></th>
+										<th><?php esc_html_e( 'Show @', 'remember' ); ?></th>
 										<th><?php esc_html_e( 'Sort', 'remember' ); ?></th>
 										<th><?php esc_html_e( 'Active', 'remember' ); ?></th>
 										<th><?php esc_html_e( 'Actions', 'remember' ); ?></th>
@@ -1221,6 +1265,17 @@ $im_platforms = Remember_Im_Platforms::get_all();
 											<td>
 												<input type="text" name="platforms[<?php echo esc_attr( $platform->platform_id ); ?>][name]"
 													value="<?php echo esc_attr( $platform->platform_name ); ?>" class="regular-text" required>
+											</td>
+											<td>
+												<input type="text" name="platforms[<?php echo esc_attr( $platform->platform_id ); ?>][url_template]"
+													value="<?php echo esc_attr( isset( $platform->url_template ) ? $platform->url_template : '' ); ?>" class="regular-text" placeholder="<?php esc_attr_e( 'https://example.com/{handle}', 'remember' ); ?>">
+											</td>
+											<td>
+												<label>
+													<input type="checkbox" name="platforms[<?php echo esc_attr( $platform->platform_id ); ?>][show_at]"
+														value="1" <?php checked( ! empty( $platform->show_at ) ); ?>>
+													<?php esc_html_e( 'Show @', 'remember' ); ?>
+												</label>
 											</td>
 											<td>
 												<input type="number" name="platforms[<?php echo esc_attr( $platform->platform_id ); ?>][sort_order]"
@@ -1264,6 +1319,16 @@ $im_platforms = Remember_Im_Platforms::get_all();
 							<label for="new_im_platform_name" class="screen-reader-text"><?php esc_html_e( 'Platform Name', 'remember' ); ?></label>
 							<input type="text" id="new_im_platform_name" name="new_im_platform_name" class="regular-text" required placeholder="<?php esc_attr_e( 'e.g. Matrix', 'remember' ); ?>">
 						</p>
+						<p>
+							<label for="new_im_platform_url" class="screen-reader-text"><?php esc_html_e( 'Profile URL', 'remember' ); ?></label>
+							<input type="text" id="new_im_platform_url" name="new_im_platform_url" class="regular-text" placeholder="<?php esc_attr_e( 'https://t.me/{handle}', 'remember' ); ?>">
+						</p>
+						<p>
+							<label>
+								<input type="checkbox" name="new_im_platform_show_at" value="1">
+								<?php esc_html_e( 'Show @', 'remember' ); ?>
+							</label>
+						</p>
 						<p class="submit" style="margin-top:0;">
 							<input type="submit" class="button button-primary" value="<?php esc_attr_e( 'Add Platform', 'remember' ); ?>">
 						</p>
@@ -1278,6 +1343,8 @@ $im_platforms = Remember_Im_Platforms::get_all();
 								<thead>
 									<tr>
 										<th><?php esc_html_e( 'Platform Name', 'remember' ); ?></th>
+										<th><?php esc_html_e( 'Profile URL', 'remember' ); ?></th>
+										<th><?php esc_html_e( 'Show @', 'remember' ); ?></th>
 										<th><?php esc_html_e( 'Sort', 'remember' ); ?></th>
 										<th><?php esc_html_e( 'Active', 'remember' ); ?></th>
 										<th><?php esc_html_e( 'Actions', 'remember' ); ?></th>
@@ -1289,6 +1356,17 @@ $im_platforms = Remember_Im_Platforms::get_all();
 											<td>
 												<input type="text" name="im_platforms[<?php echo esc_attr( $platform->platform_id ); ?>][name]"
 													value="<?php echo esc_attr( $platform->platform_name ); ?>" class="regular-text" required>
+											</td>
+											<td>
+												<input type="text" name="im_platforms[<?php echo esc_attr( $platform->platform_id ); ?>][url_template]"
+													value="<?php echo esc_attr( isset( $platform->url_template ) ? $platform->url_template : '' ); ?>" class="regular-text" placeholder="<?php esc_attr_e( 'https://t.me/{handle}', 'remember' ); ?>">
+											</td>
+											<td>
+												<label>
+													<input type="checkbox" name="im_platforms[<?php echo esc_attr( $platform->platform_id ); ?>][show_at]"
+														value="1" <?php checked( ! empty( $platform->show_at ) ); ?>>
+													<?php esc_html_e( 'Show @', 'remember' ); ?>
+												</label>
 											</td>
 											<td>
 												<input type="number" name="im_platforms[<?php echo esc_attr( $platform->platform_id ); ?>][sort_order]"
