@@ -377,6 +377,10 @@ class Remember_QuickBooks_Sync {
 		}
 
 		if ( empty( $line_items ) ) {
+			Remember_Logger::warning(
+				'QuickBooks invoice skipped: no mapped line items',
+				array( 'application_id' => (int) $application_id )
+			);
 			return new WP_Error( 'no_line_items', __( 'No line items available. Map event roles and catalog products to QuickBooks under Settings → QuickBooks.', 'remember' ) );
 		}
 

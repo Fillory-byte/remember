@@ -800,6 +800,15 @@ class Remember_Profile_Duplicates {
 			return new WP_Error( 'invalid_survivor', __( 'Pick which profile remains.', 'remember' ) );
 		}
 		$locked_id = $survivor_id === (int) $hit->member_a_id ? (int) $hit->member_b_id : (int) $hit->member_a_id;
+
+		// Merging copies the password hash and email onto the survivor, so the current
+		// user must be allowed to administer both accounts: non-admins may merge members
+		// but not administrators.
+		if ( ! Remember_Capabilities::current_user_can_administer_account( $survivor_id )
+			|| ! Remember_Capabilities::current_user_can_administer_account( $locked_id ) ) {
+			return new WP_Error( 'cannot_merge_privileged', __( 'You do not have permission to merge these accounts.', 'remember' ) );
+		}
+
 		$snap_a    = self::snapshot( (int) $hit->member_a_id );
 		$snap_b    = self::snapshot( (int) $hit->member_b_id );
 		$by_side   = array(
@@ -1285,6 +1294,13 @@ class Remember_Profile_Duplicates {
 		$b_id = absint( $payload['b']['member_id'] );
 		if ( $a_id < 1 || $b_id < 1 ) {
 			return new WP_Error( 'no_snapshot', __( 'The stored merge snapshot is incomplete.', 'remember' ) );
+		}
+
+		// undo() rewrites user_pass and user_email for both accounts from the stored
+		// snapshot, so apply the same account-administration boundary as merge().
+		if ( ! Remember_Capabilities::current_user_can_administer_account( $a_id )
+			|| ! Remember_Capabilities::current_user_can_administer_account( $b_id ) ) {
+			return new WP_Error( 'cannot_merge_privileged', __( 'You do not have permission to undo a merge involving these accounts.', 'remember' ) );
 		}
 
 		global $wpdb;

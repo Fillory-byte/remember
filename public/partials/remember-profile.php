@@ -263,6 +263,9 @@ if ( isset( $_POST['remember_profile_action'] ) && check_admin_referer( 'remembe
 
 	do_action( 'remember_member_profile_saved', $user->ID );
 
+	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-logger.php';
+	Remember_Logger::info( 'Member profile saved', array( 'member_id' => (int) $user->ID ) );
+
 	if ( $change_password ) {
 		wp_set_password( $new_password, $user->ID );
 		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-duplicates.php';

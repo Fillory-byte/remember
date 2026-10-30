@@ -19,15 +19,40 @@ class Remember_Notifications {
 	/**
 	 * Send a notification by type with placeholder context.
 	 *
+	 * The outcome is logged here, where it is known: Info when the mail is sent,
+	 * Warning when it is not sent for an expected reason (template off or an
+	 * invalid address), and Error when wp_mail() itself fails. Only ids and the
+	 * result are logged — never the subject, body, names, or (except on Error,
+	 * so the line can be matched to the SMTP log) the recipient address.
+	 *
 	 * @param string $type    Notification type key.
 	 * @param array  $context Placeholder values (without braces).
 	 * @param string $to      Recipient email.
+	 * @param array  $args {
+	 *     Optional.
+	 *     @type bool $quiet When true, suppress the per-message "sent" / "not sent"
+	 *                       lines because the caller logs its own sent-count summary
+	 *                       (staff broadcasts). A hard send failure is still logged.
+	 * }
 	 * @return bool|WP_Error True on success, false if disabled, WP_Error on failure.
 	 */
-	public static function send( $type, $context, $to ) {
+	public static function send( $type, $context, $to, $args = array() ) {
 		require_once plugin_dir_path( __FILE__ ) . '../models/class-notification-setting.php';
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
 		$model  = new Remember_Notification_Setting();
 		$setting = $model->get_by_type( $type );
+
+		$quiet   = ! empty( $args['quiet'] );
+		$log_ctx = array( 'type' => $type );
+		if ( ! empty( $context['member_id'] ) ) {
+			$log_ctx['member_id'] = (int) $context['member_id'];
+		}
+		if ( ! empty( $context['application_id'] ) ) {
+			$log_ctx['application_id'] = (int) $context['application_id'];
+		}
+		if ( ! empty( $context['event_id'] ) ) {
+			$log_ctx['event_id'] = (int) $context['event_id'];
+		}
 
 		$enabled = true;
 		$subject = Remember_Notification_Setting::get_default_subject( $type );
@@ -44,11 +69,17 @@ class Remember_Notifications {
 		}
 
 		if ( ! $enabled ) {
+			if ( ! $quiet ) {
+				Remember_Logger::warning( 'Notification email not sent: template is turned off', $log_ctx );
+			}
 			return false;
 		}
 
 		$to = sanitize_email( $to );
 		if ( ! is_email( $to ) ) {
+			if ( ! $quiet ) {
+				Remember_Logger::warning( 'Notification email not sent: invalid recipient address', $log_ctx );
+			}
 			return new WP_Error( 'remember_notify_bad_email', __( 'Invalid recipient email.', 'remember' ) );
 		}
 
@@ -63,7 +94,16 @@ class Remember_Notifications {
 		$sent    = wp_mail( $to, $subject, $body, $headers );
 
 		if ( ! $sent ) {
+			// A hard send failure always gets its own line, with the address so it can be matched to the SMTP log.
+			Remember_Logger::error(
+				'Notification email failed to send',
+				array_merge( $log_ctx, array( 'to' => $to ) )
+			);
 			return new WP_Error( 'remember_notify_send_failed', __( 'Failed to send notification email.', 'remember' ) );
+		}
+
+		if ( ! $quiet ) {
+			Remember_Logger::info( 'Notification email sent', $log_ctx );
 		}
 
 		return true;
@@ -561,6 +601,14 @@ class Remember_Notifications {
 		foreach ( (array) $emails as $email ) {
 			$user = get_user_by( 'email', $email );
 			if ( $user && in_array( $type, self::user_opted_out_types( (int) $user->ID ), true ) ) {
+				require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
+				Remember_Logger::info(
+					'Staff notification skipped: recipient turned this email off',
+					array(
+						'type'    => $type,
+						'user_id' => (int) $user->ID,
+					)
+				);
 				continue;
 			}
 			$kept[] = $email;
@@ -924,21 +972,23 @@ class Remember_Notifications {
 		}
 
 		$context = self::context_for_member( (int) $case->member_id, $extra );
+		$sent    = 0;
 		foreach ( $emails as $email ) {
-			$result = self::send( $type, $context, $email );
-			if ( is_wp_error( $result ) ) {
-				require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
-				Remember_Logger::warning(
-					'Vetting staff email failed',
-					array(
-						'type'       => $type,
-						'vetting_id' => $vetting_id,
-						'to'         => $email,
-						'error'      => $result->get_error_message(),
-					)
-				);
+			if ( true === self::send( $type, $context, $email, array( 'quiet' => true ) ) ) {
+				++$sent;
 			}
 		}
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
+		Remember_Logger::info(
+			'Vetting staff email sent',
+			array(
+				'type'       => $type,
+				'vetting_id' => $vetting_id,
+				'member_id'  => (int) $case->member_id,
+				'sent'       => $sent,
+				'recipients' => count( $emails ),
+			)
+		);
 	}
 
 	/**
@@ -1018,20 +1068,21 @@ class Remember_Notifications {
 		}
 
 		$context = self::context_for_member( $member_id );
+		$sent    = 0;
 		foreach ( $emails as $email ) {
-			$result = self::send( 'member_registered', $context, $email );
-			if ( is_wp_error( $result ) ) {
-				require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
-				Remember_Logger::warning(
-					'Member registration admin email failed',
-					array(
-						'member_id' => $member_id,
-						'to'        => $email,
-						'error'     => $result->get_error_message(),
-					)
-				);
+			if ( true === self::send( 'member_registered', $context, $email, array( 'quiet' => true ) ) ) {
+				++$sent;
 			}
 		}
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
+		Remember_Logger::info(
+			'New member registration emailed to staff',
+			array(
+				'member_id'  => $member_id,
+				'sent'       => $sent,
+				'recipients' => count( $emails ),
+			)
+		);
 	}
 
 	/**
@@ -1058,17 +1109,8 @@ class Remember_Notifications {
 			return;
 		}
 
-		$result = self::send( 'member_profile_saved', self::context_for_member( $member_id ), $user->user_email );
-		if ( is_wp_error( $result ) ) {
-			require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
-			Remember_Logger::warning(
-				'Profile saved email failed',
-				array(
-					'member_id' => $member_id,
-					'error'     => $result->get_error_message(),
-				)
-			);
-		}
+		// send() logs the outcome (Info sent / Warning not-sent / Error failed) with the member id.
+		self::send( 'member_profile_saved', self::context_for_member( $member_id ), $user->user_email );
 	}
 
 	/**
@@ -1099,16 +1141,8 @@ class Remember_Notifications {
 			return;
 		}
 
-		$member_result = self::send( 'event_application_submitted', $context['placeholders'], $context['email'] );
-		if ( is_wp_error( $member_result ) ) {
-			Remember_Logger::warning(
-				'Application submitted email failed',
-				array(
-					'application_id' => $application_id,
-					'error'          => $member_result->get_error_message(),
-				)
-			);
-		}
+		// send() logs the member outcome with the application id.
+		self::send( 'event_application_submitted', $context['placeholders'], $context['email'] );
 
 		require_once plugin_dir_path( __FILE__ ) . '../models/class-application.php';
 		$application = ( new Remember_Application() )->get( $application_id );
@@ -1125,18 +1159,20 @@ class Remember_Notifications {
 			return;
 		}
 
+		$sent = 0;
 		foreach ( $emails as $email ) {
-			$result = self::send( 'application_received', $context['placeholders'], $email );
-			if ( is_wp_error( $result ) ) {
-				Remember_Logger::warning(
-					'Application received email failed',
-					array(
-						'application_id' => $application_id,
-						'error'          => $result->get_error_message(),
-					)
-				);
+			if ( true === self::send( 'application_received', $context['placeholders'], $email, array( 'quiet' => true ) ) ) {
+				++$sent;
 			}
 		}
+		Remember_Logger::info(
+			'Application received emailed to staff',
+			array(
+				'application_id' => $application_id,
+				'sent'           => $sent,
+				'recipients'     => count( $emails ),
+			)
+		);
 	}
 
 	/**
@@ -1173,29 +1209,19 @@ class Remember_Notifications {
 		);
 		$sent = 0;
 		foreach ( $emails as $email ) {
-			$result = self::send( 'vetting_case_failed', $context, $email );
-			if ( true === $result ) {
+			// send() logs a hard failure per recipient (with address); we summarize the count.
+			if ( true === self::send( 'vetting_case_failed', $context, $email, array( 'quiet' => true ) ) ) {
 				++$sent;
-			} elseif ( is_wp_error( $result ) ) {
-				Remember_Logger::error(
-					'Vetting case failure admin email failed',
-					array(
-						'member_id' => $member_id,
-						'to'        => $email,
-						'error'     => $result->get_error_message(),
-					)
-				);
 			}
 		}
-		if ( $sent > 0 ) {
-			Remember_Logger::info(
-				'Vetting case failure emailed to admins',
-				array(
-					'member_id' => $member_id,
-					'sent'      => $sent,
-				)
-			);
-		}
+		Remember_Logger::info(
+			'Vetting case failure emailed to admins',
+			array(
+				'member_id'  => $member_id,
+				'sent'       => $sent,
+				'recipients' => count( $emails ),
+			)
+		);
 	}
 
 	/**
@@ -1227,21 +1253,8 @@ class Remember_Notifications {
 			)
 		);
 
-		$result = self::send( $type, $context, $user->user_email );
-		if ( is_wp_error( $result ) ) {
-			require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
-			Remember_Logger::warning(
-				'Vetting result email failed',
-				array(
-					'member_id'  => $member_id,
-					'vetting_id' => absint( $vetting_id ),
-					'decision'   => $decision,
-					'error'      => $result->get_error_message(),
-				)
-			);
-		}
-
-		return $result;
+		// send() logs the outcome with the member id.
+		return self::send( $type, $context, $user->user_email );
 	}
 
 	/**

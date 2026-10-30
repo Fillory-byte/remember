@@ -258,6 +258,14 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 			wp_die( __( 'You do not have sufficient permissions to perform this action.', 'remember' ), __( 'Access Denied', 'remember' ), array( 'response' => 403 ) );
 		}
 
+		// The target must be a real reMember member, and the current user must be
+		// allowed to administer that WordPress account: non-admins may edit members
+		// but not administrators.
+		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-capabilities.php';
+		if ( ! $member_model->get( $member_id ) || ! Remember_Capabilities::current_user_can_administer_account( $member_id ) ) {
+			wp_die( __( 'You do not have sufficient permissions to perform this action.', 'remember' ), __( 'Access Denied', 'remember' ), array( 'response' => 403 ) );
+		}
+
 		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-clothing-sizes.php';
 		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-im-platforms.php';
 		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-fields.php';

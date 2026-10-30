@@ -1638,7 +1638,8 @@ class Remember_Admin {
 		if ( 'setup_pages' === $action ) {
 			$default_pages = Remember_Page_Creator::get_default_pages();
 			$pages_created = 0;
-			$pages_linked = 0;
+			$pages_linked  = 0;
+			$pages_refused = 0;
 			
 			foreach ( $default_pages as $key => $page_data ) {
 				$selection = isset( $_POST[ 'page_' . $key ] ) ? sanitize_text_field( $_POST[ 'page_' . $key ] ) : 'skip';
@@ -1650,26 +1651,34 @@ class Remember_Admin {
 						$pages_created++;
 					}
 				} elseif ( 'skip' !== $selection && is_numeric( $selection ) ) {
-					// Link to existing page - add shortcode if not already present
+					// Link to existing page - add shortcode if not already present.
 					$page_id = absint( $selection );
-					$page = get_post( $page_id );
-					
-					if ( $page && 'page' === $page->post_type ) {
-						// Store the mapping
-						$created_pages = Remember_Page_Creator::get_created_pages();
-						$created_pages[ $key ] = $page_id;
-						update_option( 'remember_created_pages', $created_pages );
-						
-						// Add shortcode to page if not already present
-						if ( strpos( $page->post_content, $page_data['shortcode'] ) === false ) {
-							$new_content = $page->post_content . "\n\n" . $page_data['shortcode'];
-							wp_update_post( array(
-								'ID' => $page_id,
-								'post_content' => $new_content,
-							) );
-						}
-						$pages_linked++;
+					$page    = get_post( $page_id );
+
+					if ( ! $page || 'page' !== $page->post_type ) {
+						continue;
 					}
+					if ( ! current_user_can( 'edit_post', $page_id ) ) {
+						++$pages_refused;
+						continue;
+					}
+
+					// Store the mapping.
+					$created_pages         = Remember_Page_Creator::get_created_pages();
+					$created_pages[ $key ] = $page_id;
+					update_option( 'remember_created_pages', $created_pages );
+
+					// Add shortcode to page if not already present.
+					if ( false === strpos( $page->post_content, $page_data['shortcode'] ) ) {
+						$new_content = $page->post_content . "\n\n" . $page_data['shortcode'];
+						wp_update_post(
+							array(
+								'ID'           => $page_id,
+								'post_content' => $new_content,
+							)
+						);
+					}
+					++$pages_linked;
 				}
 			}
 			
@@ -1696,6 +1705,20 @@ class Remember_Admin {
 				);
 			}
 			
+			if ( $pages_refused > 0 ) {
+				$refused_message = sprintf(
+					/* translators: %d: number of pages */
+					_n(
+						'%d page was not changed because you cannot edit it.',
+						'%d pages were not changed because you cannot edit them.',
+						$pages_refused,
+						'remember'
+					),
+					$pages_refused
+				);
+				$message = '' === $message ? $refused_message : $message . ' ' . $refused_message;
+			}
+
 			if ( $message ) {
 				wp_safe_redirect( add_query_arg( 'pages_setup', urlencode( $message ), admin_url( 'admin.php?page=remember-settings' ) ) );
 			} else {
@@ -1758,8 +1781,6 @@ class Remember_Admin {
 	 */
 	public function ajax_get_event_roles() {
 		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-logger.php';
-		
-		Remember_Logger::debug( 'ajax_get_event_roles: Starting', array( 'POST' => $_POST ) );
 
 		// Admin vs front use different nonces so a front-end nonce cannot unlock the full role list.
 		$context       = isset( $_POST['context'] ) ? sanitize_key( wp_unslash( $_POST['context'] ) ) : 'front';
@@ -1775,8 +1796,7 @@ class Remember_Admin {
 		}
 		
 		$event_id = isset( $_POST['event_id'] ) ? absint( $_POST['event_id'] ) : 0;
-		Remember_Logger::debug( 'ajax_get_event_roles: Event ID', array( 'event_id' => $event_id ) );
-		
+
 		if ( $event_id <= 0 ) {
 			Remember_Logger::error( 'ajax_get_event_roles: Invalid event ID' );
 			wp_send_json_error( array( 'message' => __( 'Invalid event ID.', 'remember' ) ) );
@@ -1786,126 +1806,14 @@ class Remember_Admin {
 		require_once plugin_dir_path( __FILE__ ) . '../includes/models/class-member.php';
 		
 		$event_model = new Remember_Event();
-		$member_model = new Remember_Member();
-		
-		global $wpdb;
-		
-		// Check if show_in_frontend column exists
-		$columns = $wpdb->get_col( "SHOW COLUMNS FROM {$wpdb->prefix}remember_roles" );
-		$has_show_in_frontend = in_array( 'show_in_frontend', $columns, true );
-		Remember_Logger::debug( 'ajax_get_event_roles: Column check', array( 
-			'has_show_in_frontend' => $has_show_in_frontend,
-			'columns' => $columns 
-		) );
 
-		Remember_Logger::debug( 'ajax_get_event_roles: Path check', array(
-			'context'       => $context,
-			'is_admin_path' => $is_admin_path,
-			'user_id'       => get_current_user_id(),
-			'is_logged_in'  => is_user_logged_in(),
-		) );
-		
 		if ( $is_admin_path ) {
 			// Staff creating/editing applications in wp-admin: all event roles.
-			Remember_Logger::debug( 'ajax_get_event_roles: Admin path - getting all roles' );
 			$event_roles = $event_model->get_event_roles( $event_id );
-			Remember_Logger::debug( 'ajax_get_event_roles: Admin results', array( 
-				'count' => count( $event_roles ),
-				'roles' => array_map( function( $r ) { 
-					return array( 
-						'event_role_id' => $r->event_role_id, 
-						'role_id' => $r->role_id,
-						'role_name' => $r->role_name,
-						'show_in_frontend' => isset( $r->show_in_frontend ) ? $r->show_in_frontend : 'not set'
-					); 
-				}, $event_roles )
-			) );
+		} elseif ( is_user_logged_in() ) {
+			$event_roles = $event_model->get_offered_event_roles( $event_id, get_current_user_id() );
 		} else {
-			// For non-admin users, filter at the SQL level:
-			// 1. Only roles the member has assigned (join with member_roles)
-			// 2. Only roles with show_in_frontend != 0
-			// 3. Only event roles (role_type = 'event')
-			if ( is_user_logged_in() ) {
-				$member_id = get_current_user_id();
-				Remember_Logger::debug( 'ajax_get_event_roles: Non-admin logged in user', array( 'member_id' => $member_id ) );
-				
-				// Get member's assigned event role IDs for logging
-				$member_event_role_ids = $member_model->get_member_event_role_ids( $member_id );
-				Remember_Logger::debug( 'ajax_get_event_roles: Member event role IDs', array( 
-					'member_id' => $member_id,
-					'role_ids' => $member_event_role_ids 
-				) );
-				
-				if ( $has_show_in_frontend ) {
-					// Filter by member roles AND show_in_frontend
-					$query = $wpdb->prepare(
-						"SELECT DISTINCT er.*, r.role_name, r.show_in_frontend 
-						FROM {$wpdb->prefix}remember_event_roles er 
-						JOIN {$wpdb->prefix}remember_roles r ON er.role_id = r.role_id 
-						JOIN {$wpdb->prefix}remember_member_roles mr ON r.role_id = mr.role_id 
-						WHERE er.event_id = %d 
-						AND mr.member_id = %d 
-						AND r.role_type = 'event'
-						AND COALESCE(r.show_in_frontend, 1) != 0
-						ORDER BY r.role_name ASC",
-						$event_id,
-						$member_id
-					);
-					Remember_Logger::debug( 'ajax_get_event_roles: Executing SQL with show_in_frontend filter', array( 
-						'query' => $query,
-						'event_id' => $event_id,
-						'member_id' => $member_id
-					) );
-					$event_roles = $wpdb->get_results( $query );
-					Remember_Logger::debug( 'ajax_get_event_roles: Query results', array( 
-						'count' => count( $event_roles ),
-						'roles' => array_map( function( $r ) { 
-							return array( 
-								'event_role_id' => $r->event_role_id, 
-								'role_id' => $r->role_id,
-								'role_name' => $r->role_name,
-								'show_in_frontend' => isset( $r->show_in_frontend ) ? $r->show_in_frontend : 'not set'
-							); 
-						}, $event_roles ),
-						'wpdb_last_error' => $wpdb->last_error
-					) );
-				} else {
-					// Column doesn't exist yet - filter by member roles only
-					$query = $wpdb->prepare(
-						"SELECT DISTINCT er.*, r.role_name 
-						FROM {$wpdb->prefix}remember_event_roles er 
-						JOIN {$wpdb->prefix}remember_roles r ON er.role_id = r.role_id 
-						JOIN {$wpdb->prefix}remember_member_roles mr ON r.role_id = mr.role_id 
-						WHERE er.event_id = %d 
-						AND mr.member_id = %d 
-						AND r.role_type = 'event'
-						ORDER BY r.role_name ASC",
-						$event_id,
-						$member_id
-					);
-					Remember_Logger::debug( 'ajax_get_event_roles: Executing SQL without show_in_frontend filter', array( 
-						'query' => $query,
-						'event_id' => $event_id,
-						'member_id' => $member_id
-					) );
-					$event_roles = $wpdb->get_results( $query );
-					Remember_Logger::debug( 'ajax_get_event_roles: Query results', array( 
-						'count' => count( $event_roles ),
-						'roles' => array_map( function( $r ) { 
-							return array( 
-								'event_role_id' => $r->event_role_id, 
-								'role_id' => $r->role_id,
-								'role_name' => $r->role_name
-							); 
-						}, $event_roles ),
-						'wpdb_last_error' => $wpdb->last_error
-					) );
-				}
-			} else {
-				// Not logged in - return empty (can't apply without being logged in)
-				Remember_Logger::debug( 'ajax_get_event_roles: User not logged in, returning empty' );
-				$event_roles = array();
-			}
+			$event_roles = array();
 		}
 		
 		// Format for response - return event_role_id and role_name
@@ -1917,12 +1825,64 @@ class Remember_Admin {
 			);
 		}
 		
-		Remember_Logger::debug( 'ajax_get_event_roles: Final formatted response', array( 
-			'count' => count( $formatted_roles ),
-			'roles' => $formatted_roles
-		) );
-		
+		// Ids and the result count only — never the request body or the role rows.
+		Remember_Logger::debug(
+			'ajax_get_event_roles',
+			array(
+				'event_id' => $event_id,
+				'context'  => $context,
+				'count'    => count( $formatted_roles ),
+			)
+		);
+
 		wp_send_json_success( $formatted_roles );
+	}
+
+	/**
+	 * Whether the logged-in member may see this event the way the public event list does.
+	 *
+	 * @param int $event_id Event ID.
+	 * @return bool
+	 */
+	private function member_can_read_apply_event( $event_id ) {
+		if ( ! is_user_logged_in() ) {
+			return false;
+		}
+		require_once plugin_dir_path( __FILE__ ) . '../includes/models/class-event.php';
+		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-event-invites.php';
+		$event = ( new Remember_Event() )->get( absint( $event_id ) );
+		return Remember_Event_Invites::member_can_see( $event, get_current_user_id() );
+	}
+
+	/**
+	 * Whether the public apply form would offer this role to the current member.
+	 *
+	 * @param int $event_id      Event ID.
+	 * @param int $event_role_id Event role row ID.
+	 * @return bool
+	 */
+	private function member_offered_apply_role( $event_id, $event_role_id ) {
+		require_once plugin_dir_path( __FILE__ ) . '../includes/models/class-event.php';
+		return ( new Remember_Event() )->member_offered_event_role( $event_id, get_current_user_id(), $event_role_id );
+	}
+
+	/**
+	 * Log a refused apply-form lookup. Ids only.
+	 *
+	 * @param int    $event_id Event ID.
+	 * @param string $lookup   addons, agreements, or survey.
+	 * @return void
+	 */
+	private function log_apply_lookup_denied( $event_id, $lookup ) {
+		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-logger.php';
+		Remember_Logger::warning(
+			'Apply lookup refused',
+			array(
+				'lookup'    => $lookup,
+				'event_id'  => absint( $event_id ),
+				'member_id' => get_current_user_id(),
+			)
+		);
 	}
 
 	/**
@@ -1937,6 +1897,14 @@ class Remember_Admin {
 		$event_role_id = isset( $_POST['event_role_id'] ) ? absint( $_POST['event_role_id'] ) : 0;
 		if ( $event_id <= 0 ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid event ID.', 'remember' ) ) );
+		}
+		if ( ! is_user_logged_in() || ! $this->member_can_read_apply_event( $event_id ) ) {
+			$this->log_apply_lookup_denied( $event_id, 'addons' );
+			wp_send_json_error( array( 'message' => __( 'You cannot view this event.', 'remember' ) ) );
+		}
+		if ( $event_role_id > 0 && ! $this->member_offered_apply_role( $event_id, $event_role_id ) ) {
+			$this->log_apply_lookup_denied( $event_id, 'addons' );
+			wp_send_json_error( array( 'message' => __( 'That role is not available.', 'remember' ) ) );
 		}
 
 		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-addon-role-limits.php';
@@ -1974,8 +1942,9 @@ class Remember_Admin {
 		if ( $event_id <= 0 ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid event ID.', 'remember' ) ) );
 		}
-		if ( ! is_user_logged_in() ) {
-			wp_send_json_error( array( 'message' => __( 'You must be logged in.', 'remember' ) ) );
+		if ( ! is_user_logged_in() || ! $this->member_can_read_apply_event( $event_id ) ) {
+			$this->log_apply_lookup_denied( $event_id, 'agreements' );
+			wp_send_json_error( array( 'message' => __( 'You cannot view this event.', 'remember' ) ) );
 		}
 
 		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-agreements.php';
@@ -1998,6 +1967,16 @@ class Remember_Admin {
 		$event_role_id = isset( $_POST['event_role_id'] ) ? absint( $_POST['event_role_id'] ) : 0;
 		if ( $event_id <= 0 || ! is_user_logged_in() ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid event.', 'remember' ) ) );
+		}
+		if ( ! $this->member_can_read_apply_event( $event_id ) ) {
+			$this->log_apply_lookup_denied( $event_id, 'survey' );
+			wp_send_json_error( array( 'message' => __( 'You cannot view this event.', 'remember' ) ) );
+		}
+		if ( $event_role_id < 1 || ! $this->member_offered_apply_role( $event_id, $event_role_id ) ) {
+			if ( $event_role_id > 0 ) {
+				$this->log_apply_lookup_denied( $event_id, 'survey' );
+			}
+			wp_send_json_success( array( 'html' => '' ) );
 		}
 
 		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-surveys.php';

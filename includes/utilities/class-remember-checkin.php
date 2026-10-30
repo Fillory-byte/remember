@@ -109,6 +109,25 @@ class Remember_Checkin {
 	public static function check_in( $code, $event_id ) {
 		$found = self::inspect( $code, $event_id );
 		if ( 'ready' !== $found['result'] || empty( $found['row'] ) ) {
+			$found_app_id = ! empty( $found['row']->application_id ) ? (int) $found['row']->application_id : 0;
+			if ( 'already' === $found['result'] ) {
+				Remember_Logger::info(
+					'Check-in skipped: attendee already checked in',
+					array(
+						'application_id' => $found_app_id,
+						'event_id'       => absint( $event_id ),
+					)
+				);
+			} else {
+				Remember_Logger::warning(
+					'Check-in code rejected',
+					array(
+						'result'         => $found['result'],
+						'application_id' => $found_app_id,
+						'event_id'       => absint( $event_id ),
+					)
+				);
+			}
 			return $found;
 		}
 
@@ -139,6 +158,13 @@ class Remember_Checkin {
 
 		$row = self::application_row( $found['row']->application_id );
 		if ( empty( $saved ) ) {
+			Remember_Logger::info(
+				'Check-in skipped: attendee already checked in',
+				array(
+					'application_id' => (int) $found['row']->application_id,
+					'event_id'       => absint( $event_id ),
+				)
+			);
 			return array( 'result' => 'already', 'row' => $row );
 		}
 
