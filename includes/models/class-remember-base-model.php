@@ -254,14 +254,16 @@ abstract class Remember_Base_Model {
 	 * Matches a partial term against the account (login, email, display name)
 	 * and the profile (legal first / last / full name). When the term holds at
 	 * least 3 digits it also matches the stored cell phone with punctuation
-	 * stripped, so "555-1019" finds "+18055551019". Callers OR in any extra
-	 * columns of their own (member number, event name) and join the profiles
-	 * table as `p` and the users table as `u`.
+	 * stripped, so "555-1019" finds "+18055551019" (skipped for lists that do
+	 * not show a phone). Callers OR in any extra columns of their own (member
+	 * number, event name) and join the profiles table as `p` and the users
+	 * table as `u`.
 	 *
-	 * @param string $term Raw search term.
+	 * @param string $term         Raw search term.
+	 * @param bool   $include_phone Whether to match the cell phone.
 	 * @return array { @type string[] $conditions SQL LIKE fragments. @type string[] $params One %s value per fragment. }
 	 */
-	protected function person_search_clauses( $term ) {
+	protected function person_search_clauses( $term, $include_phone = true ) {
 		$term = trim( (string) $term );
 		$like = '%' . $this->wpdb->esc_like( $term ) . '%';
 
@@ -276,7 +278,7 @@ abstract class Remember_Base_Model {
 		$params     = array_fill( 0, count( $conditions ), $like );
 
 		$digits = preg_replace( '/\D+/', '', $term );
-		if ( strlen( $digits ) >= 3 ) {
+		if ( $include_phone && strlen( $digits ) >= 3 ) {
 			$conditions[] = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(p.cell_phone, '+', ''), ' ', ''), '-', ''), '(', ''), ')', ''), '.', '') LIKE %s";
 			$params[]     = '%' . $this->wpdb->esc_like( $digits ) . '%';
 		}

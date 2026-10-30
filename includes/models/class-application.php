@@ -197,7 +197,7 @@ class Remember_Application extends Remember_Base_Model {
 	 * @param array $args {
 	 *     @type int    $event_id Event filter, or 0 for all.
 	 *     @type string $status   Status filter, or '' for all.
-	 *     @type string $search   Member name (display or legal) / email / login / phone / event-name search.
+	 *     @type string $search   Member name (display or legal) / email / login / event-name search.
 	 *     @type int    $per_page Rows per page.
 	 *     @type int    $paged    1-based page number.
 	 * }
@@ -234,7 +234,7 @@ class Remember_Application extends Remember_Base_Model {
 			$params[] = (string) $args['status'];
 		}
 		if ( '' !== trim( (string) $args['search'] ) ) {
-			$search       = $this->person_search_clauses( $args['search'] );
+			$search       = $this->person_search_clauses( $args['search'], false );
 			$conditions   = $search['conditions'];
 			$conditions[] = 'e.event_name LIKE %s';
 			$where[]      = '(' . implode( ' OR ', $conditions ) . ')';
