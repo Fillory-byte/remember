@@ -247,4 +247,48 @@ abstract class Remember_Base_Model {
 
 		return (int) $this->wpdb->get_var( $query );
 	}
+
+	/**
+	 * Build the shared "find a person" search conditions for the admin lists.
+	 *
+	 * A partial term matches the account (login, email, display name) and the
+	 * profile (legal first name, legal last name, and the full legal name).
+	 * When the term holds at least 3 digits it also matches the stored cell
+	 * phone with punctuation stripped, so "555-1019" finds "+18055551019".
+	 * Lists that do not show a phone skip that match. Callers OR in any extra
+	 * columns of their own (member number, event name) and join the profiles
+	 * table as `p` and the users table as `u`.
+	 *
+	 * @param string $term          Raw search term.
+	 * @param bool   $include_phone Whether to match the cell phone.
+	 * @return array {
+	 *     @type string[] $conditions SQL LIKE fragments.
+	 *     @type string[] $params     One %s value per fragment.
+	 * }
+	 */
+	protected function person_search_clauses( $term, $include_phone = true ) {
+		$term = trim( (string) $term );
+		$like = '%' . $this->wpdb->esc_like( $term ) . '%';
+
+		$conditions = array(
+			'u.display_name LIKE %s',
+			'u.user_email LIKE %s',
+			'u.user_login LIKE %s',
+			'p.legal_first_name LIKE %s',
+			'p.legal_last_name LIKE %s',
+			"CONCAT_WS(' ', p.legal_first_name, p.legal_last_name) LIKE %s",
+		);
+		$params     = array_fill( 0, count( $conditions ), $like );
+
+		$digits = preg_replace( '/\D+/', '', $term );
+		if ( $include_phone && strlen( $digits ) >= 3 ) {
+			$conditions[] = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(p.cell_phone, '+', ''), ' ', ''), '-', ''), '(', ''), ')', ''), '.', '') LIKE %s";
+			$params[]     = '%' . $this->wpdb->esc_like( $digits ) . '%';
+		}
+
+		return array(
+			'conditions' => $conditions,
+			'params'     => $params,
+		);
+	}
 }

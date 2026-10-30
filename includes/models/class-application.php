@@ -191,13 +191,13 @@ class Remember_Application extends Remember_Base_Model {
 	 * Paginated, searchable application list for the admin screen.
 	 *
 	 * The event/status filters, the member/event search, ordering and paging all
-	 * run in SQL (joined to wp_users and the events table) so only one page of
-	 * rows is returned regardless of how many applications exist.
+	 * run in SQL (joined to wp_users, the profiles table, and the events table)
+	 * so only one page of rows is returned regardless of how many applications exist.
 	 *
 	 * @param array $args {
 	 *     @type int    $event_id Event filter, or 0 for all.
 	 *     @type string $status   Status filter, or '' for all.
-	 *     @type string $search   Member name / email / login / event-name search.
+	 *     @type string $search   Member name (display or legal) / email / login / event-name search.
 	 *     @type int    $per_page Rows per page.
 	 *     @type int    $paged    1-based page number.
 	 * }
@@ -219,7 +219,8 @@ class Remember_Application extends Remember_Base_Model {
 
 		$from = " FROM {$apps_table} a
 			INNER JOIN {$wpdb->users} u ON u.ID = a.member_id
-			LEFT JOIN {$events_table} e ON e.event_id = a.event_id";
+			LEFT JOIN {$events_table} e ON e.event_id = a.event_id
+			LEFT JOIN {$wpdb->prefix}remember_member_profiles p ON p.member_id = a.member_id";
 
 		$where  = array();
 		$params = array();
@@ -233,12 +234,11 @@ class Remember_Application extends Remember_Base_Model {
 			$params[] = (string) $args['status'];
 		}
 		if ( '' !== trim( (string) $args['search'] ) ) {
-			$like     = '%' . $wpdb->esc_like( trim( (string) $args['search'] ) ) . '%';
-			$where[]  = '(u.display_name LIKE %s OR u.user_email LIKE %s OR u.user_login LIKE %s OR e.event_name LIKE %s)';
-			$params[] = $like;
-			$params[] = $like;
-			$params[] = $like;
-			$params[] = $like;
+			$search       = $this->person_search_clauses( $args['search'], false );
+			$conditions   = $search['conditions'];
+			$conditions[] = 'e.event_name LIKE %s';
+			$where[]      = '(' . implode( ' OR ', $conditions ) . ')';
+			$params       = array_merge( $params, $search['params'], array( '%' . $wpdb->esc_like( trim( (string) $args['search'] ) ) . '%' ) );
 		}
 
 		$where_sql = $where ? ' WHERE ' . implode( ' AND ', $where ) : '';
