@@ -68,7 +68,7 @@ if ( isset( $_POST['remember_member_application_action'] ) && check_admin_refere
 				}
 			}
 			if ( '' !== $role_error ) {
-				echo '<div class="remember-notice remember-error"><p>' . esc_html( $role_error ) . '</p></div>';
+				echo '<div class="remember-notice remember-error" role="alert"><p>' . esc_html( $role_error ) . '</p></div>';
 			} else {
 			if ( $new_event_role_id > 0 && $new_event_role_id !== absint( $application->event_role_id ) ) {
 				$application_model->update( $application_id, array( 'event_role_id' => $new_event_role_id ) );
