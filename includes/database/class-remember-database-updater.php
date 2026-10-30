@@ -1859,6 +1859,18 @@ class Remember_Database_Updater {
 			}
 		}
 
+		// Update to 2.4.3 (platform profile addresses, and Telegram names stored without @).
+		if ( version_compare( get_option( 'remember_db_version', '0.0.0' ), '2.4.3', '<' ) ) {
+			Remember_Logger::info( 'Updating database schema', array( 'from' => get_option( 'remember_db_version', '0.0.0' ), 'to' => '2.4.3' ) );
+			require_once plugin_dir_path( __FILE__ ) . '../utilities/class-remember-platform-handles.php';
+			if ( Remember_Platform_Handles::install() ) {
+				update_option( 'remember_db_version', '2.4.3' );
+				Remember_Logger::info( 'Database schema updated successfully', array( 'version' => '2.4.3' ) );
+			} else {
+				Remember_Logger::error( 'Failed to add platform profile addresses', array( 'error' => $wpdb->last_error ) );
+			}
+		}
+
 		// Always re-ensure health catalogs (idempotent). Catches sites that stalled mid-migration
 		// or activated before catalog seed rows were added.
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-seeder.php';

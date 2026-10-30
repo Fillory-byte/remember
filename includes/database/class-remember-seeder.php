@@ -315,6 +315,20 @@ class Remember_Seeder {
 				);
 			}
 		}
+
+		require_once plugin_dir_path( __FILE__ ) . '../utilities/class-remember-platform-handles.php';
+		$cols = $this->wpdb->get_col( "SHOW COLUMNS FROM {$table_name}", 0 );
+		if ( is_array( $cols ) && in_array( 'url_template', $cols, true ) ) {
+			foreach ( Remember_Platform_Handles::social_templates() as $name => $template ) {
+				$this->wpdb->query(
+					$this->wpdb->prepare(
+						"UPDATE {$table_name} SET url_template = %s WHERE platform_name = %s AND (url_template IS NULL OR url_template = '')",
+						$template,
+						$name
+					)
+				);
+			}
+		}
 	}
 
 	/**
@@ -344,17 +358,21 @@ class Remember_Seeder {
 				)
 			);
 			if ( ! $existing ) {
-				$this->wpdb->insert(
-					$table,
-					array(
-						'platform_key'  => $key,
-						'platform_name' => $name,
-						'is_active'     => 1,
-						'sort_order'    => $index,
-						'created_at'    => current_time( 'mysql' ),
-					),
-					array( '%s', '%s', '%d', '%d', '%s' )
+				$row = array(
+					'platform_key'  => $key,
+					'platform_name' => $name,
+					'is_active'     => 1,
+					'sort_order'    => $index,
+					'created_at'    => current_time( 'mysql' ),
 				);
+				$formats = array( '%s', '%s', '%d', '%d', '%s' );
+				$cols    = $this->wpdb->get_col( "SHOW COLUMNS FROM {$table}", 0 );
+				if ( is_array( $cols ) && in_array( 'url_template', $cols, true ) ) {
+					$row['url_template'] = ( 'telegram' === $key ) ? 'https://t.me/{handle}' : '';
+					$row['show_at']      = ( 'telegram' === $key ) ? 1 : 0;
+					$formats             = array( '%s', '%s', '%d', '%d', '%s', '%s', '%d' );
+				}
+				$this->wpdb->insert( $table, $row, $formats );
 			}
 			++$index;
 		}
