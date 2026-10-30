@@ -251,7 +251,11 @@ if ( $selected_application_id > 0 ) {
 	$selected_application = $application_model->get( $selected_application_id );
 	if ( $selected_application && absint( $selected_application->member_id ) === absint( $member_id_for_queries ) ) {
 		$selected_event = $event_model->get( $selected_application->event_id );
-		$selected_event_roles = $event_model->get_event_roles( $selected_application->event_id );
+		$selected_event_roles = $event_model->get_member_application_role_choices(
+			$selected_application->event_id,
+			$member_id_for_queries,
+			$selected_application->event_role_id
+		);
 		foreach ( $selected_event_roles as $role_option ) {
 			if ( absint( $role_option->event_role_id ) === absint( $selected_application->event_role_id ) ) {
 				$selected_event_role = $role_option;
