@@ -1441,7 +1441,7 @@ if ( $view_member_id > 0 ) {
 				<?php } ?>
 
 				<label for="filter_search" class="screen-reader-text"><?php esc_html_e( 'Search members', 'remember' ); ?></label>
-				<input type="search" id="filter_search" name="filter_search" value="<?php echo esc_attr( $filter_search ); ?>" placeholder="<?php esc_attr_e( 'Search name, email, phone, member #', 'remember' ); ?>" style="margin-right: 10px; min-width: 220px;">
+				<input type="search" id="filter_search" name="filter_search" value="<?php echo esc_attr( $filter_search ); ?>" placeholder="<?php esc_attr_e( 'Search name, email, phone, member #', 'remember' ); ?>" style="margin-right: 10px; min-width: 290px; max-width: 100%;">
 
 				<input type="submit" class="button" value="<?php esc_attr_e( 'Filter', 'remember' ); ?>">
 				<?php if ( ! empty( $filter_status ) || $filter_role > 0 || '' !== $filter_search ) : ?>
