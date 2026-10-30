@@ -4,6 +4,7 @@ All notable changes to reMember are listed here. The current plugin version is i
 
 ## 2.2.10
 
+- **Fix:** On the apply form, the profile check starts with CLICK THIS so the underlined words are obviously a link. That link opens the profile in this tab and, after save, returns to the application with the role, add-ons, agreements, and survey answers still filled in. The confirmation phrase is left blank.
 - **Fix:** On the member dashboard, the notice after an application is saved and the notice after it is cancelled use the same green success style as the other forms. Those two notices are announced as status, and the currency error is announced as an alert, so a screen reader speaks them after the page reloads. Thanks to [@Fillory-byte](https://github.com/Fillory-byte) ([PR #147](https://github.com/ctucker1984/remember/pull/147)).
 - **Fix:** A public application is saved only while the event is Open. Changing the role on a pending or waitlisted application from the dashboard uses that same rule: the event must be open and available to that member, and the role must be one the apply form would offer them. A rejected change leaves the application and its add-ons as they were. Thanks to [@Fillory-byte](https://github.com/Fillory-byte) ([PR #148](https://github.com/ctucker1984/remember/pull/148)).
 

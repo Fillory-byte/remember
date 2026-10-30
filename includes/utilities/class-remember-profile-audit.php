@@ -388,8 +388,8 @@ class Remember_Profile_Audit {
 			</label>
 			<p class="remember-form-help remember-profile-currency-confirm__help">
 				<?php if ( $resume ) : ?>
-					<a href="<?php echo esc_url( $profile_url ); ?>" data-remember-profile-return="<?php echo esc_url( $return_url ); ?>">
-						<?php esc_html_e( 'Check your profile and confirm that it is current and accurate, then click save. You will return here with this application still filled in.', 'remember' ); ?>
+					<a href="<?php echo esc_url( $return_url ); ?>" data-remember-profile-return="<?php echo esc_url( $return_url ); ?>">
+						<?php esc_html_e( 'CLICK THIS to check your profile and confirm that it is current and accurate, then click save. You will return here with this application still filled in.', 'remember' ); ?>
 					</a>
 				<?php elseif ( $link_url ) : ?>
 					<a href="<?php echo esc_url( $link_url ); ?>" target="_blank" rel="noopener noreferrer">
