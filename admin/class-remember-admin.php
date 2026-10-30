@@ -1638,7 +1638,8 @@ class Remember_Admin {
 		if ( 'setup_pages' === $action ) {
 			$default_pages = Remember_Page_Creator::get_default_pages();
 			$pages_created = 0;
-			$pages_linked = 0;
+			$pages_linked  = 0;
+			$pages_refused = 0;
 			
 			foreach ( $default_pages as $key => $page_data ) {
 				$selection = isset( $_POST[ 'page_' . $key ] ) ? sanitize_text_field( $_POST[ 'page_' . $key ] ) : 'skip';
@@ -1650,26 +1651,34 @@ class Remember_Admin {
 						$pages_created++;
 					}
 				} elseif ( 'skip' !== $selection && is_numeric( $selection ) ) {
-					// Link to existing page - add shortcode if not already present
+					// Link to existing page - add shortcode if not already present.
 					$page_id = absint( $selection );
-					$page = get_post( $page_id );
-					
-					if ( $page && 'page' === $page->post_type ) {
-						// Store the mapping
-						$created_pages = Remember_Page_Creator::get_created_pages();
-						$created_pages[ $key ] = $page_id;
-						update_option( 'remember_created_pages', $created_pages );
-						
-						// Add shortcode to page if not already present
-						if ( strpos( $page->post_content, $page_data['shortcode'] ) === false ) {
-							$new_content = $page->post_content . "\n\n" . $page_data['shortcode'];
-							wp_update_post( array(
-								'ID' => $page_id,
-								'post_content' => $new_content,
-							) );
-						}
-						$pages_linked++;
+					$page    = get_post( $page_id );
+
+					if ( ! $page || 'page' !== $page->post_type ) {
+						continue;
 					}
+					if ( ! current_user_can( 'edit_post', $page_id ) ) {
+						++$pages_refused;
+						continue;
+					}
+
+					// Store the mapping.
+					$created_pages         = Remember_Page_Creator::get_created_pages();
+					$created_pages[ $key ] = $page_id;
+					update_option( 'remember_created_pages', $created_pages );
+
+					// Add shortcode to page if not already present.
+					if ( false === strpos( $page->post_content, $page_data['shortcode'] ) ) {
+						$new_content = $page->post_content . "\n\n" . $page_data['shortcode'];
+						wp_update_post(
+							array(
+								'ID'           => $page_id,
+								'post_content' => $new_content,
+							)
+						);
+					}
+					++$pages_linked;
 				}
 			}
 			
@@ -1696,6 +1705,20 @@ class Remember_Admin {
 				);
 			}
 			
+			if ( $pages_refused > 0 ) {
+				$refused_message = sprintf(
+					/* translators: %d: number of pages */
+					_n(
+						'%d page was not changed because you cannot edit it.',
+						'%d pages were not changed because you cannot edit them.',
+						$pages_refused,
+						'remember'
+					),
+					$pages_refused
+				);
+				$message = '' === $message ? $refused_message : $message . ' ' . $refused_message;
+			}
+
 			if ( $message ) {
 				wp_safe_redirect( add_query_arg( 'pages_setup', urlencode( $message ), admin_url( 'admin.php?page=remember-settings' ) ) );
 			} else {
