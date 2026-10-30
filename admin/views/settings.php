@@ -2233,7 +2233,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 				<input type="hidden" name="notification_category" id="remember-notification-category" value="vetting">
 
 				<p class="description" style="margin-bottom: 12px;">
-					<?php esc_html_e( 'Configure email notifications and templates. Enable or disable specific notification types and customize the subject and rich-text body. Links in {ticket_url}, {profile_url}, {review_url}, and {vetting_url} become clickable in the sent message.', 'remember' ); ?>
+					<?php esc_html_e( 'Configure email notifications and templates. Enable or disable specific notification types and customize the subject and rich-text body. Links in {ticket_url}, {profile_url}, {review_url}, and {vetting_url} become clickable in the sent message. Staff emails also link the member name, application id, event name, and vetting case id to that record in wp-admin. Those words stay plain text in a member\'s own email.', 'remember' ); ?>
 				</p>
 
 				<?php

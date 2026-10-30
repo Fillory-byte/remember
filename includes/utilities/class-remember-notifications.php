@@ -86,7 +86,8 @@ class Remember_Notifications {
 		$context = self::normalize_context( $context );
 		$subject = self::replace_placeholders( $subject, $context );
 		$body    = self::unwrap_prefixed_url_placeholders( $body );
-		$body    = self::replace_placeholders( $body, self::html_context( $context ) );
+		$link    = in_array( $type, self::admin_notification_types(), true );
+		$body    = self::replace_placeholders( $body, self::html_context( $context, $link ) );
 		$body    = self::repair_doubled_url_schemes( $body );
 		$body    = self::to_html_email( $body );
 
@@ -149,21 +150,70 @@ class Remember_Notifications {
 	/**
 	 * Escape placeholder values for HTML bodies. URL keys stay usable in href.
 	 *
-	 * @param array $context Placeholder map.
+	 * Staff emails also turn the record keys into links to wp-admin: the member
+	 * name, username, and email; the application id; the event name; the vetting
+	 * case id; the assigned vetter; and the two member ids on a duplicate notice.
+	 * A member's own email keeps those words as plain text.
+	 *
+	 * @param array $context      Placeholder map.
+	 * @param bool  $link_records Whether this is a staff email.
 	 * @return array
 	 */
-	private static function html_context( $context ) {
+	private static function html_context( $context, $link_records = false ) {
 		$url_keys = self::url_placeholder_keys();
+		$hrefs    = $link_records ? self::admin_record_hrefs( $context ) : array();
 		$safe     = array();
 		foreach ( (array) $context as $key => $value ) {
 			$value = (string) $value;
-			if ( in_array( $key, $url_keys, true ) ) {
+			if ( isset( $hrefs[ $key ] ) && '' !== $value ) {
+				$safe[ $key ] = '<a href="' . esc_url( $hrefs[ $key ] ) . '">' . esc_html( $value ) . '</a>';
+			} elseif ( in_array( $key, $url_keys, true ) ) {
 				$safe[ $key ] = esc_url( $value );
 			} else {
 				$safe[ $key ] = esc_html( $value );
 			}
 		}
 		return $safe;
+	}
+
+	/**
+	 * Admin URLs for the record keys in a staff email.
+	 *
+	 * @param array $context Placeholder map, including ids that are not printed.
+	 * @return array Map of placeholder key to admin URL.
+	 */
+	private static function admin_record_hrefs( $context ) {
+		$hrefs     = array();
+		$member_id = isset( $context['member_id'] ) ? absint( $context['member_id'] ) : 0;
+		if ( $member_id > 0 ) {
+			$url = admin_url( 'admin.php?page=remember-members&view=' . $member_id );
+			foreach ( array( 'member_name', 'username', 'member_id', 'member_email' ) as $key ) {
+				$hrefs[ $key ] = $url;
+			}
+		}
+		$application_id = isset( $context['application_id'] ) ? absint( $context['application_id'] ) : 0;
+		if ( $application_id > 0 ) {
+			$hrefs['application_id'] = admin_url( 'admin.php?page=remember-applications&view=' . $application_id );
+		}
+		$event_id = isset( $context['event_id'] ) ? absint( $context['event_id'] ) : 0;
+		if ( $event_id > 0 ) {
+			$hrefs['event_name'] = admin_url( 'admin.php?page=remember-events&view=' . $event_id );
+		}
+		$vetting_id = isset( $context['vetting_id'] ) ? absint( $context['vetting_id'] ) : 0;
+		if ( $vetting_id > 0 ) {
+			$hrefs['vetting_id'] = admin_url( 'admin.php?page=remember-vetting&view=' . $vetting_id );
+		}
+		$vetter_id = isset( $context['vetter_id'] ) ? absint( $context['vetter_id'] ) : 0;
+		if ( $vetter_id > 0 ) {
+			$hrefs['vetter_name'] = admin_url( 'admin.php?page=remember-members&view=' . $vetter_id );
+		}
+		foreach ( array( 'member_a_id', 'member_b_id' ) as $key ) {
+			$id = isset( $context[ $key ] ) ? absint( $context[ $key ] ) : 0;
+			if ( $id > 0 ) {
+				$hrefs[ $key ] = admin_url( 'admin.php?page=remember-members&view=' . $id );
+			}
+		}
+		return $hrefs;
 	}
 
 	/**
@@ -963,6 +1013,7 @@ class Remember_Notifications {
 		$extra  = array(
 			'vetting_id'  => $vetting_id,
 			'vetter_name' => $vetter ? $vetter->display_name : '',
+			'vetter_id'   => $vetter ? (int) $case->primary_vetter_id : 0,
 		);
 		if ( 'vetting_scheduled' === $type && ! empty( $case->scheduled_at ) ) {
 			$extra['date'] = date_i18n(
@@ -1444,7 +1495,9 @@ class Remember_Notifications {
 			$payment = ( new Remember_Payment() )->get_by_application( $application_id );
 			$placeholders = array(
 				'member_name'     => $user ? $user->display_name : '',
+				'member_id'       => (string) $application->member_id,
 				'event_name'      => $event ? $event->event_name : '',
+				'event_id'        => $event ? (string) $event->event_id : '',
 				'application_id'  => (string) $application_id,
 				'ticket_id'       => 'RM-' . (int) $application_id,
 				'ticket_url'      => Remember_Ticket::get_ticket_url( $application_id ),
@@ -1472,7 +1525,9 @@ class Remember_Notifications {
 
 		$placeholders = array(
 			'member_name'    => $data['member_name'],
+			'member_id'      => (string) $data['member_id'],
 			'event_name'     => $data['event_name'],
+			'event_id'       => (string) $data['event_id'],
 			'application_id' => (string) $data['application_id'],
 			'ticket_id'      => $data['ticket_id'],
 			'ticket_url'     => Remember_Ticket::get_ticket_url( $data['application_id'] ),
