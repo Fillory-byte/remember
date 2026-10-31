@@ -822,7 +822,7 @@ $status_colors = array(
 			</select>
 
 			<label for="filter_search" class="screen-reader-text"><?php esc_html_e( 'Search applications', 'remember' ); ?></label>
-			<input type="search" id="filter_search" name="filter_search" value="<?php echo esc_attr( $filter_search ); ?>" placeholder="<?php esc_attr_e( 'Search member or event', 'remember' ); ?>" style="margin-right: 10px; min-width: 220px;">
+			<input type="search" id="filter_search" name="filter_search" value="<?php echo esc_attr( $filter_search ); ?>" placeholder="<?php esc_attr_e( 'Search member or event', 'remember' ); ?>" style="margin-right: 10px; min-width: 220px; max-width: 100%;">
 
 			<input type="submit" class="button" value="<?php esc_attr_e( 'Filter', 'remember' ); ?>">
 			<?php if ( $filter_event > 0 || ! empty( $filter_status ) || '' !== $filter_search ) : ?>

@@ -79,6 +79,7 @@ $remember_reg_dietary_ids = Remember_Profile_Fields::catalog_ids_from_request( '
 $remember_reg_medical_ids = Remember_Profile_Fields::catalog_ids_from_request( 'medical_accommodations' );
 $remember_reg_social      = Remember_Profile_Fields::social_slots_from_request();
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-im-platforms.php';
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-platform-handles.php';
 if ( '' === $remember_reg_im_type ) {
 	$remember_reg_im_type = Remember_Im_Platforms::default_key();
 }
@@ -175,9 +176,13 @@ if ( '' === $remember_reg_im_type ) {
 					<select id="remember_reg_im_type" name="remember_reg_im_type" class="remember-register-input remember-register-input--im-type" required>
 						<?php Remember_Im_Platforms::render_options( $remember_reg_im_type ); ?>
 					</select>
-					<input type="text" name="remember_reg_im_handle" id="remember_reg_im_handle" required class="<?php echo esc_attr( $remember_ifc( 'im_handle', 'remember-register-input remember-register-input--im-handle' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'im_handle' ) ); ?>" placeholder="<?php esc_attr_e( 'Handle / username', 'remember' ); ?>"<?php echo $remember_ifa( 'im_handle' ); ?> />
+					<input type="text" name="remember_reg_im_handle" id="remember_reg_im_handle" required class="<?php echo esc_attr( $remember_ifc( 'im_handle', 'remember-register-input remember-register-input--im-handle' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'im_handle' ) ); ?>" placeholder="<?php esc_attr_e( 'Name only', 'remember' ); ?>"<?php echo $remember_ifa( 'im_handle' ); ?> />
 				</div>
-				<?php Remember_Profile_Fields::render_field_error( 'im_handle', $remember_invalid_fields, $remember_field_messages ); ?>
+				<?php
+				$remember_im_row = Remember_Platform_Handles::im_platform( $remember_reg_im_type );
+				Remember_Platform_Handles::render_help( $remember_im_row && ! empty( $remember_im_row->show_at ), 'remember-register-help remember-at-help' );
+				Remember_Profile_Fields::render_field_error( 'im_handle', $remember_invalid_fields, $remember_field_messages );
+				?>
 			</div>
 
 			<h3 class="remember-register-section-title"><?php esc_html_e( 'Address', 'remember' ); ?></h3>
@@ -321,11 +326,23 @@ if ( '' === $remember_reg_im_type ) {
 							<select id="remember_reg_social_platform_<?php echo esc_attr( (string) $i ); ?>" name="social_media[<?php echo esc_attr( (string) $i ); ?>][platform_id]" class="remember-register-input remember-register-input--im-type">
 								<option value=""><?php esc_html_e( '— Select —', 'remember' ); ?></option>
 								<?php foreach ( $social_platforms as $platform ) : ?>
-									<option value="<?php echo esc_attr( $platform->platform_id ); ?>" <?php selected( isset( $remember_reg_social[ $i ] ) ? (int) $remember_reg_social[ $i ]->platform_id : 0, (int) $platform->platform_id ); ?>><?php echo esc_html( $platform->platform_name ); ?></option>
+									<option value="<?php echo esc_attr( $platform->platform_id ); ?>" data-remember-show-at="<?php echo empty( $platform->show_at ) ? '0' : '1'; ?>" <?php selected( isset( $remember_reg_social[ $i ] ) ? (int) $remember_reg_social[ $i ]->platform_id : 0, (int) $platform->platform_id ); ?>><?php echo esc_html( $platform->platform_name ); ?></option>
 								<?php endforeach; ?>
 							</select>
-							<input type="text" name="social_media[<?php echo esc_attr( (string) $i ); ?>][handle]" class="remember-register-input remember-register-input--im-handle" placeholder="<?php esc_attr_e( '@handle', 'remember' ); ?>" value="<?php echo esc_attr( isset( $remember_reg_social[ $i ] ) ? $remember_reg_social[ $i ]->handle : '' ); ?>" />
+							<input type="text" name="social_media[<?php echo esc_attr( (string) $i ); ?>][handle]" class="<?php echo esc_attr( $remember_ifc( 'social_handle_' . $i, 'remember-register-input remember-register-input--im-handle' ) ); ?>" placeholder="<?php esc_attr_e( 'Name only', 'remember' ); ?>" value="<?php echo esc_attr( isset( $remember_reg_social[ $i ] ) ? $remember_reg_social[ $i ]->handle : '' ); ?>"<?php echo $remember_ifa( 'social_handle_' . $i ); ?> />
 						</div>
+						<?php
+						$remember_social_show_at = false;
+						$remember_social_selected = isset( $remember_reg_social[ $i ] ) ? (int) $remember_reg_social[ $i ]->platform_id : 0;
+						foreach ( $social_platforms as $platform ) {
+							if ( (int) $platform->platform_id === $remember_social_selected && ! empty( $platform->show_at ) ) {
+								$remember_social_show_at = true;
+								break;
+							}
+						}
+						Remember_Platform_Handles::render_help( $remember_social_show_at, 'remember-register-help remember-at-help' );
+						Remember_Profile_Fields::render_field_error( 'social_handle_' . $i, $remember_invalid_fields, $remember_field_messages );
+						?>
 					</div>
 				<?php endfor; ?>
 			<?php endif; ?>
@@ -451,3 +468,4 @@ if ( '' === $remember_reg_im_type ) {
 		</form>
 	<?php endif; ?>
 </div>
+<?php Remember_Platform_Handles::print_toggle_script(); ?>

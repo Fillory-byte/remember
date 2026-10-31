@@ -203,6 +203,8 @@ class Remember_Database {
 		$sql = "CREATE TABLE $table_name (
 			platform_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
 			platform_name VARCHAR(100) NOT NULL,
+			url_template VARCHAR(255) DEFAULT NULL,
+			show_at TINYINT(1) DEFAULT 0,
 			is_active BOOLEAN DEFAULT 1,
 			sort_order INT(11) DEFAULT 0,
 			created_at DATETIME NOT NULL,
@@ -224,6 +226,8 @@ class Remember_Database {
 			platform_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
 			platform_key VARCHAR(50) NOT NULL,
 			platform_name VARCHAR(100) NOT NULL,
+			url_template VARCHAR(255) DEFAULT NULL,
+			show_at TINYINT(1) DEFAULT 0,
 			is_active TINYINT(1) DEFAULT 1,
 			sort_order INT(11) DEFAULT 0,
 			created_at DATETIME NOT NULL,

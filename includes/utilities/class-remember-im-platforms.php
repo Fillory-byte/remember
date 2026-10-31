@@ -82,6 +82,8 @@ class Remember_Im_Platforms {
 					'platform_id'   => $i++,
 					'platform_key'  => $key,
 					'platform_name' => $name,
+					'url_template'  => ( 'telegram' === $key ) ? 'https://t.me/{handle}' : '',
+					'show_at'       => ( 'telegram' === $key ) ? 1 : 0,
 					'is_active'     => 1,
 					'sort_order'    => $i,
 				);
@@ -165,9 +167,10 @@ class Remember_Im_Platforms {
 				$found = true;
 			}
 			printf(
-				'<option value="%s" %s>%s</option>',
+				'<option value="%s" %s data-remember-show-at="%d">%s</option>',
 				esc_attr( $key ),
 				selected( $selected, $key, false ),
+				empty( $platform->show_at ) ? 0 : 1,
 				esc_html( (string) $platform->platform_name )
 			);
 		}

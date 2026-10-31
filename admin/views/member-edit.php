@@ -265,12 +265,15 @@ if ( $photo_max_bytes < 1 ) {
 			<td>
 				<?php
 				require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-im-platforms.php';
+				require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-platform-handles.php';
 				$im_selected = ( $view_profile && ! empty( $view_profile->im_type ) ) ? $view_profile->im_type : Remember_Im_Platforms::default_key();
+				$remember_im_row = Remember_Platform_Handles::im_platform( $im_selected );
 				?>
 				<select id="im_type" name="im_type" style="width: 150px;">
 					<?php Remember_Im_Platforms::render_options( $im_selected ); ?>
 				</select>
-				<input type="text" id="im_handle" name="im_handle" class="regular-text" value="<?php echo esc_attr( $view_profile ? $view_profile->im_handle : '' ); ?>" placeholder="<?php esc_attr_e( 'Handle', 'remember' ); ?>" style="margin-left: 10px;">
+				<input type="text" id="im_handle" name="im_handle" class="regular-text" value="<?php echo esc_attr( $view_profile ? $view_profile->im_handle : '' ); ?>" placeholder="<?php esc_attr_e( 'Name only', 'remember' ); ?>" style="margin-left: 10px;">
+				<?php Remember_Platform_Handles::render_help( $remember_im_row && ! empty( $remember_im_row->show_at ), 'description remember-at-help' ); ?>
 			</td>
 		</tr>
 		<?php
@@ -334,7 +337,12 @@ if ( $photo_max_bytes < 1 ) {
 				<tr>
 					<th><label for="social_media_<?php echo esc_attr( $platform->platform_id ); ?>"><?php echo esc_html( $platform->platform_name ); ?></label></th>
 					<td>
-						<input type="text" id="social_media_<?php echo esc_attr( $platform->platform_id ); ?>" name="social_media[<?php echo esc_attr( $platform->platform_id ); ?>]" class="regular-text" value="<?php echo esc_attr( $current_handle ); ?>" placeholder="<?php esc_attr_e( 'Handle/Username', 'remember' ); ?>">
+						<input type="text" id="social_media_<?php echo esc_attr( $platform->platform_id ); ?>" name="social_media[<?php echo esc_attr( $platform->platform_id ); ?>]" class="regular-text" value="<?php echo esc_attr( $current_handle ); ?>" placeholder="<?php esc_attr_e( 'Name only', 'remember' ); ?>">
+						<?php
+						if ( ! empty( $platform->show_at ) ) {
+							Remember_Platform_Handles::render_help( true, 'description remember-at-help' );
+						}
+						?>
 					</td>
 				</tr>
 			<?php endforeach; ?>
@@ -521,6 +529,7 @@ if ( $photo_max_bytes < 1 ) {
 		</tr>
 	</table>
 	
+	<?php Remember_Platform_Handles::print_toggle_script(); ?>
 	<p class="submit">
 		<input type="submit" class="button button-primary" value="<?php esc_attr_e( 'Save Profile', 'remember' ); ?>">
 		<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-members&view=' . $view_member_id ) ); ?>" class="button"><?php esc_html_e( 'Cancel', 'remember' ); ?></a>

@@ -2,6 +2,13 @@
 
 All notable changes to reMember are listed here. The current plugin version is in `remember.php` (`REMEMBER_VERSION`) and [GitHub Releases](https://github.com/ctucker1984/remember/releases).
 
+## 2.2.10
+
+- **Enhancement:** Each social and instant-messenger platform can store a profile address, with `{handle}` standing in for the name the member types. Telegram starts as `https://t.me/{handle}` and shows `@` in front of the name. The name field says not to type `@`. A save that includes `@` is refused. On the attendee list, the member's own profile, and the member record in wp-admin, that name is a link when the platform has an address.
+- **Enhancement:** Staff notification emails link the member name, username, and email to that member in wp-admin, the application id to that application, and the event name to that event. A vetting case id links to the case, the assigned vetter's name links to that member, and the two member ids in a duplicate notice link to those profiles. The same words in a member's own email stay plain text. [#153](https://github.com/ctucker1984/remember/issues/153)
+- **Enhancement:** The admin Members search finds a person from one box by a full or partial username, email, display name, legal name, or phone, including when the display name is not the legal name. The Applications search uses that same name, email, and username match, plus the event name. A phone number is not searched on Applications, because that list does not show one. [#149](https://github.com/ctucker1984/remember/issues/149)
+- **Fix:** On the apply form, the profile check starts with CLICK THIS so the underlined words are obviously a link. That link opens the profile in this tab and, after save, returns to the application with the role, add-ons, agreements, and survey answers still filled in. The confirmation phrase is left blank.
+
 ## 2.2.9.1
 
 - **Fix:** On a pending or waitlisted application, the dashboard role menu lists the roles the apply form would offer that member. The role already on the application stays in the menu when it would no longer be offered, so they can keep it. [#150](https://github.com/ctucker1984/remember/issues/150)

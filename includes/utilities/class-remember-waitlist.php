@@ -194,6 +194,7 @@ class Remember_Waitlist {
 		);
 		return array(
 			'event_name'     => isset( $event->event_name ) ? (string) $event->event_name : '',
+			'event_id'       => isset( $event->event_id ) ? (string) $event->event_id : '',
 			'role_name'      => is_string( $role_name ) ? $role_name : '',
 			'waitlist_count' => (string) $waiting,
 			'date'           => date_i18n( get_option( 'date_format' ) ),
