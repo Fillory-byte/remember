@@ -180,10 +180,11 @@ class Remember_Event_Invites {
 	/**
 	 * Whether the member may see this event on the public list or detail page.
 	 *
-	 * A member whose latest vetting decision was a rejection sees only events
-	 * they were already accepted to. Otherwise, invitees see a private event,
-	 * and anyone who already applied still sees it so they can follow that
-	 * application. Everyone else does not.
+	 * A draft event is seen only by staff who can read events. A member whose
+	 * latest vetting decision was a rejection sees only events they were
+	 * already accepted to. Otherwise, invitees see a private event, and anyone
+	 * who already applied still sees it so they can follow that application.
+	 * Everyone else does not.
 	 *
 	 * @param object|null $event     Event row.
 	 * @param int         $member_id Member ID.
@@ -195,6 +196,9 @@ class Remember_Event_Invites {
 		}
 		$member_id = absint( $member_id );
 		$event_id  = absint( $event->event_id );
+		if ( isset( $event->status ) && 'draft' === (string) $event->status && ( $member_id < 1 || ! user_can( $member_id, 'remember_read_events' ) ) ) {
+			return false;
+		}
 		if ( $member_id > 0 ) {
 			require_once plugin_dir_path( __FILE__ ) . 'class-remember-vetting-workflow.php';
 			require_once plugin_dir_path( __FILE__ ) . '../models/class-member.php';

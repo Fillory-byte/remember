@@ -5,6 +5,7 @@ All notable changes to reMember are listed here. The current plugin version is i
 ## 2.2.11
 
 - **Fix:** A member's status can no longer be changed by posting a hand-made request to the Members screen. That old status action had no button left in the plugin, and it skipped the rule that keeps staff from acting on an administrator's account. Adding a member or converting a WordPress user accepts only Pending Vetting, Unvetted, In Vetting, Vetted, Rejected, or Inactive. Any other value, including Merged, is saved as the usual starting status and logged as a warning. Only the duplicate-merge tool sets Merged. [#155](https://github.com/ctucker1984/remember/issues/155) Reported by [@Fillory-byte](https://github.com/Fillory-byte).
+- **Fix:** A draft event no longer appears on the events list, the event page, or the apply form for members or visitors, including when someone types its event number into the address. Staff who can read events still see drafts on the front end to preview them. Closed, cancelled, and completed events are shown as before. [#156](https://github.com/ctucker1984/remember/issues/156) Reported by [@Fillory-byte](https://github.com/Fillory-byte).
 
 ## 2.2.10
 
