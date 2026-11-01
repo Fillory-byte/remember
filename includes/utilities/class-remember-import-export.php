@@ -726,7 +726,7 @@ class Remember_Import_Export {
 			$status = 'pending_vetting';
 			if ( array_key_exists( 'Status', $row_data ) && '' !== trim( (string) $row_data['Status'] ) ) {
 				$status = strtolower( trim( (string) $row_data['Status'] ) );
-				if ( ! in_array( $status, Remember_Member::statuses(), true ) ) {
+				if ( ! in_array( $status, Remember_Member::assignable_statuses(), true ) ) {
 					Remember_Logger::warning(
 						'Member import rejected status',
 						array(
@@ -735,7 +735,7 @@ class Remember_Import_Export {
 						)
 					);
 					$results['error']++;
-					$results['errors'][] = sprintf( __( 'Row %d: Status is not a member status.', 'remember' ), $row_number );
+					$results['errors'][] = sprintf( __( 'Row %d: Status is not a member status that can be imported. Merged is set only by the duplicate-merge tool.', 'remember' ), $row_number );
 					continue;
 				}
 			}
