@@ -1151,7 +1151,7 @@ if ( $remember_sticky ) {
 		<div class="remember-profile-edit-header">
 			<?php if ( $member && ! empty( $member->photo_url ) ) : ?>
 				<div class="remember-profile-photo-preview remember-profile-photo-preview--header">
-					<img src="<?php echo esc_url( $member->photo_url ); ?>" alt="<?php echo esc_attr( $user->display_name ); ?>">
+					<img src="<?php echo esc_url( $member->photo_url ); ?>" alt="">
 				</div>
 			<?php endif; ?>
 			<h2><?php echo esc_html( $user->display_name ); ?></h2>

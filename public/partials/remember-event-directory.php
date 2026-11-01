@@ -129,7 +129,7 @@ foreach ( $event_roles as $event_role ) {
 				<div class="remember-member-card-header">
 					<?php if ( $photo_url ) : ?>
 						<div class="remember-member-avatar">
-							<img src="<?php echo esc_url( $photo_url ); ?>" alt="<?php echo esc_attr( $user->display_name ); ?>" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;">
+							<img src="<?php echo esc_url( $photo_url ); ?>" alt="" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;">
 						</div>
 					<?php else : ?>
 						<div class="remember-member-avatar">
