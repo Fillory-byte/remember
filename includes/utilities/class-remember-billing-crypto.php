@@ -230,6 +230,66 @@ class Remember_Billing_Crypto {
 	}
 
 	/**
+	 * Why secrets would be stored with the weak fallback, or '' when strong encryption is available.
+	 *
+	 * @return string missing_sodium|missing_key|''
+	 */
+	public static function weak_storage_reason() {
+		if ( ! function_exists( 'sodium_crypto_secretbox' ) ) {
+			return 'missing_sodium';
+		}
+		if ( ! is_string( self::key_bytes() ) ) {
+			return 'missing_key';
+		}
+		return '';
+	}
+
+	/**
+	 * Admin-facing explanation of why secrets cannot be stored safely.
+	 *
+	 * @param string|null $reason A weak_storage_reason() value; defaults to this server's.
+	 * @return string Empty when strong encryption is available.
+	 */
+	public static function weak_storage_message( $reason = null ) {
+		$reason = null === $reason ? self::weak_storage_reason() : (string) $reason;
+		if ( 'missing_sodium' === $reason ) {
+			$cause = __( 'PHP\'s sodium extension is not available on this server. Ask your host to enable it.', 'remember' );
+		} elseif ( 'missing_key' === $reason ) {
+			$cause = __( 'wp-config.php does not define AUTH_KEY or REMEMBER_ENCRYPTION_KEY. Add one before saving credentials.', 'remember' );
+		} else {
+			return '';
+		}
+		$scheme = function_exists( 'openssl_encrypt' )
+			? __( 'Until then, secrets saved here are encrypted with a key kept in the same database, so anyone with a copy of the database can read them.', 'remember' )
+			: __( 'Until then, secrets saved here are only encoded, not encrypted, so anyone with a copy of the database can read them.', 'remember' );
+		return __( 'QuickBooks and Xero secrets cannot be stored safely on this server.', 'remember' ) . ' ' . $cause . ' ' . $scheme;
+	}
+
+	/**
+	 * Log, at most once a day per processor, that a secret was stored with the weak fallback.
+	 *
+	 * @param string $legacy_option Option that holds the old AES key for this processor.
+	 * @return void
+	 */
+	private static function warn_weak_storage( $legacy_option ) {
+		$flag = 'remember_weak_secret_warned_' . md5( (string) $legacy_option );
+		if ( get_transient( $flag ) ) {
+			return;
+		}
+		set_transient( $flag, 1, DAY_IN_SECONDS );
+		$reason = self::weak_storage_reason();
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
+		Remember_Logger::warning(
+			'Billing secret saved with weak fallback encryption',
+			array(
+				'key_option' => (string) $legacy_option,
+				'reason'     => '' !== $reason ? $reason : 'sealing_failed',
+				'scheme'     => function_exists( 'openssl_encrypt' ) ? 'aes_database_key' : 'base64',
+			)
+		);
+	}
+
+	/**
 	 * @param string $payload Stored value.
 	 * @return bool
 	 */
@@ -321,6 +381,7 @@ class Remember_Billing_Crypto {
 	 * @return string
 	 */
 	private static function legacy_seal( $plain, $legacy_option ) {
+		self::warn_weak_storage( $legacy_option );
 		if ( ! function_exists( 'openssl_encrypt' ) ) {
 			return base64_encode( $plain );
 		}

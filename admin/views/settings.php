@@ -1613,6 +1613,14 @@ $im_platforms = Remember_Im_Platforms::get_all();
 				</div>
 			<?php endif; ?>
 			
+			<?php
+			require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-billing-crypto.php';
+			$remember_weak_storage_message = Remember_Billing_Crypto::weak_storage_message();
+			?>
+			<?php if ( '' !== $remember_weak_storage_message ) : ?>
+				<div class="notice notice-error inline remember-weak-secret-storage"><p><?php echo esc_html( $remember_weak_storage_message ); ?></p></div>
+			<?php endif; ?>
+
 			<!-- Credentials Form -->
 			<form method="post" action="" style="margin-bottom: 30px;">
 				<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
@@ -2016,6 +2024,14 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						<strong><?php esc_html_e( 'Not Connected', 'remember' ); ?></strong>
 					</p>
 				</div>
+			<?php endif; ?>
+
+			<?php
+			require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-billing-crypto.php';
+			$remember_weak_storage_message = Remember_Billing_Crypto::weak_storage_message();
+			?>
+			<?php if ( '' !== $remember_weak_storage_message ) : ?>
+				<div class="notice notice-error inline remember-weak-secret-storage"><p><?php echo esc_html( $remember_weak_storage_message ); ?></p></div>
 			<?php endif; ?>
 
 			<form method="post" action="" style="margin-bottom: 30px;">
