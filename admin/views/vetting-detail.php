@@ -300,6 +300,7 @@ if ( ! defined( 'WPINC' ) ) {
 			<?php if ( 'completed' !== $viewing_vetting->status && current_user_can( 'remember_update_vetting' ) ) : ?>
 				<div style="margin-bottom: 15px; padding: 12px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
 					<h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600;"><?php esc_html_e( 'Add Note', 'remember' ); ?></h4>
+					<p id="remember_vetting_note_visibility_help" class="description" style="margin: 0 0 8px 0;"><?php esc_html_e( 'Staff who can open this case see every note. Unchecked notes are shown to the member on their dashboard.', 'remember' ); ?></p>
 					<form method="post" action="">
 						<?php wp_nonce_field( 'remember_vetting_action', 'remember_vetting_nonce' ); ?>
 						<input type="hidden" name="remember_vetting_action" value="add_note">
@@ -308,8 +309,8 @@ if ( ! defined( 'WPINC' ) ) {
 					<textarea name="note_content" class="large-text" rows="3" required placeholder="<?php esc_attr_e( 'Enter your note...', 'remember' ); ?>" style="margin-bottom: 8px;"></textarea>
 					<div style="display: flex; justify-content: space-between; align-items: center;">
 						<label style="font-size: 12px;">
-							<input type="checkbox" name="is_admin_only" value="1">
-							<?php esc_html_e( 'Admin only', 'remember' ); ?>
+							<input type="checkbox" name="is_admin_only" value="1" checked aria-describedby="remember_vetting_note_visibility_help">
+							<?php esc_html_e( 'Hide from member', 'remember' ); ?>
 						</label>
 						<input type="submit" class="button button-small button-primary" value="<?php esc_attr_e( 'Add Note', 'remember' ); ?>">
 					</div>
@@ -323,13 +324,15 @@ if ( ! defined( 'WPINC' ) ) {
 					<?php foreach ( $viewing_notes as $note ) : 
 						$note_author = get_user_by( 'ID', $note->member_id );
 					?>
-						<div style="margin-bottom: 12px; padding: 10px; background: #f9f9f9; border-left: 3px solid #2271b1; border-radius: 2px;">
+						<div style="margin-bottom: 12px; padding: 10px; background: #f9f9f9; border-left: 3px solid <?php echo $note->is_admin_only ? '#dc3232' : '#2271b1'; ?>; border-radius: 2px;">
 							<div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12px;">
 								<strong style="font-size: 13px;"><?php echo $note_author ? esc_html( $note_author->display_name ) : esc_html__( 'Unknown', 'remember' ); ?></strong>
 								<span class="description" style="font-size: 11px; color: #666;">
 									<?php echo esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $note->created_at ) ) ); ?>
 									<?php if ( $note->is_admin_only ) : ?>
-										<span style="color: #dc3232;">(<?php esc_html_e( 'Admin', 'remember' ); ?>)</span>
+										<span style="color: #dc3232;">(<?php esc_html_e( 'Hidden from member', 'remember' ); ?>)</span>
+									<?php else : ?>
+										<span>(<?php esc_html_e( 'Visible to member', 'remember' ); ?>)</span>
 									<?php endif; ?>
 								</span>
 							</div>
