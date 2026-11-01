@@ -68,7 +68,22 @@ if ( isset( $_POST['remember_waitlist_action'] ) && check_admin_referer( 'rememb
 		$event = $application ? $event_model->get( $application->event_id ) : null;
 		$event_name = $event ? $event->event_name : __( 'Unknown Event', 'remember' );
 
-		if ( 'promote_to_pending' === $action ) {
+		if ( in_array( $action, array( 'promote_to_pending', 'decline_waitlisted' ), true ) && ( ! $application || 'waitlisted' !== $application->status ) ) {
+			Remember_Logger::warning(
+				'Waitlist action refused for an application that is not waitlisted',
+				array(
+					'application_id' => $application_id,
+					'action'         => $action,
+					'status'         => $application ? $application->status : '',
+					'user_id'        => get_current_user_id(),
+				)
+			);
+			$message = $application
+				/* translators: %s: current application status, e.g. accepted. */
+				? sprintf( __( 'That application is no longer on the waitlist (it is now %s), so nothing was changed. Refresh the page to see the current waitlist.', 'remember' ), str_replace( '_', ' ', $application->status ) )
+				: __( 'That application was not found, so nothing was changed.', 'remember' );
+			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( $message ) . '</p></div>';
+		} elseif ( 'promote_to_pending' === $action ) {
 			$result = $application_model->update_status( $application_id, 'pending', get_current_user_id() );
 			if ( false !== $result && $application ) {
 				remember_notify_event_admins(
