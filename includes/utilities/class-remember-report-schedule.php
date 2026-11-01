@@ -138,6 +138,7 @@ class Remember_Report_Schedule {
 	 */
 	public static function dispatch() {
 		global $wpdb;
+		self::delete_stale_files();
 		require_once plugin_dir_path( __FILE__ ) . '../models/class-saved-report.php';
 		$table = self::table_name();
 		$reports = Remember_Saved_Report::table_name();
@@ -268,31 +269,34 @@ class Remember_Report_Schedule {
 		$sent     = 0;
 		$eligible = 0;
 		$ids      = self::recipient_ids_from_json( $row->recipient_ids );
-		foreach ( $ids as $user_id ) {
-			if ( ! Remember_Report_Catalog::user_can_receive_report( $user_id, $row->subject, $definition ) ) {
-				continue;
+		try {
+			foreach ( $ids as $user_id ) {
+				if ( ! Remember_Report_Catalog::user_can_receive_report( $user_id, $row->subject, $definition ) ) {
+					continue;
+				}
+				$user = get_userdata( $user_id );
+				if ( ! $user || ! is_email( $user->user_email ) ) {
+					continue;
+				}
+				++$eligible;
+				$ok = wp_mail(
+					$user->user_email,
+					sprintf(
+						/* translators: %s: report name */
+						__( 'Report: %s', 'remember' ),
+						(string) $row->name
+					),
+					self::message( $row, $result ),
+					array( 'Content-Type: text/plain; charset=UTF-8' ),
+					array( $path )
+				);
+				if ( $ok ) {
+					++$sent;
+				}
 			}
-			$user = get_userdata( $user_id );
-			if ( ! $user || ! is_email( $user->user_email ) ) {
-				continue;
-			}
-			++$eligible;
-			$ok = wp_mail(
-				$user->user_email,
-				sprintf(
-					/* translators: %s: report name */
-					__( 'Report: %s', 'remember' ),
-					(string) $row->name
-				),
-				self::message( $row, $result ),
-				array( 'Content-Type: text/plain; charset=UTF-8' ),
-				array( $path )
-			);
-			if ( $ok ) {
-				++$sent;
-			}
+		} finally {
+			wp_delete_file( $path );
 		}
-		wp_delete_file( $path );
 
 		if ( $eligible > 0 && $sent < 1 ) {
 			Remember_Logger::error( 'Scheduled report email was not accepted', array( 'report_id' => (int) $row->report_id ) );
@@ -358,26 +362,72 @@ class Remember_Report_Schedule {
 		}
 		$path = $temp . '.csv';
 		wp_delete_file( $temp );
-		$out = fopen( $path, 'w' );
+		$out = fopen( $path, 'x' );
 		if ( ! $out ) {
 			return false;
 		}
-		fprintf( $out, chr( 0xEF ) . chr( 0xBB ) . chr( 0xBF ) );
-		$headers = array();
-		foreach ( $result['columns'] as $col ) {
-			$headers[] = Remember_Report_Engine::csv_cell( $col['label'] );
+		if ( ! chmod( $path, 0600 ) ) {
+			fclose( $out );
+			wp_delete_file( $path );
+			Remember_Logger::error( 'Scheduled report CSV could not be made owner-only, so it was not sent', array( 'report_id' => absint( $report_id ) ) );
+			return false;
 		}
-		fputcsv( $out, $headers );
-		foreach ( $result['rows'] as $line ) {
-			$cells = array();
+		$written = false;
+		try {
+			fprintf( $out, chr( 0xEF ) . chr( 0xBB ) . chr( 0xBF ) );
+			$headers = array();
 			foreach ( $result['columns'] as $col ) {
-				$id      = $col['id'];
-				$cells[] = Remember_Report_Engine::csv_cell( isset( $line[ $id ] ) ? $line[ $id ] : '' );
+				$headers[] = Remember_Report_Engine::csv_cell( $col['label'] );
 			}
-			fputcsv( $out, $cells );
+			fputcsv( $out, $headers );
+			foreach ( $result['rows'] as $line ) {
+				$cells = array();
+				foreach ( $result['columns'] as $col ) {
+					$id      = $col['id'];
+					$cells[] = Remember_Report_Engine::csv_cell( isset( $line[ $id ] ) ? $line[ $id ] : '' );
+				}
+				fputcsv( $out, $cells );
+			}
+			$written = true;
+		} finally {
+			fclose( $out );
+			if ( ! $written ) {
+				wp_delete_file( $path );
+			}
 		}
-		fclose( $out );
 		return $path;
+	}
+
+	/**
+	 * Delete report CSVs a killed or crashed send left in the temp folder.
+	 *
+	 * @return void
+	 */
+	public static function delete_stale_files() {
+		$files = glob( trailingslashit( get_temp_dir() ) . 'remember-report-*.csv' );
+		if ( ! is_array( $files ) || ! $files ) {
+			return;
+		}
+		$cutoff  = time() - DAY_IN_SECONDS;
+		$removed = 0;
+		foreach ( $files as $file ) {
+			if ( ! is_file( $file ) || is_link( $file ) ) {
+				continue;
+			}
+			$modified = filemtime( $file );
+			if ( false === $modified || $modified >= $cutoff ) {
+				continue;
+			}
+			wp_delete_file( $file );
+			if ( file_exists( $file ) ) {
+				Remember_Logger::warning( 'A leftover scheduled report file could not be deleted', array( 'file' => basename( $file ) ) );
+			} else {
+				++$removed;
+			}
+		}
+		if ( $removed > 0 ) {
+			Remember_Logger::info( 'Deleted leftover scheduled report files', array( 'count' => $removed ) );
+		}
 	}
 
 	/**
