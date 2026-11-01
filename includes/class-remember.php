@@ -196,6 +196,7 @@ class Remember {
 		$this->loader->add_action( 'edit_user_profile', $plugin_admin, 'add_timezone_field_to_profile' );
 		$this->loader->add_action( 'personal_options_update', $plugin_admin, 'save_timezone_field' );
 		$this->loader->add_action( 'edit_user_profile_update', $plugin_admin, 'save_timezone_field' );
+		$this->loader->add_action( 'user_profile_update_errors', $plugin_admin, 'validate_timezone_field', 10, 3 );
 		
 		// Redirect non-admin users to member dashboard after login
 		$this->loader->add_filter( 'login_redirect', $this, 'redirect_non_admin_to_dashboard', 10, 3 );

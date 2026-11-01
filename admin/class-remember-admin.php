@@ -2027,9 +2027,7 @@ class Remember_Admin {
 		
 		$selected_timezone = get_user_meta( $user->ID, 'timezone_string', true );
 		if ( empty( $selected_timezone ) ) {
-			$selected_timezone = 'America/Los_Angeles'; // Default
-			// Auto-assign default timezone
-			update_user_meta( $user->ID, 'timezone_string', $selected_timezone );
+			$selected_timezone = 'America/Los_Angeles'; // Preselected only; saved when the profile is saved.
 		}
 		?>
 		<h2><?php esc_html_e( 'reMember Settings', 'remember' ); ?></h2>
@@ -2054,15 +2052,41 @@ class Remember_Admin {
 		if ( ! current_user_can( 'edit_user', $user_id ) ) {
 			return;
 		}
-		
+
 		if ( isset( $_POST['timezone_string'] ) ) {
-			$timezone_string = sanitize_text_field( $_POST['timezone_string'] );
-			if ( ! empty( $timezone_string ) ) {
+			require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-timezone.php';
+			$timezone_string = sanitize_text_field( wp_unslash( $_POST['timezone_string'] ) );
+			if ( '' === $timezone_string ) {
+				update_user_meta( $user_id, 'timezone_string', 'America/Los_Angeles' );
+			} elseif ( Remember_Timezone::is_valid_timezone( $timezone_string ) ) {
 				update_user_meta( $user_id, 'timezone_string', $timezone_string );
 			} else {
-				// Default if empty
-				update_user_meta( $user_id, 'timezone_string', 'America/Los_Angeles' );
+				Remember_Logger::warning(
+					'Profile timezone not saved because it is not a valid time zone',
+					array(
+						'user_id'    => absint( $user_id ),
+						'by_user_id' => get_current_user_id(),
+					)
+				);
 			}
+		}
+	}
+
+	/**
+	 * Report an invalid timezone on the WordPress profile screen.
+	 *
+	 * @param WP_Error $errors Profile errors.
+	 * @param bool     $update Whether an existing user is being updated.
+	 * @param stdClass $user   User data being saved.
+	 */
+	public function validate_timezone_field( $errors, $update, $user ) {
+		if ( ! isset( $_POST['timezone_string'] ) ) {
+			return;
+		}
+		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-timezone.php';
+		$timezone_string = sanitize_text_field( wp_unslash( $_POST['timezone_string'] ) );
+		if ( '' !== $timezone_string && ! Remember_Timezone::is_valid_timezone( $timezone_string ) ) {
+			$errors->add( 'remember_timezone_string', __( 'Please select a valid time zone.', 'remember' ), array( 'form-field' => 'timezone_string' ) );
 		}
 	}
 }

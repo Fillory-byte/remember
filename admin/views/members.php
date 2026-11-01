@@ -274,6 +274,8 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 		$remember_email_error = isset( $_POST['user_email'] )
 			? Remember_Profile_Fields::user_email_change_error( $member_id, wp_unslash( $_POST['user_email'] ) )
 			: '';
+		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-timezone.php';
+		$remember_posted_timezone = isset( $_POST['timezone_string'] ) ? sanitize_text_field( wp_unslash( $_POST['timezone_string'] ) ) : '';
 		$member_number_error = '';
 		if ( null === $member_number ) {
 			$member_number_error = __( 'Member number must be alphanumeric (letters and numbers only).', 'remember' );
@@ -301,6 +303,15 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( Remember_Profile_Fields::user_email_change_message( $remember_email_error ) ) . '</p></div>';
 		} elseif ( ! empty( Remember_Platform_Handles::at_errors_from_request() ) ) {
 			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( Remember_Platform_Handles::at_message() ) . '</p></div>';
+		} elseif ( '' !== $remember_posted_timezone && ! Remember_Timezone::is_valid_timezone( $remember_posted_timezone ) ) {
+			Remember_Logger::warning(
+				'Member profile not saved because the time zone is not valid',
+				array(
+					'member_id'  => $member_id,
+					'by_user_id' => get_current_user_id(),
+				)
+			);
+			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Please select a valid time zone.', 'remember' ) . '</p></div>';
 		} else {
 		
 		global $wpdb;
@@ -382,9 +393,8 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 		
 		// Save timezone to WP user meta (not member_profiles)
 		if ( isset( $_POST['timezone_string'] ) ) {
-			$timezone_string = sanitize_text_field( wp_unslash( $_POST['timezone_string'] ) );
-			if ( ! empty( $timezone_string ) ) {
-				update_user_meta( $member_id, 'timezone_string', $timezone_string );
+			if ( '' !== $remember_posted_timezone ) {
+				update_user_meta( $member_id, 'timezone_string', $remember_posted_timezone );
 			} else {
 				// Default if empty
 				update_user_meta( $member_id, 'timezone_string', 'America/Los_Angeles' );

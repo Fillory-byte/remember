@@ -42,12 +42,10 @@ class Remember_Timezone {
 		}
 
 		$timezone_string = get_user_meta( $user_id, 'timezone_string', true );
-		
-		// Default to America/Los_Angeles if not set
+
+		// Display falls back to America/Los_Angeles; nothing is saved until the user saves a profile.
 		if ( empty( $timezone_string ) ) {
 			$timezone_string = 'America/Los_Angeles';
-			// Auto-assign default timezone
-			update_user_meta( $user_id, 'timezone_string', $timezone_string );
 		}
 
 		try {

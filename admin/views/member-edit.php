@@ -26,9 +26,7 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remem
 // Get timezone from WP user meta (not from member_profiles)
 $selected_timezone = get_user_meta( $view_user->ID, 'timezone_string', true );
 if ( empty( $selected_timezone ) ) {
-	$selected_timezone = 'America/Los_Angeles'; // Default
-	// Auto-assign default timezone
-	update_user_meta( $view_user->ID, 'timezone_string', $selected_timezone );
+	$selected_timezone = 'America/Los_Angeles'; // Preselected only; saved when the form is saved.
 }
 
 // Load countries helper
