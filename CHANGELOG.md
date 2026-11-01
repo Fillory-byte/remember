@@ -2,6 +2,10 @@
 
 All notable changes to reMember are listed here. The current plugin version is in `remember.php` (`REMEMBER_VERSION`) and [GitHub Releases](https://github.com/ctucker1984/remember/releases).
 
+## 2.2.11
+
+- **Fix:** A member's status can no longer be changed by posting a hand-made request to the Members screen. That old status action had no button left in the plugin, and it skipped the rule that keeps staff from acting on an administrator's account. Adding a member or converting a WordPress user accepts only Pending Vetting, Unvetted, In Vetting, Vetted, Rejected, or Inactive. Any other value, including Merged, is saved as the usual starting status and logged as a warning. Only the duplicate-merge tool sets Merged. [#155](https://github.com/ctucker1984/remember/issues/155) Reported by [@Fillory-byte](https://github.com/Fillory-byte).
+
 ## 2.2.10
 
 - **Enhancement:** Each social and instant-messenger platform can store a profile address, with `{handle}` standing in for the name the member types. Telegram starts as `https://t.me/{handle}` and shows `@` in front of the name. The name field says not to type `@`. A save that includes `@` is refused. On the attendee list, the member's own profile, and the member record in wp-admin, that name is a link when the platform has an address.

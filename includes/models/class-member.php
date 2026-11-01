@@ -45,6 +45,15 @@ class Remember_Member extends Remember_Base_Model {
 	}
 
 	/**
+	 * Statuses staff may choose when adding a member. Merged is set only by the duplicate-merge tool.
+	 *
+	 * @return string[]
+	 */
+	public static function assignable_statuses() {
+		return array_values( array_diff( self::statuses(), array( 'merged' ) ) );
+	}
+
+	/**
 	 * Get all members, excluding merged (locked) profiles unless requested.
 	 *
 	 * @param array $args Query arguments. Set include_merged to true to include locked profiles.

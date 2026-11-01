@@ -85,7 +85,11 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 		$first_name = isset( $_POST['first_name'] ) ? sanitize_text_field( $_POST['first_name'] ) : '';
 		$last_name = isset( $_POST['last_name'] ) ? sanitize_text_field( $_POST['last_name'] ) : '';
 		$password = isset( $_POST['password'] ) ? $_POST['password'] : wp_generate_password( 12, false );
-		$status = isset( $_POST['status'] ) ? sanitize_text_field( $_POST['status'] ) : 'pending_vetting';
+		$status = isset( $_POST['status'] ) ? sanitize_key( wp_unslash( $_POST['status'] ) ) : 'pending_vetting';
+		if ( ! in_array( $status, Remember_Member::assignable_statuses(), true ) ) {
+			Remember_Logger::warning( 'Refused an unknown initial member status; using pending_vetting', array( 'status' => $status, 'by_user_id' => get_current_user_id() ) );
+			$status = 'pending_vetting';
+		}
 		
 		if ( empty( $username ) || empty( $email ) ) {
 			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Username and email are required.', 'remember' ) . '</p></div>';
@@ -122,9 +126,6 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 					if ( 'first_application' === $vetting_workflow ) {
 						// If vetting is on first application, member starts as unvetted but can apply
 						$status = 'unvetted'; // New status for members waiting for first application
-					} else {
-						// Default: vetting on join, so status is pending_vetting
-						$status = isset( $_POST['status'] ) ? sanitize_text_field( $_POST['status'] ) : 'pending_vetting';
 					}
 					
 					// Create member record
@@ -198,7 +199,7 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 		} elseif ( $member_model->get( $wp_user_id ) ) {
 			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'That WordPress user is already a reMember member.', 'remember' ) . '</p></div>';
 		} else {
-			if ( ! array_key_exists( $status, $status_labels ) ) {
+			if ( ! in_array( $status, Remember_Member::assignable_statuses(), true ) ) {
 				$vetting_workflow = Remember_Vetting_Workflow::get_workflow();
 				$status = ( 'first_application' === $vetting_workflow ) ? 'unvetted' : 'pending_vetting';
 			}
@@ -233,23 +234,6 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 				) . '</p></div>';
 			} else {
 				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Could not create the member record. Check the logs for details.', 'remember' ) . '</p></div>';
-			}
-		}
-	} elseif ( $member_id > 0 && 'update_status' === $action ) {
-		// Check capability
-		if ( ! current_user_can( 'remember_update_members' ) ) {
-			wp_die( __( 'You do not have sufficient permissions to perform this action.', 'remember' ), __( 'Access Denied', 'remember' ), array( 'response' => 403 ) );
-		}
-		
-		$status = isset( $_POST['status'] ) ? sanitize_text_field( $_POST['status'] ) : '';
-		if ( ! empty( $status ) ) {
-			$result = $member_model->update_status( $member_id, $status );
-			if ( $result !== false ) {
-				Remember_Logger::info( 'Member status updated', array( 'member_id' => $member_id, 'status' => $status ) );
-				echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Member status updated successfully.', 'remember' ) . '</p></div>';
-			} else {
-				Remember_Logger::error( 'Failed to update member status', array( 'member_id' => $member_id ) );
-				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Failed to update member status.', 'remember' ) . '</p></div>';
 			}
 		}
 	} elseif ( $member_id > 0 && 'update_profile' === $action ) {
