@@ -158,7 +158,7 @@ if ( '' === $remember_reg_im_type ) {
 
 			<div class="remember-register-row">
 				<label for="remember_reg_cell_phone"><?php esc_html_e( 'Cell Phone', 'remember' ); ?> <span class="required">*</span></label>
-				<input type="tel" name="remember_reg_cell_phone" id="remember_reg_cell_phone" required autocomplete="tel" class="<?php echo esc_attr( $remember_ifc( 'cell_phone' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'cell_phone' ) ); ?>" placeholder="<?php esc_attr_e( '+18055551212', 'remember' ); ?>"<?php echo $remember_ifa( 'cell_phone' ); ?> />
+				<input type="tel" name="remember_reg_cell_phone" id="remember_reg_cell_phone" required autocomplete="tel" class="<?php echo esc_attr( $remember_ifc( 'cell_phone' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'cell_phone' ) ); ?>" placeholder="+18055551212"<?php echo $remember_ifa( 'cell_phone' ); ?> />
 				<?php Remember_Profile_Fields::render_field_error( 'cell_phone', $remember_invalid_fields, $remember_field_messages ); ?>
 				<p class="remember-register-help"><?php esc_html_e( 'Include a leading + and country code. Examples: +18055551212 (USA/Canada), +447700900123 (UK).', 'remember' ); ?></p>
 			</div>
@@ -253,7 +253,7 @@ if ( '' === $remember_reg_im_type ) {
 
 			<div class="remember-register-row">
 				<label for="remember_reg_emergency_contact_phone"><?php esc_html_e( 'Phone', 'remember' ); ?> <span class="required">*</span></label>
-				<input type="tel" name="remember_reg_emergency_contact_phone" id="remember_reg_emergency_contact_phone" required class="<?php echo esc_attr( $remember_ifc( 'emergency_contact_phone' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'emergency_contact_phone' ) ); ?>" placeholder="<?php esc_attr_e( '+18055551212', 'remember' ); ?>"<?php echo $remember_ifa( 'emergency_contact_phone' ); ?> />
+				<input type="tel" name="remember_reg_emergency_contact_phone" id="remember_reg_emergency_contact_phone" required class="<?php echo esc_attr( $remember_ifc( 'emergency_contact_phone' ) ); ?>" value="<?php echo esc_attr( $remember_reg_val( 'emergency_contact_phone' ) ); ?>" placeholder="+18055551212"<?php echo $remember_ifa( 'emergency_contact_phone' ); ?> />
 				<?php Remember_Profile_Fields::render_field_error( 'emergency_contact_phone', $remember_invalid_fields, $remember_field_messages ); ?>
 			</div>
 

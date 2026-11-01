@@ -442,7 +442,7 @@ class Remember_Sensitive_Profile {
 				<tr>
 					<th><label for="emergency_contact_phone"><?php esc_html_e( 'Phone', 'remember' ); ?></label></th>
 					<td>
-						<input type="text" id="emergency_contact_phone" name="emergency_contact_phone" class="regular-text" value="<?php echo esc_attr( $profile ? $profile->emergency_contact_phone : '' ); ?>" placeholder="<?php esc_attr_e( '+18055551212', 'remember' ); ?>">
+						<input type="text" id="emergency_contact_phone" name="emergency_contact_phone" class="regular-text" value="<?php echo esc_attr( $profile ? $profile->emergency_contact_phone : '' ); ?>" placeholder="+18055551212">
 					</td>
 				</tr>
 				<tr>
