@@ -972,7 +972,7 @@ $status_colors = array(
 									<input type="hidden" name="remember_application_action" value="decline">
 									<input type="hidden" name="application_id" value="<?php echo esc_attr( $application->application_id ); ?>">
 									<input type="hidden" name="billing_action" value="leave">
-									<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Decline', 'remember' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Decline this application? Invoice will be left unaltered. Open the application detail to void or refund.', 'remember' ) ); ?>');">
+									<input type="submit" class="button button-small remember-button-danger" value="<?php esc_attr_e( 'Decline', 'remember' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Decline this application? Invoice will be left unaltered. Open the application detail to void or refund.', 'remember' ) ); ?>');">
 								</form>
 								
 								<?php if ( 'pending' === $application->status ) : ?>
@@ -985,7 +985,7 @@ $status_colors = array(
 								<?php endif; ?>
 							<?php elseif ( current_user_can( 'remember_update_applications' ) ) : ?>
 								<?php if ( 'accepted' === $application->status ) : ?>
-									<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-applications&view=' . $application->application_id ) ); ?>"><?php esc_html_e( 'Decline…', 'remember' ); ?></a>
+									<a class="button-link-delete" href="<?php echo esc_url( admin_url( 'admin.php?page=remember-applications&view=' . $application->application_id ) ); ?>"><?php esc_html_e( 'Decline…', 'remember' ); ?></a>
 									<form method="post" action="">
 										<?php wp_nonce_field( 'remember_application_action', 'remember_application_nonce' ); ?>
 										<input type="hidden" name="remember_application_action" value="reopen_pending">

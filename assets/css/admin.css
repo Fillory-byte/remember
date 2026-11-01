@@ -3592,3 +3592,16 @@
 	font-size: 11px;
 	white-space: nowrap;
 }
+
+/* Destructive application action: set Decline apart from Accept. */
+.wp-core-ui .button.remember-button-danger {
+	color: #b32d2e;
+	border-color: #b32d2e;
+}
+
+.wp-core-ui .button.remember-button-danger:hover,
+.wp-core-ui .button.remember-button-danger:focus {
+	color: #8a2424;
+	border-color: #8a2424;
+	background: #fcf0f1;
+}
