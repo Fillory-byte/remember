@@ -18,6 +18,7 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-member.p
 require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-application.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-event.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-vetting-workflow.php';
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-capabilities.php';
 
 Remember_Logger::debug( 'Vetting page loaded' );
 
@@ -30,13 +31,48 @@ if ( isset( $_POST['remember_vetting_action'] ) && check_admin_referer( 'remembe
 	$vetting_id = isset( $_POST['vetting_id'] ) ? absint( $_POST['vetting_id'] ) : 0;
 	
 	if ( $vetting_id > 0 ) {
-		if ( 'assign' === $action ) {
-			// Check capability
-			if ( ! current_user_can( 'remember_update_vetting' ) ) {
-				wp_die( __( 'You do not have sufficient permissions to perform this action.', 'remember' ), __( 'Access Denied', 'remember' ), array( 'response' => 403 ) );
+		if ( ! current_user_can( 'remember_update_vetting' ) ) {
+			wp_die( __( 'You do not have sufficient permissions to perform this action.', 'remember' ), __( 'Access Denied', 'remember' ), array( 'response' => 403 ) );
+		}
+		$acting_case = $vetting_model->get( $vetting_id );
+		$refusal     = '';
+		if ( ! $acting_case ) {
+			$refusal = __( 'That vetting case was not found.', 'remember' );
+		} elseif ( 'completed' === $acting_case->status ) {
+			$refusal = __( 'This vetting case is completed and can no longer be changed.', 'remember' );
+		} elseif ( 'assign' === $action ) {
+			if ( ! $vetting_model->user_can_assign( $acting_case, get_current_user_id() ) ) {
+				$refusal = __( 'Only the primary vetter or a user with Access Settings can reassign this case.', 'remember' );
 			}
+		} elseif ( in_array( $action, array( 'schedule', 'complete', 'update_status', 'add_collaborator' ), true ) ) {
+			if ( ! $vetting_model->user_can_work( $acting_case, get_current_user_id() ) ) {
+				$refusal = __( 'Only the primary vetter, collaborators, and users with Access Settings can work this case.', 'remember' );
+			}
+		}
+
+		if ( '' !== $refusal ) {
+			Remember_Logger::warning(
+				'Vetting case action refused',
+				array(
+					'vetting_id' => $vetting_id,
+					'action'     => $action,
+					'user_id'    => get_current_user_id(),
+				)
+			);
+			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( $refusal ) . '</p></div>';
+		} elseif ( 'assign' === $action ) {
 			$vetter_id = isset( $_POST['primary_vetter_id'] ) ? absint( $_POST['primary_vetter_id'] ) : 0;
-			if ( $vetter_id > 0 ) {
+			if ( $vetter_id > 0 && ! Remember_Vetting::user_can_be_vetter( $vetter_id ) ) {
+				Remember_Logger::warning(
+					'Vetter assignment refused an account without the vetting permission',
+					array(
+						'vetting_id' => $vetting_id,
+						'vetter_id'  => $vetter_id,
+						'user_id'    => get_current_user_id(),
+					)
+				);
+				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Choose a vetter who can update vetting cases.', 'remember' ) . '</p></div>';
+			} elseif ( $vetter_id > 0 ) {
 				$vetter_user = get_user_by( 'ID', $vetter_id );
 				$result = $vetting_model->update( $vetting_id, array(
 					'primary_vetter_id' => $vetter_id,
@@ -56,10 +92,6 @@ if ( isset( $_POST['remember_vetting_action'] ) && check_admin_referer( 'remembe
 				}
 			}
 		} elseif ( 'schedule' === $action ) {
-			// Check capability
-			if ( ! current_user_can( 'remember_update_vetting' ) ) {
-				wp_die( __( 'You do not have sufficient permissions to perform this action.', 'remember' ), __( 'Access Denied', 'remember' ), array( 'response' => 403 ) );
-			}
 			// Handle both old datetime-local format and new separate fields
 			$scheduled_at = '';
 			if ( isset( $_POST['scheduled_at'] ) && ! empty( $_POST['scheduled_at'] ) ) {
@@ -100,10 +132,6 @@ if ( isset( $_POST['remember_vetting_action'] ) && check_admin_referer( 'remembe
 				}
 			}
 		} elseif ( 'complete' === $action ) {
-			// Check capability
-			if ( ! current_user_can( 'remember_update_vetting' ) ) {
-				wp_die( __( 'You do not have sufficient permissions to perform this action.', 'remember' ), __( 'Access Denied', 'remember' ), array( 'response' => 403 ) );
-			}
 			$decision = isset( $_POST['decision'] ) ? sanitize_text_field( $_POST['decision'] ) : '';
 			if ( in_array( $decision, array( 'accepted', 'rejected' ), true ) ) {
 				$result = $vetting_model->complete( $vetting_id, $decision );
@@ -137,10 +165,6 @@ if ( isset( $_POST['remember_vetting_action'] ) && check_admin_referer( 'remembe
 				}
 			}
 		} elseif ( 'add_note' === $action ) {
-			// Check capability
-			if ( ! current_user_can( 'remember_update_vetting' ) ) {
-				wp_die( __( 'You do not have sufficient permissions to perform this action.', 'remember' ), __( 'Access Denied', 'remember' ), array( 'response' => 403 ) );
-			}
 			$note_content = isset( $_POST['note_content'] ) ? sanitize_textarea_field( wp_unslash( $_POST['note_content'] ) ) : '';
 			$is_admin_only = isset( $_POST['is_admin_only'] ) ? 1 : 0;
 			if ( ! empty( $note_content ) ) {
@@ -151,12 +175,18 @@ if ( isset( $_POST['remember_vetting_action'] ) && check_admin_referer( 'remembe
 				}
 			}
 		} elseif ( 'add_collaborator' === $action ) {
-			// Check capability
-			if ( ! current_user_can( 'remember_update_vetting' ) ) {
-				wp_die( __( 'You do not have sufficient permissions to perform this action.', 'remember' ), __( 'Access Denied', 'remember' ), array( 'response' => 403 ) );
-			}
 			$collaborator_id = isset( $_POST['collaborator_id'] ) ? absint( $_POST['collaborator_id'] ) : 0;
-			if ( $collaborator_id > 0 ) {
+			if ( $collaborator_id > 0 && ! Remember_Vetting::user_can_be_vetter( $collaborator_id ) ) {
+				Remember_Logger::warning(
+					'Collaborator refused an account without the vetting permission',
+					array(
+						'vetting_id'      => $vetting_id,
+						'collaborator_id' => $collaborator_id,
+						'user_id'         => get_current_user_id(),
+					)
+				);
+				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Choose a collaborator who can update vetting cases.', 'remember' ) . '</p></div>';
+			} elseif ( $collaborator_id > 0 ) {
 				$collab_user = get_user_by( 'ID', $collaborator_id );
 				$collab_id = $vetting_model->add_collaborator( $vetting_id, $collaborator_id, get_current_user_id() );
 				if ( $collab_id ) {
@@ -173,16 +203,20 @@ if ( isset( $_POST['remember_vetting_action'] ) && check_admin_referer( 'remembe
 				}
 			}
 		} elseif ( 'update_status' === $action ) {
-			// Check capability
-			if ( ! current_user_can( 'remember_update_vetting' ) ) {
-				wp_die( __( 'You do not have sufficient permissions to perform this action.', 'remember' ), __( 'Access Denied', 'remember' ), array( 'response' => 403 ) );
-			}
-			$new_status = isset( $_POST['status'] ) ? sanitize_text_field( $_POST['status'] ) : '';
-			if ( ! empty( $new_status ) ) {
-				// Get current status for comparison
-				$current_vetting = $vetting_model->get( $vetting_id );
-				$old_status = $current_vetting ? $current_vetting->status : '';
-				
+			$new_status = isset( $_POST['status'] ) ? sanitize_key( wp_unslash( $_POST['status'] ) ) : '';
+			if ( '' !== $new_status && ! in_array( $new_status, Remember_Vetting::manual_statuses(), true ) ) {
+				Remember_Logger::warning(
+					'Vetting status change refused an unknown or decision-only status',
+					array(
+						'vetting_id' => $vetting_id,
+						'status'     => $new_status,
+						'user_id'    => get_current_user_id(),
+					)
+				);
+				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Choose Pending, Scheduled, or In Progress. To complete a case, record an Accepted or Rejected decision.', 'remember' ) . '</p></div>';
+			} elseif ( '' !== $new_status ) {
+				$old_status = $acting_case->status;
+
 				$result = $vetting_model->update_status( $vetting_id, $new_status );
 				if ( $result !== false && $old_status !== $new_status ) {
 					// Add system note
@@ -216,16 +250,32 @@ if ( isset( $_POST['remember_vetting_action'] ) && check_admin_referer( 'remembe
 		$member_id = isset( $_POST['member_id'] ) ? absint( $_POST['member_id'] ) : 0;
 		$primary_vetter_id = isset( $_POST['primary_vetter_id'] ) ? absint( $_POST['primary_vetter_id'] ) : 0;
 		
-		if ( $member_id > 0 ) {
+		$create_refusal = '';
+		if ( $member_id > 0 && ! $member_model->get( $member_id ) ) {
+			$create_refusal = __( 'That member was not found.', 'remember' );
+		} elseif ( $member_id > 0 && ! Remember_Capabilities::current_user_can_administer_account( $member_id ) ) {
+			$create_refusal = __( 'You cannot open a vetting case on a WordPress administrator or a user who can edit other users.', 'remember' );
+		} elseif ( $primary_vetter_id > 0 && ! Remember_Vetting::user_can_be_vetter( $primary_vetter_id ) ) {
+			$create_refusal = __( 'Choose a vetter who can update vetting cases.', 'remember' );
+		}
+
+		if ( '' !== $create_refusal ) {
+			Remember_Logger::warning(
+				'Vetting case creation refused',
+				array(
+					'member_id' => $member_id,
+					'vetter_id' => $primary_vetter_id,
+					'user_id'   => get_current_user_id(),
+				)
+			);
+			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( $create_refusal ) . '</p></div>';
+		} elseif ( $member_id > 0 ) {
 			// Create vetting case (multiple cases allowed per member)
 			$vetting_id = $vetting_model->create( $member_id, $primary_vetter_id, 'pending' );
 			if ( $vetting_id ) {
 				// Update member status to in_vetting when a new case is created
 				// This allows re-vetting of previously vetted or rejected members
-				$member = $member_model->get( $member_id );
-				if ( $member ) {
-					$member_model->update_status( $member_id, 'in_vetting' );
-				}
+				$member_model->update_status( $member_id, 'in_vetting' );
 				
 				// Add system note for case creation
 				$current_user = wp_get_current_user();
@@ -278,9 +328,9 @@ if ( ! $viewing_vetting ) {
 	}
 }
 
-// Get users with vetting capability for assign dropdown
+// Primary vetters and collaborators must be able to update cases.
 $vetters = get_users( array(
-	'capability__in' => array( 'remember_create_vetting', 'remember_update_vetting' ),
+	'capability' => 'remember_update_vetting',
 ) );
 
 // If viewing a case, get related data
@@ -290,6 +340,8 @@ if ( $viewing_vetting ) {
 	$viewing_vetter = ! empty( $viewing_vetting->primary_vetter_id ) ? get_user_by( 'ID', $viewing_vetting->primary_vetter_id ) : null;
 	$viewing_notes = $vetting_model->get_notes( $viewing_vetting_id );
 	$viewing_collaborators = $vetting_model->get_collaborators( $viewing_vetting_id );
+	$can_work_case         = $vetting_model->user_can_work( $viewing_vetting, get_current_user_id() );
+	$can_assign_case       = $vetting_model->user_can_assign( $viewing_vetting, get_current_user_id() );
 	
 	// Get member profile for phone number
 	global $wpdb;

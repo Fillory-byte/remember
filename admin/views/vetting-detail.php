@@ -74,7 +74,7 @@ if ( ! defined( 'WPINC' ) ) {
 				</div>
 			</div>
 			<div class="remember-member-detail-header__actions remember-vetting-detail-status">
-				<?php if ( 'completed' !== $viewing_vetting->status ) : ?>
+				<?php if ( 'completed' !== $viewing_vetting->status && $can_work_case ) : ?>
 					<form method="post" action="">
 						<?php wp_nonce_field( 'remember_vetting_action', 'remember_vetting_nonce' ); ?>
 						<input type="hidden" name="remember_vetting_action" value="update_status">
@@ -82,13 +82,14 @@ if ( ! defined( 'WPINC' ) ) {
 						<label class="remember-vetting-detail-status__label" for="remember_vetting_case_status">
 							<?php esc_html_e( 'Case Status', 'remember' ); ?>
 						</label>
-						<select id="remember_vetting_case_status" name="status" class="regular-text remember-vetting-detail-status__select">
-							<?php foreach ( $status_labels as $status => $label ) : ?>
+						<select id="remember_vetting_case_status" name="status" class="regular-text remember-vetting-detail-status__select" aria-describedby="remember_vetting_case_status_help">
+							<?php foreach ( Remember_Vetting::manual_statuses() as $status ) : ?>
 								<option value="<?php echo esc_attr( $status ); ?>" <?php selected( $viewing_vetting->status, $status ); ?>>
-									<?php echo esc_html( $label ); ?>
+									<?php echo esc_html( $status_labels[ $status ] ); ?>
 								</option>
 							<?php endforeach; ?>
 						</select>
+						<p id="remember_vetting_case_status_help" class="description"><?php esc_html_e( 'To complete the case, record a decision under Quick Actions.', 'remember' ); ?></p>
 						<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Update', 'remember' ); ?>">
 					</form>
 				<?php else : ?>
@@ -97,7 +98,9 @@ if ( ! defined( 'WPINC' ) ) {
 						<div style="color: <?php echo esc_attr( $status_colors[ $viewing_vetting->status ] ); ?>; font-weight: bold;">
 							<?php echo esc_html( $status_labels[ $viewing_vetting->status ] ); ?>
 						</div>
-						<div class="description"><?php esc_html_e( 'Case completed', 'remember' ); ?></div>
+						<?php if ( 'completed' === $viewing_vetting->status ) : ?>
+							<div class="description"><?php esc_html_e( 'Case completed', 'remember' ); ?></div>
+						<?php endif; ?>
 					</div>
 				<?php endif; ?>
 			</div>
@@ -107,9 +110,20 @@ if ( ! defined( 'WPINC' ) ) {
 	<!-- Quick Actions -->
 	<div class="remember-member-detail-card">
 		<h3 class="remember-vetting-detail-section-title"><?php esc_html_e( 'Quick Actions', 'remember' ); ?></h3>
+		<?php if ( 'completed' !== $viewing_vetting->status && ! $can_work_case ) : ?>
+			<p class="description">
+				<?php
+				if ( empty( $viewing_vetting->primary_vetter_id ) ) {
+					esc_html_e( 'This case has no primary vetter yet. Once one is assigned, only the primary vetter, collaborators, and users with Access Settings can work it. Any vetter can add notes.', 'remember' );
+				} else {
+					esc_html_e( 'Only the primary vetter, collaborators, and users with Access Settings can work this case. Any vetter can add notes.', 'remember' );
+				}
+				?>
+			</p>
+		<?php endif; ?>
 		<div class="remember-vetting-quick-actions">
 
-			<?php if ( empty( $viewing_vetting->primary_vetter_id ) || 'pending' === $viewing_vetting->status ) : ?>
+			<?php if ( ( empty( $viewing_vetting->primary_vetter_id ) || 'pending' === $viewing_vetting->status ) && 'completed' !== $viewing_vetting->status && $can_assign_case ) : ?>
 				<div class="remember-vetting-quick-actions__group">
 					<form method="post" action="">
 						<?php wp_nonce_field( 'remember_vetting_action', 'remember_vetting_nonce' ); ?>
@@ -130,7 +144,7 @@ if ( ! defined( 'WPINC' ) ) {
 				</div>
 			<?php endif; ?>
 
-			<?php if ( 'pending' === $viewing_vetting->status || 'scheduled' === $viewing_vetting->status ) :
+			<?php if ( $can_work_case && ( 'pending' === $viewing_vetting->status || 'scheduled' === $viewing_vetting->status ) ) :
 				require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-timezone.php';
 				$org_tz_name = Remember_Timezone::get_organization_timezone_name();
 				$current_user_id = get_current_user_id();
@@ -186,7 +200,7 @@ if ( ! defined( 'WPINC' ) ) {
 				</div>
 			<?php endif; ?>
 
-			<?php if ( 'pending' === $viewing_vetting->status || 'scheduled' === $viewing_vetting->status || 'in_progress' === $viewing_vetting->status ) : ?>
+			<?php if ( $can_work_case && ( 'pending' === $viewing_vetting->status || 'scheduled' === $viewing_vetting->status || 'in_progress' === $viewing_vetting->status ) ) : ?>
 				<div class="remember-vetting-quick-actions__group">
 					<form method="post" action="">
 						<?php wp_nonce_field( 'remember_vetting_action', 'remember_vetting_nonce' ); ?>
@@ -283,7 +297,7 @@ if ( ! defined( 'WPINC' ) ) {
 			<h3 class="remember-vetting-detail-section-title"><?php esc_html_e( 'Case Notes', 'remember' ); ?></h3>
 			
 			<!-- Add Note Form -->
-			<?php if ( 'completed' !== $viewing_vetting->status ) : ?>
+			<?php if ( 'completed' !== $viewing_vetting->status && current_user_can( 'remember_update_vetting' ) ) : ?>
 				<div style="margin-bottom: 15px; padding: 12px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
 					<h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600;"><?php esc_html_e( 'Add Note', 'remember' ); ?></h4>
 					<form method="post" action="">
@@ -335,7 +349,7 @@ if ( ! defined( 'WPINC' ) ) {
 			<h3 class="remember-vetting-detail-section-title"><?php esc_html_e( 'Collaborators', 'remember' ); ?></h3>
 			
 			<!-- Add Collaborator Form -->
-			<?php if ( 'completed' !== $viewing_vetting->status ) : ?>
+			<?php if ( 'completed' !== $viewing_vetting->status && $can_work_case ) : ?>
 				<div style="margin-bottom: 15px; padding: 12px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
 					<h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600;"><?php esc_html_e( 'Add Collaborator', 'remember' ); ?></h4>
 					<form method="post" action="">
