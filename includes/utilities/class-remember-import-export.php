@@ -15,6 +15,7 @@ require_once plugin_dir_path( __FILE__ ) . '../models/class-member.php';
 require_once plugin_dir_path( __FILE__ ) . '../models/class-event.php';
 require_once plugin_dir_path( __FILE__ ) . '../models/class-location.php';
 require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
+require_once plugin_dir_path( __FILE__ ) . 'class-remember-capabilities.php';
 
 /**
  * Import/Export utility class.
@@ -773,16 +774,17 @@ class Remember_Import_Export {
 				) );
 			} else {
 				$user_id = $user->ID;
-				if ( user_can( $user, 'manage_options' ) && ! current_user_can( 'manage_options' ) ) {
+				if ( ! Remember_Capabilities::current_user_can_administer_account( $user_id ) ) {
 					Remember_Logger::warning(
-						'Member import skipped a WordPress administrator',
+						'Member import skipped a privileged WordPress account',
 						array(
-							'row'     => $row_number,
-							'user_id' => $user_id,
+							'row'        => $row_number,
+							'user_id'    => $user_id,
+							'by_user_id' => get_current_user_id(),
 						)
 					);
 					$results['error']++;
-					$results['errors'][] = sprintf( __( 'Row %d: That email belongs to a WordPress administrator.', 'remember' ), $row_number );
+					$results['errors'][] = sprintf( __( 'Row %d: That email belongs to a WordPress administrator or a user who can edit other users.', 'remember' ), $row_number );
 					continue;
 				}
 				if ( $dry_run ) {
