@@ -62,7 +62,7 @@ if ( isset( $_POST['remember_role_action'] ) && check_admin_referer( 'remember_r
 		}
 		
 		$data = array(
-			'role_name'     => sanitize_text_field( $_POST['role_name'] ),
+			'role_name'     => sanitize_text_field( wp_unslash( $_POST['role_name'] ) ),
 			'role_type'     => sanitize_text_field( $_POST['role_type'] ),
 			'is_event_role' => ( 'event' === $_POST['role_type'] ) ? 1 : 0,
 			'description'   => isset( $_POST['description'] ) ? sanitize_textarea_field( wp_unslash( $_POST['description'] ) ) : '',
@@ -93,7 +93,7 @@ if ( isset( $_POST['remember_role_action'] ) && check_admin_referer( 'remember_r
 		} elseif ( Remember_Capabilities::is_protected_system_role( $existing_role ) && ! current_user_can( 'manage_options' ) ) {
 			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Only a WordPress administrator can edit the System Administrator role.', 'remember' ) . '</p></div>';
 		} else {
-			$role_name = sanitize_text_field( $_POST['role_name'] );
+			$role_name = sanitize_text_field( wp_unslash( $_POST['role_name'] ) );
 			// Keep the protected role name stable.
 			if ( Remember_Capabilities::is_protected_system_role( $existing_role ) ) {
 				$role_name = 'System Administrator';

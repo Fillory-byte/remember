@@ -142,14 +142,14 @@ if ( isset( $_POST['remember_settings_action'] ) && 'disconnect_qb' === $_POST['
 // Handle QuickBooks credentials save
 if ( isset( $_POST['remember_settings_action'] ) && 'save_qb_credentials' === $_POST['remember_settings_action'] && check_admin_referer( 'remember_settings_action', 'remember_settings_nonce' ) ) {
 	$settings = Remember_QuickBooks_OAuth::get_settings() ?: array();
-	$settings['client_id'] = isset( $_POST['qb_client_id'] ) ? sanitize_text_field( $_POST['qb_client_id'] ) : '';
+	$settings['client_id'] = isset( $_POST['qb_client_id'] ) ? sanitize_text_field( wp_unslash( $_POST['qb_client_id'] ) ) : '';
 	
 	// Only update client_secret if a new value was provided
 	if ( ! empty( $_POST['qb_client_secret'] ) ) {
-		$settings['client_secret'] = sanitize_text_field( $_POST['qb_client_secret'] );
+		$settings['client_secret'] = sanitize_text_field( wp_unslash( $_POST['qb_client_secret'] ) );
 	}
 	
-	$settings['environment'] = isset( $_POST['qb_environment'] ) ? sanitize_text_field( $_POST['qb_environment'] ) : 'sandbox';
+	$settings['environment'] = isset( $_POST['qb_environment'] ) ? sanitize_text_field( wp_unslash( $_POST['qb_environment'] ) ) : 'sandbox';
 	
 	if ( Remember_QuickBooks_OAuth::save_settings( $settings ) ) {
 		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'QuickBooks credentials saved successfully.', 'remember' ) . '</p></div>';

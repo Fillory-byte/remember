@@ -151,12 +151,12 @@ if ( isset( $_POST['remember_location_action'] ) && check_admin_referer( 'rememb
 		}
 		
 		$data = array(
-			'location_name'  => sanitize_text_field( $_POST['location_name'] ),
-			'address_street' => sanitize_text_field( $_POST['address_street'] ),
-			'address_city'   => sanitize_text_field( $_POST['address_city'] ),
-			'address_state'  => sanitize_text_field( $_POST['address_state'] ),
-			'address_postal' => sanitize_text_field( $_POST['address_postal'] ),
-			'address_country' => sanitize_text_field( $_POST['address_country'] ),
+			'location_name'  => sanitize_text_field( wp_unslash( $_POST['location_name'] ) ),
+			'address_street' => sanitize_text_field( wp_unslash( $_POST['address_street'] ) ),
+			'address_city'   => sanitize_text_field( wp_unslash( $_POST['address_city'] ) ),
+			'address_state'  => sanitize_text_field( wp_unslash( $_POST['address_state'] ) ),
+			'address_postal' => sanitize_text_field( wp_unslash( $_POST['address_postal'] ) ),
+			'address_country' => sanitize_text_field( wp_unslash( $_POST['address_country'] ) ),
 			'details'        => isset( $_POST['details'] ) ? wp_kses_post( wp_unslash( $_POST['details'] ) ) : '',
 			'is_active'      => isset( $_POST['is_active'] ) ? 1 : 0,
 		);
@@ -184,12 +184,12 @@ if ( isset( $_POST['remember_location_action'] ) && check_admin_referer( 'rememb
 		$location = $location_model->get( $location_id );
 		
 		$data = array(
-			'location_name'  => sanitize_text_field( $_POST['location_name'] ),
-			'address_street' => sanitize_text_field( $_POST['address_street'] ),
-			'address_city'   => sanitize_text_field( $_POST['address_city'] ),
-			'address_state'  => sanitize_text_field( $_POST['address_state'] ),
-			'address_postal' => sanitize_text_field( $_POST['address_postal'] ),
-			'address_country' => sanitize_text_field( $_POST['address_country'] ),
+			'location_name'  => sanitize_text_field( wp_unslash( $_POST['location_name'] ) ),
+			'address_street' => sanitize_text_field( wp_unslash( $_POST['address_street'] ) ),
+			'address_city'   => sanitize_text_field( wp_unslash( $_POST['address_city'] ) ),
+			'address_state'  => sanitize_text_field( wp_unslash( $_POST['address_state'] ) ),
+			'address_postal' => sanitize_text_field( wp_unslash( $_POST['address_postal'] ) ),
+			'address_country' => sanitize_text_field( wp_unslash( $_POST['address_country'] ) ),
 			'details'        => isset( $_POST['details'] ) ? wp_kses_post( wp_unslash( $_POST['details'] ) ) : '',
 			'is_active'      => isset( $_POST['is_active'] ) ? 1 : 0,
 		);

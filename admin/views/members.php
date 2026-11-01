@@ -82,8 +82,8 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 		// Create WordPress user first
 		$username = isset( $_POST['username'] ) ? sanitize_user( $_POST['username'] ) : '';
 		$email = isset( $_POST['email'] ) ? sanitize_email( $_POST['email'] ) : '';
-		$first_name = isset( $_POST['first_name'] ) ? sanitize_text_field( $_POST['first_name'] ) : '';
-		$last_name = isset( $_POST['last_name'] ) ? sanitize_text_field( $_POST['last_name'] ) : '';
+		$first_name = isset( $_POST['first_name'] ) ? sanitize_text_field( wp_unslash( $_POST['first_name'] ) ) : '';
+		$last_name = isset( $_POST['last_name'] ) ? sanitize_text_field( wp_unslash( $_POST['last_name'] ) ) : '';
 		$password = isset( $_POST['password'] ) ? $_POST['password'] : wp_generate_password( 12, false );
 		$status = isset( $_POST['status'] ) ? sanitize_key( wp_unslash( $_POST['status'] ) ) : 'pending_vetting';
 		if ( ! in_array( $status, Remember_Member::assignable_statuses(), true ) ) {
