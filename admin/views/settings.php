@@ -142,6 +142,7 @@ if ( isset( $_POST['remember_settings_action'] ) && 'disconnect_qb' === $_POST['
 // Handle QuickBooks credentials save
 if ( isset( $_POST['remember_settings_action'] ) && 'save_qb_credentials' === $_POST['remember_settings_action'] && check_admin_referer( 'remember_settings_action', 'remember_settings_nonce' ) ) {
 	$settings = Remember_QuickBooks_OAuth::get_settings() ?: array();
+	$previous = $settings;
 	$settings['client_id'] = isset( $_POST['qb_client_id'] ) ? sanitize_text_field( wp_unslash( $_POST['qb_client_id'] ) ) : '';
 	
 	// Only update client_secret if a new value was provided
@@ -150,10 +151,21 @@ if ( isset( $_POST['remember_settings_action'] ) && 'save_qb_credentials' === $_
 	}
 	
 	$settings['environment'] = isset( $_POST['qb_environment'] ) ? sanitize_text_field( wp_unslash( $_POST['qb_environment'] ) ) : 'sandbox';
+
+	// Only whether each value changed is logged, never the values themselves.
+	$credential_log = array(
+		'client_id_changed'     => ( isset( $previous['client_id'] ) ? (string) $previous['client_id'] : '' ) !== $settings['client_id'],
+		'client_secret_changed' => ( isset( $previous['client_secret'] ) ? (string) $previous['client_secret'] : '' ) !== ( isset( $settings['client_secret'] ) ? (string) $settings['client_secret'] : '' ),
+		'environment'           => $settings['environment'],
+		'environment_changed'   => ( isset( $previous['environment'] ) ? (string) $previous['environment'] : '' ) !== $settings['environment'],
+		'user_id'               => get_current_user_id(),
+	);
 	
 	if ( Remember_QuickBooks_OAuth::save_settings( $settings ) ) {
+		Remember_Logger::info( 'QuickBooks credentials saved', $credential_log );
 		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'QuickBooks credentials saved successfully.', 'remember' ) . '</p></div>';
 	} else {
+		Remember_Logger::error( 'QuickBooks credentials could not be saved', array( 'user_id' => get_current_user_id() ) );
 		echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Failed to save QuickBooks credentials.', 'remember' ) . '</p></div>';
 	}
 }
@@ -174,6 +186,13 @@ if ( isset( $_POST['remember_settings_action'] ) && 'disconnect_xero' === $_POST
 			$settings['client_secret']
 		);
 	}
+	Remember_Logger::info(
+		'Xero disconnected',
+		array(
+			'tenant_name' => ( $settings && ! empty( $settings['tenant_name'] ) ) ? $settings['tenant_name'] : '',
+			'user_id'     => get_current_user_id(),
+		)
+	);
 
 	Remember_Xero_OAuth::save_settings( array() );
 
@@ -192,15 +211,25 @@ if ( isset( $_POST['remember_settings_action'] ) && 'disconnect_xero' === $_POST
 // Handle Xero credentials save.
 if ( isset( $_POST['remember_settings_action'] ) && 'save_xero_credentials' === $_POST['remember_settings_action'] && check_admin_referer( 'remember_settings_action', 'remember_settings_nonce' ) ) {
 	$settings = Remember_Xero_OAuth::get_settings() ?: array();
+	$previous = $settings;
 	$settings['client_id'] = isset( $_POST['xero_client_id'] ) ? sanitize_text_field( wp_unslash( $_POST['xero_client_id'] ) ) : '';
 
 	if ( ! empty( $_POST['xero_client_secret'] ) ) {
 		$settings['client_secret'] = sanitize_text_field( wp_unslash( $_POST['xero_client_secret'] ) );
 	}
 
+	// Only whether each value changed is logged, never the values themselves.
+	$credential_log = array(
+		'client_id_changed'     => ( isset( $previous['client_id'] ) ? (string) $previous['client_id'] : '' ) !== $settings['client_id'],
+		'client_secret_changed' => ( isset( $previous['client_secret'] ) ? (string) $previous['client_secret'] : '' ) !== ( isset( $settings['client_secret'] ) ? (string) $settings['client_secret'] : '' ),
+		'user_id'               => get_current_user_id(),
+	);
+
 	if ( Remember_Xero_OAuth::save_settings( $settings ) ) {
+		Remember_Logger::info( 'Xero credentials saved', $credential_log );
 		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Xero credentials saved successfully.', 'remember' ) . '</p></div>';
 	} else {
+		Remember_Logger::error( 'Xero credentials could not be saved', array( 'user_id' => get_current_user_id() ) );
 		echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Failed to save Xero credentials.', 'remember' ) . '</p></div>';
 	}
 }

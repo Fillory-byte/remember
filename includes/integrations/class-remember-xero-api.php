@@ -67,6 +67,7 @@ class Remember_Xero_API {
 		$settings['expires_at'] = time() + $expires_in;
 
 		Remember_Xero_OAuth::save_settings( $settings );
+		Remember_Logger::debug( 'Xero access token refreshed', array( 'expires_in' => $expires_in ) );
 
 		// Re-load so decrypted tokens are present for callers.
 		return Remember_Xero_OAuth::get_settings();

@@ -1249,6 +1249,27 @@ class Remember_Admin {
 		$notice   = 'remember_qb_oauth_notice_' . $uid;
 		$redirect = admin_url( 'admin.php?page=remember-settings#quickbooks' );
 
+		$code    = isset( $_GET['code'] ) ? sanitize_text_field( wp_unslash( $_GET['code'] ) ) : '';
+		$state   = isset( $_GET['state'] ) ? sanitize_text_field( wp_unslash( $_GET['state'] ) ) : '';
+		$pending = Remember_QuickBooks_OAuth::get_pending_oauth();
+
+		// Verified before an error is shown, so a crafted link cannot cancel a sign-in or put its text in a notice.
+		if ( ! $pending || '' === $state || ! hash_equals( (string) $pending['state'], $state ) ) {
+			$this->finish_qb_oauth_error(
+				__( 'This QuickBooks sign-in could not be verified. It may have expired, been started in another tab, or been reloaded. Nothing was changed; click Connect or Reconnect QuickBooks again.', 'remember' ),
+				$redirect,
+				'QuickBooks sign-in state did not match',
+				array(
+					'has_pending' => (bool) $pending,
+					'user_id'     => $uid,
+				),
+				false
+			);
+		}
+
+		// The state is single-use: consume it before any further work.
+		Remember_QuickBooks_OAuth::clear_pending_oauth();
+
 		if ( ! empty( $_GET['error'] ) ) {
 			$error       = sanitize_text_field( wp_unslash( $_GET['error'] ) );
 			$description = isset( $_GET['error_description'] ) ? sanitize_text_field( wp_unslash( $_GET['error_description'] ) ) : '';
@@ -1268,25 +1289,6 @@ class Remember_Admin {
 				)
 			);
 		}
-
-		$code    = isset( $_GET['code'] ) ? sanitize_text_field( wp_unslash( $_GET['code'] ) ) : '';
-		$state   = isset( $_GET['state'] ) ? sanitize_text_field( wp_unslash( $_GET['state'] ) ) : '';
-		$pending = Remember_QuickBooks_OAuth::get_pending_oauth();
-
-		if ( ! $pending || '' === $state || ! hash_equals( (string) $pending['state'], $state ) ) {
-			$this->finish_qb_oauth_error(
-				__( 'This QuickBooks sign-in could not be verified. It may have expired, been started in another tab, or been reloaded. Nothing was changed; click Connect or Reconnect QuickBooks again.', 'remember' ),
-				$redirect,
-				'QuickBooks sign-in state did not match',
-				array(
-					'has_pending' => (bool) $pending,
-					'user_id'     => $uid,
-				)
-			);
-		}
-
-		// The state is single-use: consume it before any further work.
-		Remember_QuickBooks_OAuth::clear_pending_oauth();
 
 		if ( '' === $code ) {
 			$this->finish_qb_oauth_error(
@@ -1449,6 +1451,27 @@ class Remember_Admin {
 		}
 
 		$redirect = admin_url( 'admin.php?page=remember-settings#xero' );
+		$state    = isset( $_GET['state'] ) ? sanitize_text_field( wp_unslash( $_GET['state'] ) ) : '';
+
+		// Only the administrator who started this sign-in, in the same browser, may finish it or see its error.
+		if ( ! is_array( $pending ) || '' === $state || ! hash_equals( (string) $pending['state'], $state ) ) {
+			require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-logger.php';
+			Remember_Logger::warning(
+				'Xero sign-in state did not match',
+				array(
+					'has_pending' => is_array( $pending ),
+					'user_id'     => get_current_user_id(),
+				)
+			);
+			$this->finish_xero_oauth_error(
+				__( 'This Xero sign-in could not be verified. It may have expired, been started by another administrator or in another tab, or been reloaded. Nothing was changed; click Reconnect Xero again.', 'remember' ),
+				$redirect,
+				false
+			);
+		}
+
+		// The state is single-use: consume it before any further work.
+		Remember_Xero_OAuth::clear_pending_oauth();
 
 		if ( ! empty( $_GET['error'] ) ) {
 			$error_desc = isset( $_GET['error_description'] ) ? sanitize_text_field( wp_unslash( $_GET['error_description'] ) ) : sanitize_text_field( wp_unslash( $_GET['error'] ) );
@@ -1469,15 +1492,7 @@ class Remember_Admin {
 			);
 		}
 
-		$code  = sanitize_text_field( wp_unslash( $_GET['code'] ) );
-		$state = isset( $_GET['state'] ) ? sanitize_text_field( wp_unslash( $_GET['state'] ) ) : '';
-
-		if ( ! is_array( $pending ) || empty( $pending['state'] ) || ! hash_equals( (string) $pending['state'], $state ) ) {
-			$this->finish_xero_oauth_error(
-				__( 'Invalid OAuth state. Click Reconnect Xero again and finish the Xero prompt without using the browser Back button.', 'remember' ),
-				$redirect
-			);
-		}
+		$code = sanitize_text_field( wp_unslash( $_GET['code'] ) );
 
 		$settings = Remember_Xero_OAuth::get_settings();
 		if ( ! $settings || empty( $settings['client_id'] ) || empty( $settings['client_secret'] ) ) {
@@ -1486,6 +1501,7 @@ class Remember_Admin {
 				$redirect
 			);
 		}
+		$previous_tenant = ! empty( $settings['tenant_id'] ) ? (string) $settings['tenant_id'] : '';
 
 		$redirect_uri  = ! empty( $pending['redirect_uri'] ) ? $pending['redirect_uri'] : Remember_Xero_OAuth::get_redirect_uri();
 		$code_verifier = ! empty( $pending['code_verifier'] ) ? $pending['code_verifier'] : '';
@@ -1533,8 +1549,6 @@ class Remember_Admin {
 			$this->finish_xero_oauth_error( __( 'Failed to save Xero connection.', 'remember' ), $redirect );
 		}
 
-		Remember_Xero_OAuth::clear_pending_oauth();
-
 		// Cache org ShortCode for invoice deep links (best-effort).
 		require_once plugin_dir_path( __FILE__ ) . '../includes/integrations/class-remember-xero-api.php';
 		$org = Remember_Xero_API::get_organisation();
@@ -1553,6 +1567,16 @@ class Remember_Admin {
 			array( '%s' )
 		);
 
+		Remember_Logger::info(
+			'Xero connected',
+			array(
+				'tenant_id'   => $settings['tenant_id'],
+				'tenant_name' => $settings['tenant_name'],
+				'reconnect'   => '' !== $previous_tenant,
+				'user_id'     => get_current_user_id(),
+			)
+		);
+
 		$org_label = $settings['tenant_name'] ? $settings['tenant_name'] : $settings['tenant_id'];
 		Remember_Xero_OAuth::set_last_oauth_result(
 			'success',
@@ -1569,12 +1593,15 @@ class Remember_Admin {
 	/**
 	 * Store a Xero OAuth failure and return to Settings → Xero.
 	 *
-	 * @param string $message  Error message.
-	 * @param string $redirect Admin URL.
+	 * @param string $message       Error message.
+	 * @param string $redirect      Admin URL.
+	 * @param bool   $clear_pending Whether to drop the user's in-flight sign-in. False when the callback did not prove it belongs to that sign-in.
 	 */
-	private function finish_xero_oauth_error( $message, $redirect ) {
+	private function finish_xero_oauth_error( $message, $redirect, $clear_pending = true ) {
 		Remember_Xero_OAuth::set_last_oauth_result( 'error', $message );
-		Remember_Xero_OAuth::clear_pending_oauth();
+		if ( $clear_pending ) {
+			Remember_Xero_OAuth::clear_pending_oauth();
+		}
 		wp_safe_redirect( $redirect );
 		exit;
 	}
@@ -1582,16 +1609,19 @@ class Remember_Admin {
 	/**
 	 * End a QuickBooks sign-in attempt with an error notice for the settings tab.
 	 *
-	 * @param string $message     Message shown to the admin.
-	 * @param string $redirect    Settings URL to return to.
-	 * @param string $log_message Warning to log, or '' when the caller already logged the failure.
-	 * @param array  $context     Log context.
+	 * @param string $message       Message shown to the admin.
+	 * @param string $redirect      Settings URL to return to.
+	 * @param string $log_message   Warning to log, or '' when the caller already logged the failure.
+	 * @param array  $context       Log context.
+	 * @param bool   $clear_pending Whether to drop the user's in-flight sign-in. False when the callback did not prove it belongs to that sign-in.
 	 */
-	private function finish_qb_oauth_error( $message, $redirect, $log_message = '', $context = array() ) {
+	private function finish_qb_oauth_error( $message, $redirect, $log_message = '', $context = array(), $clear_pending = true ) {
 		if ( '' !== $log_message ) {
 			Remember_Logger::warning( $log_message, $context );
 		}
-		Remember_QuickBooks_OAuth::clear_pending_oauth();
+		if ( $clear_pending ) {
+			Remember_QuickBooks_OAuth::clear_pending_oauth();
+		}
 		set_transient(
 			'remember_qb_oauth_notice_' . get_current_user_id(),
 			array(

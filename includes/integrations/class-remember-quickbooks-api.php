@@ -116,6 +116,7 @@ class Remember_QuickBooks_API {
 			}
 			$settings['expires_at'] = time() + $rin;
 			Remember_QuickBooks_OAuth::save_settings( $settings );
+			Remember_Logger::debug( 'QuickBooks access token refreshed', array( 'expires_in' => $rin ) );
 
 			return trim( (string) $settings['access_token'] );
 		}
