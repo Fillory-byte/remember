@@ -237,6 +237,8 @@ class Remember_Admin {
 							'scheduleSaved' => __( 'Schedule saved.', 'remember' ),
 							'scheduleNote' => __( 'Times use the site timezone (%s). The CSV uses your access. Each person is checked again when it sends.', 'remember' ),
 							'lastSent'     => __( 'Last sent %s.', 'remember' ),
+							'limitedAccess' => __( '(limited access)', 'remember' ),
+							'limitedIntro' => __( 'You chose people who could not pull this data themselves. Sending it to them is your decision:', 'remember' ),
 							'notSentYet'   => __( 'Not sent yet.', 'remember' ),
 							'copyNeedUser' => __( 'Choose someone to copy this report to.', 'remember' ),
 							'noRecipients' => __( 'No one else can receive this report. They need View Reports plus the read access this subject uses.', 'remember' ),

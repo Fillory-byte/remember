@@ -195,8 +195,9 @@ if ( ! defined( 'WPINC' ) ) {
 					</label>
 					<label class="remember-reports-field">
 						<span class="remember-reports-label"><?php esc_html_e( 'Send to', 'remember' ); ?></span>
-						<select id="remember-report-schedule-recipients" multiple size="6"></select>
+						<select id="remember-report-schedule-recipients" multiple size="6" aria-describedby="remember-report-schedule-warning"></select>
 					</label>
+					<div id="remember-report-schedule-warning" class="notice notice-warning inline remember-reports-schedule-warning" aria-live="polite" hidden></div>
 					<p class="description" id="remember-report-schedule-last"></p>
 					<p>
 						<button type="button" class="button button-primary" id="remember-report-schedule-save"><?php esc_html_e( 'Save schedule', 'remember' ); ?></button>

@@ -704,6 +704,29 @@
 		$('#remember-report-schedule-panel').prop('hidden', true);
 	}
 
+	function scheduleRecipientWarning() {
+		var $box = $('#remember-report-schedule-warning');
+		var notes = [];
+		$('#remember-report-schedule-recipients option:selected').each(function () {
+			var note = $(this).data('note');
+			if (note) {
+				notes.push(String(note));
+			}
+		});
+		$box.empty();
+		if (!notes.length) {
+			$box.prop('hidden', true);
+			return;
+		}
+		var $list = $('<ul></ul>');
+		notes.forEach(function (note) {
+			$list.append($('<li></li>').text(note));
+		});
+		$box.append($('<p></p>').text(t('limitedIntro', 'You chose people who could not pull this data themselves. Sending it to them is your decision:')));
+		$box.append($list);
+		$box.prop('hidden', false);
+	}
+
 	function scheduleFrequencyFields() {
 		var frequency = $('#remember-report-schedule-frequency').val();
 		$('#remember-report-schedule-weekday-wrap').prop('hidden', frequency !== 'weekly');
@@ -734,12 +757,17 @@
 		var $people = $('#remember-report-schedule-recipients');
 		$people.empty();
 		(data.recipients || []).forEach(function (person) {
-			var $opt = $('<option></option>').val(String(person.id)).text(person.label);
+			var label = person.note ? person.label + ' ' + t('limitedAccess', '(limited access)') : person.label;
+			var $opt = $('<option></option>').val(String(person.id)).text(label);
+			if (person.note) {
+				$opt.data('note', person.note);
+			}
 			if (chosen[String(person.id)]) {
 				$opt.prop('selected', true);
 			}
 			$people.append($opt);
 		});
+		scheduleRecipientWarning();
 		if (schedule.last_sent_at) {
 			$('#remember-report-schedule-last').text(t('lastSent', 'Last sent %s.').replace('%s', schedule.last_sent_at));
 		} else {
@@ -1162,6 +1190,7 @@
 			hideSchedulePanel();
 		});
 		$('#remember-report-schedule-frequency').on('change', scheduleFrequencyFields);
+		$('#remember-report-schedule-recipients').on('change', scheduleRecipientWarning);
 		$('#remember-report-schedule-save').on('click', function () {
 			if (!state.reportId) {
 				notice(t('scheduleNeedSave', 'Save this report before scheduling it.'), 'error');

@@ -204,11 +204,13 @@ class Remember_Report_Catalog {
 	 * @param string $subject    Subject.
 	 * @param array  $definition Definition.
 	 * @param int    $exclude_id User to skip (usually the owner).
-	 * @return array<int,array{id:int,label:string}>
+	 * @param int    $owner_id   When set, each person gets a note if the owner's access returns rows they could not get themselves.
+	 * @return array<int,array{id:int,label:string,note?:string}>
 	 */
-	public static function recipients_for_report( $subject, $definition, $exclude_id = 0 ) {
+	public static function recipients_for_report( $subject, $definition, $exclude_id = 0, $owner_id = 0 ) {
 		global $wpdb;
 		$exclude_id = absint( $exclude_id );
+		$owner_id   = absint( $owner_id );
 		$ids        = array();
 		$member_ids = $wpdb->get_col( "SELECT DISTINCT member_id FROM {$wpdb->prefix}remember_member_roles" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		if ( is_array( $member_ids ) ) {
@@ -242,10 +244,14 @@ class Remember_Report_Catalog {
 			if ( $user->user_login && $user->user_login !== $label ) {
 				$label .= ' (' . $user->user_login . ')';
 			}
-			$out[] = array(
+			$person = array(
 				'id'    => $id,
 				'label' => $label,
 			);
+			if ( $owner_id > 0 ) {
+				$person['note'] = self::recipient_access_note( $id, $owner_id, $label );
+			}
+			$out[] = $person;
 		}
 		usort(
 			$out,
@@ -445,6 +451,52 @@ class Remember_Report_Catalog {
 	 */
 	public static function is_attendees_only() {
 		return current_user_can( 'remember_read_attendees' ) && ! current_user_can( 'remember_read_members' );
+	}
+
+	/**
+	 * Whether a given user is attendees-only (no full member read).
+	 *
+	 * @param int $user_id User.
+	 * @return bool
+	 */
+	public static function user_is_attendees_only( $user_id ) {
+		$user_id = absint( $user_id );
+		return $user_id > 0 && user_can( $user_id, 'remember_read_attendees' ) && ! user_can( $user_id, 'remember_read_members' );
+	}
+
+	/**
+	 * Why a scheduled email built with the owner's access can hold rows this recipient could not run themselves.
+	 *
+	 * Every report subject is limited to co-attendees for attendees-only staff, so a different
+	 * attendees-only person still sees a different set of people than the owner.
+	 *
+	 * @param int    $recipient_id Recipient.
+	 * @param int    $owner_id     Report owner.
+	 * @param string $label        Recipient name and username for the message.
+	 * @return string Empty when the recipient could get the same rows.
+	 */
+	public static function recipient_access_note( $recipient_id, $owner_id, $label ) {
+		$recipient_id = absint( $recipient_id );
+		$owner_id     = absint( $owner_id );
+		if ( $recipient_id < 1 || $recipient_id === $owner_id || ! self::user_is_attendees_only( $recipient_id ) ) {
+			return '';
+		}
+		$user = get_userdata( $recipient_id );
+		$name = $user && $user->display_name ? $user->display_name : $label;
+		if ( self::user_is_attendees_only( $owner_id ) ) {
+			return sprintf(
+				/* translators: 1: recipient name and username, 2: recipient name */
+				__( '%1$s does not have the Read Members permission, so on their own they see only people at the events they attended. This email is built from the events you attended, so it can include users %2$s wouldn\'t be able to see on their own account.', 'remember' ),
+				$label,
+				$name
+			);
+		}
+		return sprintf(
+			/* translators: 1: recipient name and username, 2: recipient name */
+			__( '%1$s does not have the Read Members permission, so on their own they see only people at the events they attended. This email is built with your access and can include everyone your report returns, including users %2$s wouldn\'t be able to see on their own account.', 'remember' ),
+			$label,
+			$name
+		);
 	}
 
 	/**

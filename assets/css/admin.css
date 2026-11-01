@@ -3379,6 +3379,15 @@
 	max-width: 100%;
 }
 
+.remember-reports-schedule-warning[hidden] {
+	display: none;
+}
+
+.remember-reports-schedule-warning ul {
+	margin: 0 0 8px 18px;
+	list-style: disc;
+}
+
 .remember-reports-results__head {
 	display: flex;
 	align-items: baseline;
