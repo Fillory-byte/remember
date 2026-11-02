@@ -83,6 +83,302 @@
 	margin-left: 0;
 }
 
+/*
+ * Settings screen layout. Scoped to .remember-settings so these win over core
+ * rules such as p.submit, .form-table th and .wrap .notice.
+ */
+.remember-settings .remember-initially-hidden {
+	display: none;
+}
+
+.notice.notice-info.remember-settings-getting-started {
+	margin: 12px 0 18px;
+}
+
+.remember-settings .remember-settings-stacked-label {
+	display: block;
+	margin-bottom: 0.35em;
+}
+
+#remember-ticket-logo-preview {
+	margin-bottom: 8px;
+}
+
+#remember-ticket-logo-preview img {
+	max-height: 72px;
+	width: auto;
+}
+
+.remember-settings .remember-settings-flush-top {
+	margin-top: 0;
+}
+
+.remember-settings .remember-settings-flush {
+	margin: 0;
+}
+
+.remember-settings .remember-settings-section {
+	margin-bottom: 30px;
+}
+
+.remember-settings .remember-settings-section-top {
+	margin-top: 20px;
+}
+
+.remember-settings .remember-settings-inline-form {
+	display: inline-block;
+	margin: 0 8px 8px 0;
+}
+
+.remember-settings .remember-settings-inline-form--last {
+	margin-right: 0;
+}
+
+.remember-settings .remember-settings-connect-help {
+	margin-top: 8px;
+}
+
+.remember-settings .notice.remember-settings-inline-notice {
+	margin: 0 0 1em;
+}
+
+.remember-settings .notice.remember-settings-inline-notice--spaced {
+	margin-bottom: 20px;
+}
+
+/* Connection status boxes on the QuickBooks and Xero tabs. */
+.remember-settings .remember-settings-status {
+	padding: 15px;
+	border: 1px solid;
+	border-radius: 4px;
+	margin-bottom: 20px;
+}
+
+.remember-settings .remember-settings-status--warning {
+	background: #fff3cd;
+	border-color: #ffc107;
+}
+
+.remember-settings .remember-settings-status--success {
+	background: #d4edda;
+	border-color: #c3e6cb;
+}
+
+.remember-settings .remember-settings-status--error {
+	background: #f8d7da;
+	border-color: #f5c6cb;
+}
+
+.remember-settings .remember-settings-status-title {
+	margin: 0;
+}
+
+.remember-settings .remember-settings-status--warning .remember-settings-status-title {
+	color: #664d03;
+}
+
+.remember-settings .remember-settings-status--success .remember-settings-status-title {
+	color: #155724;
+}
+
+.remember-settings .remember-settings-status--error .remember-settings-status-title {
+	color: #721c24;
+}
+
+.remember-settings .remember-settings-status-detail {
+	margin: 8px 0 0;
+}
+
+.remember-settings .remember-settings-status-note {
+	margin: 5px 0 0;
+	font-size: 13px;
+}
+
+/* QuickBooks and Xero item mapping tables. */
+.remember-settings .remember-qb-mapping,
+.remember-settings .remember-xero-mapping {
+	margin-top: 30px;
+}
+
+.remember-settings .remember-item-mapping-heading {
+	margin-top: 18px;
+}
+
+.remember-settings .remember-item-mapping-heading--next {
+	margin-top: 22px;
+}
+
+.remember-settings .remember-item-mapping-table {
+	margin-top: 8px;
+}
+
+.remember-settings .remember-item-mapping-id-col {
+	width: 110px;
+}
+
+.remember-settings .remember-item-mapping-submit {
+	margin-bottom: 1.5em;
+}
+
+/* Shortcodes tab. */
+.remember-settings .remember-shortcode-cards {
+	margin-top: 30px;
+}
+
+.remember-settings .remember-shortcode-card {
+	background: #fff;
+	border: 1px solid #ccd0d4;
+	border-radius: 4px;
+	padding: 20px;
+	margin-bottom: 20px;
+}
+
+.remember-settings .remember-shortcode-card-title {
+	margin-top: 0;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.remember-settings .remember-shortcode-page-status {
+	font-size: 0.875em;
+	font-weight: normal;
+}
+
+.remember-settings .remember-shortcode-page-link {
+	margin-left: 10px;
+}
+
+.remember-settings .remember-shortcode-card-desc {
+	color: #646970;
+	margin: 10px 0;
+}
+
+.remember-settings .remember-shortcode-box {
+	background: #f6f7f7;
+	border: 1px solid #ddd;
+	border-radius: 3px;
+	padding: 15px;
+	margin: 15px 0;
+}
+
+.remember-settings .remember-shortcode-label {
+	display: block;
+	margin-bottom: 8px;
+}
+
+.remember-settings .remember-shortcode-code {
+	display: block;
+	padding: 10px;
+	background: #fff;
+	border: 1px solid #ddd;
+	border-radius: 3px;
+	font-size: 14px;
+	word-break: break-all;
+}
+
+.remember-settings .remember-shortcode-box .remember-copy-shortcode {
+	margin-top: 8px;
+}
+
+.remember-settings .remember-shortcode-box-text {
+	margin: 0 0 10px;
+}
+
+.remember-settings .remember-shortcode-box-footnote {
+	margin: 10px 0 0;
+}
+
+.remember-settings .remember-shortcode-section {
+	margin-top: 15px;
+	padding-top: 15px;
+	border-top: 1px solid #ddd;
+}
+
+.remember-settings .remember-shortcode-list {
+	margin: 0;
+	padding-left: 20px;
+}
+
+.remember-settings .remember-shortcode-note {
+	margin-top: 10px;
+}
+
+.remember-settings .remember-shortcode-page-creation {
+	background: #fff3cd;
+	border: 1px solid #ffc107;
+	border-radius: 4px;
+	padding: 15px;
+	margin-top: 30px;
+}
+
+/* Clothing tab. */
+.remember-settings .remember-clothing-form {
+	max-width: 480px;
+	margin-bottom: 24px;
+}
+
+.remember-settings .remember-clothing-table-narrow {
+	max-width: 480px;
+	margin-bottom: 12px;
+}
+
+.remember-settings .remember-clothing-table-wide {
+	max-width: 640px;
+	margin-bottom: 24px;
+}
+
+/* Notifications tab. */
+.remember-settings .remember-notifications-intro {
+	margin-bottom: 12px;
+}
+
+.remember-settings .remember-notification-toggle-row {
+	display: flex;
+	align-items: center;
+	margin-bottom: 10px;
+}
+
+.remember-settings .remember-notification-toggle-label {
+	font-weight: 600;
+	cursor: pointer;
+	margin: 0;
+}
+
+.remember-settings .remember-notification-desc {
+	margin: 5px 0 15px 25px;
+	font-size: 13px;
+}
+
+.remember-settings .remember-notification-fields {
+	margin-left: 25px;
+}
+
+.remember-settings .remember-notification-fields > .form-table {
+	margin: 0;
+}
+
+.remember-settings .remember-notification-fields > .form-table > tbody > tr > th {
+	width: 120px;
+	padding: 10px 0;
+	vertical-align: top;
+}
+
+.remember-settings .remember-notification-fields > .form-table > tbody > tr > td {
+	padding: 10px 0;
+}
+
+.remember-settings .remember-notification-help {
+	margin-top: 5px;
+	font-size: 12px;
+}
+
+.remember-settings p.submit.remember-settings-main-save {
+	margin-top: 1.75em;
+	padding-top: 1em;
+	border-top: 1px solid #c3c4c7;
+}
+
 .remember-notify-roles__groups {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

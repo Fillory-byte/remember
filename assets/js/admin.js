@@ -179,7 +179,7 @@
 				var attachment = ticketLogoFrame.state().get('selection').first().toJSON();
 				$('#ticket_logo_id').val(attachment.id);
 				var url = (attachment.sizes && attachment.sizes.medium) ? attachment.sizes.medium.url : attachment.url;
-				$('#remember-ticket-logo-preview').html('<img src="' + url + '" alt="" style="max-height: 72px; width: auto;">');
+				$('#remember-ticket-logo-preview').html('<img src="' + url + '" alt="">');
 				$('#remember-ticket-logo-clear').prop('disabled', false);
 			});
 			ticketLogoFrame.open();

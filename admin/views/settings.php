@@ -22,7 +22,7 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remem
 Remember_Logger::debug( 'Settings page loaded' );
 
 if ( current_user_can( 'remember_access_settings' ) ) {
-	echo '<div class="notice notice-info" style="margin: 12px 0 18px;"><p>';
+	echo '<div class="notice notice-info remember-settings-getting-started"><p>';
 	echo '<strong>' . esc_html__( 'Getting Started', 'remember' ) . '</strong> — ';
 	echo esc_html__( 'Set up locations, roles, optional add-ons (Products), and events in the recommended order, then wire up front-end pages when you are ready.', 'remember' ) . ' ';
 	echo '<a href="' . esc_url( admin_url( 'admin.php?page=remember-getting-started' ) ) . '">' . esc_html__( 'Open the Getting Started guide', 'remember' ) . '</a>';
@@ -784,7 +784,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 		</h2>
 
 		<!-- General Settings -->
-		<div id="general" class="remember-settings-tab" style="display: block;">
+		<div id="general" class="remember-settings-tab">
 			<table class="form-table">
 				<tr>
 					<th scope="row">
@@ -811,15 +811,15 @@ $im_platforms = Remember_Im_Platforms::get_all();
 					<td>
 						<?php $billing_provider = isset( $options['billing_provider'] ) ? $options['billing_provider'] : 'none'; ?>
 						<fieldset>
-							<label style="display:block;margin-bottom:0.35em;">
+							<label class="remember-settings-stacked-label">
 								<input type="radio" name="billing_provider" value="none" <?php checked( $billing_provider, 'none' ); ?>>
 								<?php esc_html_e( 'None (manual / cash tracking only)', 'remember' ); ?>
 							</label>
-							<label style="display:block;margin-bottom:0.35em;">
+							<label class="remember-settings-stacked-label">
 								<input type="radio" name="billing_provider" value="quickbooks" <?php checked( $billing_provider, 'quickbooks' ); ?>>
 								<?php esc_html_e( 'QuickBooks Online', 'remember' ); ?>
 							</label>
-							<label style="display:block;margin-bottom:0.35em;">
+							<label class="remember-settings-stacked-label">
 								<input type="radio" name="billing_provider" value="xero" <?php checked( $billing_provider, 'xero' ); ?>>
 								<?php esc_html_e( 'Xero', 'remember' ); ?>
 							</label>
@@ -1023,9 +1023,9 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						$ticket_logo_url = $ticket_logo_id ? wp_get_attachment_image_url( $ticket_logo_id, 'medium' ) : '';
 						?>
 						<input type="hidden" id="ticket_logo_id" name="ticket_logo_id" value="<?php echo esc_attr( $ticket_logo_id ); ?>">
-						<div id="remember-ticket-logo-preview" style="margin-bottom: 8px;">
+						<div id="remember-ticket-logo-preview">
 							<?php if ( $ticket_logo_url ) : ?>
-								<img src="<?php echo esc_url( $ticket_logo_url ); ?>" alt="" style="max-height: 72px; width: auto;">
+								<img src="<?php echo esc_url( $ticket_logo_url ); ?>" alt="">
 							<?php endif; ?>
 						</div>
 						<button type="button" class="button" id="remember-ticket-logo-select"><?php esc_html_e( 'Select logo', 'remember' ); ?></button>
@@ -1047,7 +1047,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 		</div>
 
 		<!-- Shortcodes Documentation -->
-		<div id="shortcodes" class="remember-settings-tab" style="display: none;">
+		<div id="shortcodes" class="remember-settings-tab remember-initially-hidden">
 			<?php require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-page-creator.php'; ?>
 			<?php $default_pages = Remember_Page_Creator::get_default_pages(); ?>
 			<?php $created_pages = Remember_Page_Creator::get_created_pages(); ?>
@@ -1060,45 +1060,45 @@ $im_platforms = Remember_Im_Platforms::get_all();
 				<?php esc_html_e( 'For Full Site Editing (FSE) themes, you can also use the block patterns available in the "reMember" category.', 'remember' ); ?>
 			</p>
 
-			<div style="margin-top: 30px;">
+			<div class="remember-shortcode-cards">
 				<?php foreach ( $default_pages as $key => $page_data ) : 
 					$is_created = isset( $created_pages[ $key ] );
 					$page_id = $is_created ? $created_pages[ $key ] : 0;
 				?>
-					<div style="background: #fff; border: 1px solid #ccd0d4; border-radius: 4px; padding: 20px; margin-bottom: 20px;">
-						<h3 style="margin-top: 0; display: flex; align-items: center; justify-content: space-between;">
+					<div class="remember-shortcode-card">
+						<h3 class="remember-shortcode-card-title">
 							<span><?php echo esc_html( $page_data['title'] ); ?></span>
 							<?php if ( $is_created ) : ?>
-								<span class="remember-tone-success" style="font-size: 0.875em; font-weight: normal;">
+								<span class="remember-tone-success remember-shortcode-page-status">
 									✓ <?php esc_html_e( 'Page created', 'remember' ); ?>
-									<a href="<?php echo esc_url( get_edit_post_link( $page_id ) ); ?>" target="_blank" style="margin-left: 10px;">
+									<a href="<?php echo esc_url( get_edit_post_link( $page_id ) ); ?>" target="_blank" class="remember-shortcode-page-link">
 										<?php esc_html_e( 'Edit', 'remember' ); ?>
 									</a>
-									<a href="<?php echo esc_url( get_permalink( $page_id ) ); ?>" target="_blank" style="margin-left: 10px;">
+									<a href="<?php echo esc_url( get_permalink( $page_id ) ); ?>" target="_blank" class="remember-shortcode-page-link">
 										<?php esc_html_e( 'View', 'remember' ); ?>
 									</a>
 								</span>
 							<?php endif; ?>
 						</h3>
 						
-						<p style="color: #646970; margin: 10px 0;">
+						<p class="remember-shortcode-card-desc">
 							<?php echo esc_html( $page_data['description'] ); ?>
 						</p>
 
-						<div style="background: #f6f7f7; border: 1px solid #ddd; border-radius: 3px; padding: 15px; margin: 15px 0;">
-							<strong style="display: block; margin-bottom: 8px;"><?php esc_html_e( 'Shortcode:', 'remember' ); ?></strong>
-							<code style="display: block; padding: 10px; background: #fff; border: 1px solid #ddd; border-radius: 3px; font-size: 14px; word-break: break-all;">
+						<div class="remember-shortcode-box">
+							<strong class="remember-shortcode-label"><?php esc_html_e( 'Shortcode:', 'remember' ); ?></strong>
+							<code class="remember-shortcode-code">
 								<?php echo esc_html( $page_data['shortcode'] ); ?>
 							</code>
-							<button type="button" class="button button-small remember-copy-shortcode" data-shortcode="<?php echo esc_attr( $page_data['shortcode'] ); ?>" style="margin-top: 8px;">
+							<button type="button" class="button button-small remember-copy-shortcode" data-shortcode="<?php echo esc_attr( $page_data['shortcode'] ); ?>">
 								<?php esc_html_e( 'Copy to Clipboard', 'remember' ); ?>
 							</button>
 						</div>
 
 						<?php if ( 'remember_dashboard' === $page_data['shortcode'] ) : ?>
-							<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
-								<h4 style="margin-top: 0;"><?php esc_html_e( 'Features:', 'remember' ); ?></h4>
-								<ul style="margin: 0; padding-left: 20px;">
+							<div class="remember-shortcode-section">
+								<h4 class="remember-settings-flush-top"><?php esc_html_e( 'Features:', 'remember' ); ?></h4>
+								<ul class="remember-shortcode-list">
 									<li><?php esc_html_e( 'Member status and profile summary', 'remember' ); ?></li>
 									<li><?php esc_html_e( 'List of accepted events with links to event directories', 'remember' ); ?></li>
 									<li><?php esc_html_e( 'Recent applications with status badges', 'remember' ); ?></li>
@@ -1106,38 +1106,38 @@ $im_platforms = Remember_Im_Platforms::get_all();
 								</ul>
 							</div>
 						<?php elseif ( 'remember_events' === $page_data['shortcode'] ) : ?>
-							<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
-								<h4 style="margin-top: 0;"><?php esc_html_e( 'Attributes:', 'remember' ); ?></h4>
-								<ul style="margin: 0; padding-left: 20px;">
+							<div class="remember-shortcode-section">
+								<h4 class="remember-settings-flush-top"><?php esc_html_e( 'Attributes:', 'remember' ); ?></h4>
+								<ul class="remember-shortcode-list">
 									<li><code>status="open"</code> - <?php esc_html_e( 'Show only open events (default)', 'remember' ); ?></li>
 									<li><code>status="all"</code> - <?php esc_html_e( 'Show all events regardless of status', 'remember' ); ?></li>
 									<li><code>status="upcoming"</code> - <?php esc_html_e( 'Show only upcoming events', 'remember' ); ?></li>
 									<li><code>limit="5"</code> - <?php esc_html_e( 'Limit the number of events displayed', 'remember' ); ?></li>
 								</ul>
-								<p style="margin-top: 10px;"><strong><?php esc_html_e( 'Example:', 'remember' ); ?></strong> <code>[remember_events status="upcoming" limit="10"]</code></p>
+								<p class="remember-shortcode-note"><strong><?php esc_html_e( 'Example:', 'remember' ); ?></strong> <code>[remember_events status="upcoming" limit="10"]</code></p>
 							</div>
 						<?php elseif ( 'remember_apply' === $page_data['shortcode'] ) : ?>
-							<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
-								<h4 style="margin-top: 0;"><?php esc_html_e( 'Attributes:', 'remember' ); ?></h4>
-								<ul style="margin: 0; padding-left: 20px;">
+							<div class="remember-shortcode-section">
+								<h4 class="remember-settings-flush-top"><?php esc_html_e( 'Attributes:', 'remember' ); ?></h4>
+								<ul class="remember-shortcode-list">
 									<li><code>event_id="123"</code> - <?php esc_html_e( 'Pre-select a specific event (optional)', 'remember' ); ?></li>
 								</ul>
-								<p style="margin-top: 10px;"><strong><?php esc_html_e( 'Example:', 'remember' ); ?></strong> <code>[remember_apply event_id="5"]</code></p>
-								<p style="margin-top: 10px;"><strong><?php esc_html_e( 'Note:', 'remember' ); ?></strong> <?php esc_html_e( 'If no event_id is provided, users can select an event from a dropdown. The form will automatically load available roles for the selected event.', 'remember' ); ?></p>
+								<p class="remember-shortcode-note"><strong><?php esc_html_e( 'Example:', 'remember' ); ?></strong> <code>[remember_apply event_id="5"]</code></p>
+								<p class="remember-shortcode-note"><strong><?php esc_html_e( 'Note:', 'remember' ); ?></strong> <?php esc_html_e( 'If no event_id is provided, users can select an event from a dropdown. The form will automatically load available roles for the selected event.', 'remember' ); ?></p>
 							</div>
 						<?php elseif ( '[remember_register]' === $page_data['shortcode'] ) : ?>
-							<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
-								<h4 style="margin-top: 0;"><?php esc_html_e( 'Notes:', 'remember' ); ?></h4>
-								<ul style="margin: 0; padding-left: 20px;">
+							<div class="remember-shortcode-section">
+								<h4 class="remember-settings-flush-top"><?php esc_html_e( 'Notes:', 'remember' ); ?></h4>
+								<ul class="remember-shortcode-list">
 									<li><?php esc_html_e( 'Creates a WordPress user and reMember member record; does not require “Anyone can register” in Settings → General.', 'remember' ); ?></li>
 									<li><?php esc_html_e( 'Disable the form site-wide with the remember_allow_public_registration filter.', 'remember' ); ?></li>
 									<li><?php esc_html_e( 'Reject an email domain with the remember_registration_disposable_email filter, or stop account creation with remember_registration_pre_create.', 'remember' ); ?></li>
 								</ul>
 							</div>
 						<?php elseif ( 'remember_profile' === $page_data['shortcode'] ) : ?>
-							<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
-								<h4 style="margin-top: 0;"><?php esc_html_e( 'Features:', 'remember' ); ?></h4>
-								<ul style="margin: 0; padding-left: 20px;">
+							<div class="remember-shortcode-section">
+								<h4 class="remember-settings-flush-top"><?php esc_html_e( 'Features:', 'remember' ); ?></h4>
+								<ul class="remember-shortcode-list">
 									<li><?php esc_html_e( 'View and edit profile information', 'remember' ); ?></li>
 									<li><?php esc_html_e( 'Change their password without using wp-admin', 'remember' ); ?></li>
 									<li><?php esc_html_e( 'Manage privacy settings for event sharing', 'remember' ); ?></li>
@@ -1149,84 +1149,84 @@ $im_platforms = Remember_Im_Platforms::get_all();
 				<?php endforeach; ?>
 
 				<!-- Log out -->
-				<div style="background: #fff; border: 1px solid #ccd0d4; border-radius: 4px; padding: 20px; margin-bottom: 20px;">
-					<h3 style="margin-top: 0;"><?php esc_html_e( 'Log out', 'remember' ); ?></h3>
-					<p style="color: #646970; margin: 10px 0;">
+				<div class="remember-shortcode-card">
+					<h3 class="remember-settings-flush-top"><?php esc_html_e( 'Log out', 'remember' ); ?></h3>
+					<p class="remember-shortcode-card-desc">
 						<?php esc_html_e( 'A nonce-protected log out link for the front end. Hidden when the visitor is not logged in. After logout they land on the site home.', 'remember' ); ?>
 					</p>
-					<div style="background: #f6f7f7; border: 1px solid #ddd; border-radius: 3px; padding: 15px; margin: 15px 0;">
-						<strong style="display: block; margin-bottom: 8px;"><?php esc_html_e( 'Nav menu (classic):', 'remember' ); ?></strong>
-						<p style="margin: 0 0 10px 0;"><?php esc_html_e( 'Appearance → Menus → reMember → Log out → Add to Menu.', 'remember' ); ?></p>
-						<strong style="display: block; margin-bottom: 8px;"><?php esc_html_e( 'Nav menu (block theme / FSE):', 'remember' ); ?></strong>
-						<p style="margin: 0 0 10px 0;"><?php esc_html_e( 'Site Editor → open the Navigation block → + → search “Log out” (reMember). That inserts a nonce-protected item. A Custom Link to /remember-logout also works.', 'remember' ); ?></p>
-						<strong style="display: block; margin-bottom: 8px;"><?php esc_html_e( 'Shortcode:', 'remember' ); ?></strong>
-						<code style="display: block; padding: 10px; background: #fff; border: 1px solid #ddd; border-radius: 3px; font-size: 14px; word-break: break-all;">
+					<div class="remember-shortcode-box">
+						<strong class="remember-shortcode-label"><?php esc_html_e( 'Nav menu (classic):', 'remember' ); ?></strong>
+						<p class="remember-shortcode-box-text"><?php esc_html_e( 'Appearance → Menus → reMember → Log out → Add to Menu.', 'remember' ); ?></p>
+						<strong class="remember-shortcode-label"><?php esc_html_e( 'Nav menu (block theme / FSE):', 'remember' ); ?></strong>
+						<p class="remember-shortcode-box-text"><?php esc_html_e( 'Site Editor → open the Navigation block → + → search “Log out” (reMember). That inserts a nonce-protected item. A Custom Link to /remember-logout also works.', 'remember' ); ?></p>
+						<strong class="remember-shortcode-label"><?php esc_html_e( 'Shortcode:', 'remember' ); ?></strong>
+						<code class="remember-shortcode-code">
 							[remember_logout]
 						</code>
-						<button type="button" class="button button-small remember-copy-shortcode" data-shortcode="[remember_logout]" style="margin-top: 8px;">
+						<button type="button" class="button button-small remember-copy-shortcode" data-shortcode="[remember_logout]">
 							<?php esc_html_e( 'Copy to Clipboard', 'remember' ); ?>
 						</button>
-						<p style="margin: 10px 0 0 0;"><?php esc_html_e( 'Optional: [remember_logout text="Sign out"]', 'remember' ); ?></p>
+						<p class="remember-shortcode-box-footnote"><?php esc_html_e( 'Optional: [remember_logout text="Sign out"]', 'remember' ); ?></p>
 					</div>
-					<p class="description" style="margin: 0;">
+					<p class="description remember-settings-flush">
 						<?php esc_html_e( 'The WordPress admin bar is hidden for accounts whose only WordPress role is Subscriber. Editor, Author, Administrator, and any other WP role still see it. reMember roles do not change this.', 'remember' ); ?>
 					</p>
 				</div>
 
 				<!-- Event Detail Shortcode -->
-				<div style="background: #fff; border: 1px solid #ccd0d4; border-radius: 4px; padding: 20px; margin-bottom: 20px;">
-					<h3 style="margin-top: 0;"><?php esc_html_e( 'Event Detail', 'remember' ); ?></h3>
-					<p style="color: #646970; margin: 10px 0;">
+				<div class="remember-shortcode-card">
+					<h3 class="remember-settings-flush-top"><?php esc_html_e( 'Event Detail', 'remember' ); ?></h3>
+					<p class="remember-shortcode-card-desc">
 						<?php esc_html_e( 'Display detailed information about an event, including dates, location, status, and the attendee directory (for accepted members).', 'remember' ); ?>
 					</p>
 
-					<div style="background: #f6f7f7; border: 1px solid #ddd; border-radius: 3px; padding: 15px; margin: 15px 0;">
-						<strong style="display: block; margin-bottom: 8px;"><?php esc_html_e( 'Shortcode:', 'remember' ); ?></strong>
-						<code style="display: block; padding: 10px; background: #fff; border: 1px solid #ddd; border-radius: 3px; font-size: 14px; word-break: break-all;">
+					<div class="remember-shortcode-box">
+						<strong class="remember-shortcode-label"><?php esc_html_e( 'Shortcode:', 'remember' ); ?></strong>
+						<code class="remember-shortcode-code">
 							[remember_event_detail]
 						</code>
-						<button type="button" class="button button-small remember-copy-shortcode" data-shortcode="[remember_event_detail]" style="margin-top: 8px;">
+						<button type="button" class="button button-small remember-copy-shortcode" data-shortcode="[remember_event_detail]">
 							<?php esc_html_e( 'Copy to Clipboard', 'remember' ); ?>
 						</button>
 					</div>
 
-					<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
-						<h4 style="margin-top: 0;"><?php esc_html_e( 'Attributes:', 'remember' ); ?></h4>
-						<ul style="margin: 0; padding-left: 20px;">
+					<div class="remember-shortcode-section">
+						<h4 class="remember-settings-flush-top"><?php esc_html_e( 'Attributes:', 'remember' ); ?></h4>
+						<ul class="remember-shortcode-list">
 							<li><code>event_id="123"</code> - <?php esc_html_e( 'Optional: The ID of the event. If not provided, uses ?event=ID from URL.', 'remember' ); ?></li>
 						</ul>
-						<p style="margin-top: 10px;"><strong><?php esc_html_e( 'Note:', 'remember' ); ?></strong> <?php esc_html_e( 'The attendee directory is only visible to members who are accepted to the event. Contact information is displayed only if members have enabled sharing in their privacy settings.', 'remember' ); ?></p>
+						<p class="remember-shortcode-note"><strong><?php esc_html_e( 'Note:', 'remember' ); ?></strong> <?php esc_html_e( 'The attendee directory is only visible to members who are accepted to the event. Contact information is displayed only if members have enabled sharing in their privacy settings.', 'remember' ); ?></p>
 					</div>
 				</div>
 
 				<!-- Event Directory Shortcode -->
-				<div style="background: #fff; border: 1px solid #ccd0d4; border-radius: 4px; padding: 20px; margin-bottom: 20px;">
-					<h3 style="margin-top: 0;"><?php esc_html_e( 'Event Member Directory', 'remember' ); ?></h3>
-					<p style="color: #646970; margin: 10px 0;">
+				<div class="remember-shortcode-card">
+					<h3 class="remember-settings-flush-top"><?php esc_html_e( 'Event Member Directory', 'remember' ); ?></h3>
+					<p class="remember-shortcode-card-desc">
 						<?php esc_html_e( 'Display a directory of members accepted to a specific event. Only shows contact information that members have chosen to share via privacy settings. This is typically embedded within the Event Detail page.', 'remember' ); ?>
 					</p>
 
-					<div style="background: #f6f7f7; border: 1px solid #ddd; border-radius: 3px; padding: 15px; margin: 15px 0;">
-						<strong style="display: block; margin-bottom: 8px;"><?php esc_html_e( 'Shortcode:', 'remember' ); ?></strong>
-						<code style="display: block; padding: 10px; background: #fff; border: 1px solid #ddd; border-radius: 3px; font-size: 14px; word-break: break-all;">
+					<div class="remember-shortcode-box">
+						<strong class="remember-shortcode-label"><?php esc_html_e( 'Shortcode:', 'remember' ); ?></strong>
+						<code class="remember-shortcode-code">
 							[remember_event_directory event_id="123"]
 						</code>
-						<button type="button" class="button button-small remember-copy-shortcode" data-shortcode="[remember_event_directory event_id=&quot;123&quot;]" style="margin-top: 8px;">
+						<button type="button" class="button button-small remember-copy-shortcode" data-shortcode="[remember_event_directory event_id=&quot;123&quot;]">
 							<?php esc_html_e( 'Copy to Clipboard', 'remember' ); ?>
 						</button>
 					</div>
 
-					<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
-						<h4 style="margin-top: 0;"><?php esc_html_e( 'Attributes:', 'remember' ); ?></h4>
-						<ul style="margin: 0; padding-left: 20px;">
+					<div class="remember-shortcode-section">
+						<h4 class="remember-settings-flush-top"><?php esc_html_e( 'Attributes:', 'remember' ); ?></h4>
+						<ul class="remember-shortcode-list">
 							<li><code>event_id="123"</code> - <?php esc_html_e( 'Required: The ID of the event to show members for', 'remember' ); ?></li>
 						</ul>
-						<p style="margin-top: 10px;"><strong><?php esc_html_e( 'Note:', 'remember' ); ?></strong> <?php esc_html_e( 'Only members who are accepted to the event can view the directory. Contact information is displayed only if members have enabled sharing for that type of information in their privacy settings.', 'remember' ); ?></p>
+						<p class="remember-shortcode-note"><strong><?php esc_html_e( 'Note:', 'remember' ); ?></strong> <?php esc_html_e( 'Only members who are accepted to the event can view the directory. Contact information is displayed only if members have enabled sharing for that type of information in their privacy settings.', 'remember' ); ?></p>
 					</div>
 				</div>
 
-				<div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 15px; margin-top: 30px;">
-					<h3 style="margin-top: 0;"><?php esc_html_e( 'Page Creation', 'remember' ); ?></h3>
+				<div class="remember-shortcode-page-creation">
+					<h3 class="remember-settings-flush-top"><?php esc_html_e( 'Page Creation', 'remember' ); ?></h3>
 					<p>
 						<?php esc_html_e( 'You can automatically create pages with these shortcodes using the setup wizard.', 'remember' ); ?>
 					</p>
@@ -1241,7 +1241,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 	</form>
 
 		<!-- Social + Instant Messenger Platforms -->
-		<div id="platforms" class="remember-settings-tab" style="display: none;">
+		<div id="platforms" class="remember-settings-tab remember-initially-hidden">
 			<h2><?php esc_html_e( 'Platforms', 'remember' ); ?></h2>
 			<p class="description"><?php esc_html_e( 'Social media and instant messenger options members can use on registration and their profile. A profile URL uses {handle} for the name the member types, such as https://t.me/{handle}. Leave it blank when the name should stay plain text. When Show @ is on, the name is shown with @ in front, and a save that includes @ is refused.', 'remember' ); ?></p>
 
@@ -1267,7 +1267,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 								<?php esc_html_e( 'Show @', 'remember' ); ?>
 							</label>
 						</p>
-						<p class="submit" style="margin-top:0;">
+						<p class="submit remember-settings-flush-top">
 							<input type="submit" class="button button-primary" value="<?php esc_attr_e( 'Add Platform', 'remember' ); ?>">
 						</p>
 					</form>
@@ -1358,7 +1358,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 								<?php esc_html_e( 'Show @', 'remember' ); ?>
 							</label>
 						</p>
-						<p class="submit" style="margin-top:0;">
+						<p class="submit remember-settings-flush-top">
 							<input type="submit" class="button button-primary" value="<?php esc_attr_e( 'Add Platform', 'remember' ); ?>">
 						</p>
 					</form>
@@ -1431,7 +1431,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 		</div>
 
 		<!-- Clothing sizes vs issued inventory -->
-		<div id="clothing" class="remember-settings-tab" style="display: none;">
+		<div id="clothing" class="remember-settings-tab remember-initially-hidden">
 			<?php
 			require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-clothing-sizes.php';
 			$clothing_help = Remember_Clothing_Sizes::section_help();
@@ -1446,7 +1446,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 				<p><?php esc_html_e( 'Reload this page after the database update finishes so the stock table is available.', 'remember' ); ?></p>
 			<?php else : ?>
 				<h3><?php esc_html_e( 'Add stock size', 'remember' ); ?></h3>
-				<form method="post" action="" style="max-width: 480px; margin-bottom: 24px;">
+				<form method="post" action="" class="remember-clothing-form">
 					<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 					<input type="hidden" name="remember_settings_action" value="add_clothing_stock">
 					<p>
@@ -1461,7 +1461,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						<label for="clothing_stock_code"><?php esc_html_e( 'Size', 'remember' ); ?></label><br>
 						<input type="text" id="clothing_stock_code" name="stock_size_code" class="regular-text" maxlength="20" required placeholder="<?php esc_attr_e( 'e.g. L, XL, 10.5', 'remember' ); ?>">
 					</p>
-					<p class="submit" style="margin-top:0;">
+					<p class="submit remember-settings-flush-top">
 						<input type="submit" class="button button-primary" value="<?php esc_attr_e( 'Add Stock Size', 'remember' ); ?>">
 					</p>
 				</form>
@@ -1481,7 +1481,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						<?php if ( empty( $clothing_stock ) ) : ?>
 							<p><?php esc_html_e( 'No stock sizes yet. Add them above, then map member sizes.', 'remember' ); ?></p>
 						<?php else : ?>
-							<table class="wp-list-table widefat striped" style="max-width: 480px; margin-bottom: 12px;">
+							<table class="wp-list-table widefat striped remember-clothing-table-narrow">
 								<thead>
 									<tr>
 										<th><?php esc_html_e( 'Size', 'remember' ); ?></th>
@@ -1514,7 +1514,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						<?php if ( empty( $clothing_rows ) ) : ?>
 							<p><?php esc_html_e( 'No sizes in this catalog yet.', 'remember' ); ?></p>
 						<?php else : ?>
-							<table class="wp-list-table widefat striped" style="max-width: 640px; margin-bottom: 24px;">
+							<table class="wp-list-table widefat striped remember-clothing-table-wide">
 								<thead>
 									<tr>
 										<th><?php esc_html_e( 'Size', 'remember' ); ?></th>
@@ -1564,7 +1564,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 		</div>
 
 		<!-- QuickBooks Settings -->
-		<div id="quickbooks" class="remember-settings-tab" style="display: none;">
+		<div id="quickbooks" class="remember-settings-tab remember-initially-hidden">
 			<?php
 			$qb_settings = Remember_QuickBooks_OAuth::get_settings();
 			$is_connected = $qb_settings && ! empty( $qb_settings['access_token'] ) && ! empty( $qb_settings['realm_id'] );
@@ -1592,8 +1592,8 @@ $im_platforms = Remember_Im_Platforms::get_all();
 			
 			<!-- Connection Status -->
 			<?php if ( $is_connected && $qb_status_error ) : ?>
-				<div style="padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; margin-bottom: 20px;">
-					<p style="margin: 0; color: #664d03;">
+				<div class="remember-settings-status remember-settings-status--warning">
+					<p class="remember-settings-status-title">
 						<strong>
 							<?php
 							if ( $qb_needs_reauth ) {
@@ -1604,7 +1604,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 							?>
 						</strong>
 					</p>
-					<p style="margin: 8px 0 0;">
+					<p class="remember-settings-status-detail">
 						<?php echo esc_html( wp_strip_all_tags( $qb_status_error->get_error_message() ) ); ?>
 						<?php
 						if ( $qb_needs_reauth ) {
@@ -1614,29 +1614,29 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						}
 						?>
 					</p>
-					<p style="margin: 5px 0 0; font-size: 13px;">
+					<p class="remember-settings-status-note">
 						<?php esc_html_e( 'Company ID:', 'remember' ); ?>
 						<code><?php echo esc_html( $qb_settings['realm_id'] ); ?></code>
 						&middot; <?php echo esc_html( $qb_environment_label ); ?>
 					</p>
 				</div>
 			<?php elseif ( $is_connected ) : ?>
-				<div style="padding: 15px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; margin-bottom: 20px;">
-					<p style="margin: 0; color: #155724;">
+				<div class="remember-settings-status remember-settings-status--success">
+					<p class="remember-settings-status-title">
 						<strong><?php esc_html_e( 'Connected', 'remember' ); ?></strong>
 						<?php if ( ! empty( $company_info['CompanyName'] ) ) : ?>
 							&mdash; <?php echo esc_html( $company_info['CompanyName'] ); ?>
 						<?php endif; ?>
 					</p>
-					<p style="margin: 5px 0 0; font-size: 13px;">
+					<p class="remember-settings-status-note">
 						<?php esc_html_e( 'Company ID:', 'remember' ); ?>
 						<code><?php echo esc_html( $qb_settings['realm_id'] ); ?></code>
 						&middot; <?php echo esc_html( $qb_environment_label ); ?>
 					</p>
 				</div>
 			<?php else : ?>
-				<div style="padding: 15px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; margin-bottom: 20px;">
-					<p style="margin: 0; color: #721c24;">
+				<div class="remember-settings-status remember-settings-status--error">
+					<p class="remember-settings-status-title">
 						<strong><?php esc_html_e( 'Not Connected', 'remember' ); ?></strong>
 					</p>
 				</div>
@@ -1651,7 +1651,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 			<?php endif; ?>
 
 			<!-- Credentials Form -->
-			<form method="post" action="" style="margin-bottom: 30px;">
+			<form method="post" action="" class="remember-settings-section">
 				<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 				<input type="hidden" name="remember_settings_action" value="save_qb_credentials">
 				
@@ -1725,8 +1725,8 @@ $im_platforms = Remember_Im_Platforms::get_all();
 			
 			<!-- Connect/Disconnect -->
 			<?php if ( ! empty( $qb_settings['client_id'] ) && ! empty( $qb_settings['client_secret'] ) ) : ?>
-				<div style="margin-bottom: 30px;">
-					<form method="post" action="" class="remember-qb-connect-form" style="display: inline-block; margin: 0 8px 8px 0;">
+				<div class="remember-settings-section">
+					<form method="post" action="" class="remember-qb-connect-form remember-settings-inline-form">
 						<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 						<input type="hidden" name="remember_settings_action" value="start_qb_oauth" />
 						<input type="hidden" name="qb_environment_oauth" id="remember_qb_oauth_environment_field" value="<?php echo esc_attr( isset( $qb_settings['environment'] ) ? $qb_settings['environment'] : 'sandbox' ); ?>" />
@@ -1740,13 +1740,13 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						?>
 					</form>
 					<?php if ( $is_connected ) : ?>
-						<form method="post" action="" style="display: inline-block; margin: 0 0 8px;" onsubmit="return confirm('<?php echo esc_js( __( 'Disconnect QuickBooks? reMember will stop creating and syncing QuickBooks invoices, QuickBooks will be told to revoke its access, and the saved Client ID, Client Secret and sign-in will be deleted. To reconnect you will need to enter the credentials and sign in again. Invoices already in QuickBooks are not changed.', 'remember' ) ); ?>');">
+						<form method="post" action="" class="remember-settings-inline-form remember-settings-inline-form--last" onsubmit="return confirm('<?php echo esc_js( __( 'Disconnect QuickBooks? reMember will stop creating and syncing QuickBooks invoices, QuickBooks will be told to revoke its access, and the saved Client ID, Client Secret and sign-in will be deleted. To reconnect you will need to enter the credentials and sign in again. Invoices already in QuickBooks are not changed.', 'remember' ) ); ?>');">
 							<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 							<input type="hidden" name="remember_settings_action" value="disconnect_qb">
 							<?php submit_button( __( 'Disconnect QuickBooks', 'remember' ), 'secondary', 'submit', false ); ?>
 						</form>
 					<?php endif; ?>
-					<p class="description" style="margin-top: 8px;">
+					<p class="description remember-settings-connect-help">
 						<?php
 						if ( $is_connected ) {
 							esc_html_e( 'Reconnect signs in to QuickBooks again and replaces the stored tokens; choose the same company, or the reconnect is refused. Disconnect clears the connection and saved credentials entirely.', 'remember' );
@@ -1807,7 +1807,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 			
 			<!-- Manual Sync -->
 			<?php if ( $is_connected ) : ?>
-				<form method="post" action="" style="margin-top: 20px;">
+				<form method="post" action="" class="remember-settings-section-top">
 					<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 					<input type="hidden" name="remember_settings_action" value="sync_qb_payments">
 					<h3><?php esc_html_e( 'Manual Sync', 'remember' ); ?></h3>
@@ -1845,11 +1845,11 @@ $im_platforms = Remember_Im_Platforms::get_all();
 					$qb_products = $qb_items_result;
 				}
 				?>
-				<form id="remember-qb-mapping-form" method="post" action="" class="screen-reader-text" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;">
+				<form id="remember-qb-mapping-form" method="post" action="" class="screen-reader-text">
 					<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 					<input type="hidden" name="remember_settings_action" value="save_qb_item_mappings" />
 				</form>
-				<div class="remember-qb-mapping" style="margin-top: 30px;">
+				<div class="remember-qb-mapping">
 					<h3><?php esc_html_e( 'QuickBooks line mapping', 'remember' ); ?></h3>
 					<p class="description">
 						<?php esc_html_e( 'Map each event role and each catalog add-on to a QuickBooks Product/Service. Role mapping uses role_id and applies to all events. Add-ons are defined under Products.', 'remember' ); ?>
@@ -1860,14 +1860,14 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						</button>
 					</p>
 
-					<h4 style="margin-top: 18px;"><?php esc_html_e( 'Event roles', 'remember' ); ?></h4>
+					<h4 class="remember-item-mapping-heading"><?php esc_html_e( 'Event roles', 'remember' ); ?></h4>
 					<?php if ( ! empty( $event_roles ) ) : ?>
-						<table class="wp-list-table widefat fixed striped" style="margin-top: 8px;">
+						<table class="wp-list-table widefat fixed striped remember-item-mapping-table">
 							<thead>
 								<tr>
 									<th><?php esc_html_e( 'Role', 'remember' ); ?></th>
 									<th><?php esc_html_e( 'QuickBooks item', 'remember' ); ?></th>
-									<th style="width: 110px;"><?php esc_html_e( 'QB item ID', 'remember' ); ?></th>
+									<th class="remember-item-mapping-id-col"><?php esc_html_e( 'QB item ID', 'remember' ); ?></th>
 								</tr>
 							</thead>
 							<tbody>
@@ -1897,7 +1897,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						<p class="description"><?php esc_html_e( 'No event roles found. Create roles under Roles.', 'remember' ); ?></p>
 					<?php endif; ?>
 
-					<h4 style="margin-top: 22px;"><?php esc_html_e( 'Product catalog (add-ons)', 'remember' ); ?></h4>
+					<h4 class="remember-item-mapping-heading remember-item-mapping-heading--next"><?php esc_html_e( 'Product catalog (add-ons)', 'remember' ); ?></h4>
 					<p class="description">
 						<?php
 						echo wp_kses_post(
@@ -1910,12 +1910,12 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						?>
 					</p>
 					<?php if ( ! empty( $catalog_products ) ) : ?>
-						<table class="wp-list-table widefat fixed striped" style="margin-top: 8px;">
+						<table class="wp-list-table widefat fixed striped remember-item-mapping-table">
 							<thead>
 								<tr>
 									<th><?php esc_html_e( 'Product', 'remember' ); ?></th>
 									<th><?php esc_html_e( 'QuickBooks item', 'remember' ); ?></th>
-									<th style="width: 110px;"><?php esc_html_e( 'QB item ID', 'remember' ); ?></th>
+									<th class="remember-item-mapping-id-col"><?php esc_html_e( 'QB item ID', 'remember' ); ?></th>
 								</tr>
 							</thead>
 							<tbody>
@@ -1945,12 +1945,12 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						<p class="description"><?php esc_html_e( 'No active catalog products. Add add-ons under Products.', 'remember' ); ?></p>
 					<?php endif; ?>
 
-					<p class="submit" style="margin-bottom: 1.5em;">
+					<p class="submit remember-item-mapping-submit">
 						<?php submit_button( __( 'Save QuickBooks mappings', 'remember' ), 'primary', 'submit', false, array( 'form' => 'remember-qb-mapping-form' ) ); ?>
 					</p>
 				</div>
 
-				<form id="sync-qb-products-form" method="post" action="" style="display: none;">
+				<form id="sync-qb-products-form" method="post" action="" hidden>
 					<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 					<input type="hidden" name="remember_settings_action" value="sync_qb_products">
 				</form>
@@ -1958,7 +1958,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 		</div>
 
 		<!-- Xero Settings -->
-		<div id="xero" class="remember-settings-tab" style="display: none;">
+		<div id="xero" class="remember-settings-tab remember-initially-hidden">
 			<?php
 			$xero_settings  = Remember_Xero_OAuth::get_settings();
 			$xero_connected = Remember_Xero_OAuth::is_connected( $xero_settings );
@@ -1982,7 +1982,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 			</p>
 
 			<?php if ( 'xero' !== $billing_provider_now ) : ?>
-				<div class="notice notice-warning inline" style="margin: 0 0 1em;">
+				<div class="notice notice-warning inline remember-settings-inline-notice">
 					<p>
 						<?php
 						echo esc_html__( 'Xero is not the active billing provider.', 'remember' );
@@ -1997,7 +1997,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 			$xero_last_oauth = Remember_Xero_OAuth::get_last_oauth_result();
 			if ( $xero_org_error && ! empty( $xero_last_oauth['message'] ) && isset( $xero_last_oauth['type'] ) && 'error' === $xero_last_oauth['type'] ) :
 				?>
-				<div class="notice notice-error inline" style="margin: 0 0 20px;">
+				<div class="notice notice-error inline remember-settings-inline-notice remember-settings-inline-notice--spaced">
 					<p>
 						<strong><?php esc_html_e( 'Reconnect did not finish:', 'remember' ); ?></strong>
 						<?php echo esc_html( $xero_last_oauth['message'] ); ?>
@@ -2006,8 +2006,8 @@ $im_platforms = Remember_Im_Platforms::get_all();
 			<?php endif; ?>
 
 			<?php if ( $xero_connected && $xero_org_error ) : ?>
-				<div style="padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; margin-bottom: 20px;">
-					<p style="margin: 0; color: #664d03;">
+				<div class="remember-settings-status remember-settings-status--warning">
+					<p class="remember-settings-status-title">
 						<strong><?php esc_html_e( 'Connection expired', 'remember' ); ?></strong>
 						<?php
 						$display_name = '';
@@ -2019,14 +2019,14 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						}
 						?>
 					</p>
-					<p style="margin: 8px 0 0;">
+					<p class="remember-settings-status-detail">
 						<?php echo esc_html( $xero_org_error ); ?>
 						<?php esc_html_e( ' Use Reconnect Xero below to authorize again. You do not need to disconnect first.', 'remember' ); ?>
 					</p>
 				</div>
 			<?php elseif ( $xero_connected ) : ?>
-				<div style="padding: 15px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; margin-bottom: 20px;">
-					<p style="margin: 0; color: #155724;">
+				<div class="remember-settings-status remember-settings-status--success">
+					<p class="remember-settings-status-title">
 						<strong><?php esc_html_e( 'Connected', 'remember' ); ?></strong>
 						<?php
 						$display_name = '';
@@ -2041,15 +2041,15 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						?>
 					</p>
 					<?php if ( ! empty( $xero_settings['tenant_id'] ) ) : ?>
-						<p style="margin: 5px 0 0; font-size: 13px;">
+						<p class="remember-settings-status-note">
 							<?php esc_html_e( 'Tenant ID:', 'remember' ); ?>
 							<code><?php echo esc_html( $xero_settings['tenant_id'] ); ?></code>
 						</p>
 					<?php endif; ?>
 				</div>
 			<?php else : ?>
-				<div style="padding: 15px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; margin-bottom: 20px;">
-					<p style="margin: 0; color: #721c24;">
+				<div class="remember-settings-status remember-settings-status--error">
+					<p class="remember-settings-status-title">
 						<strong><?php esc_html_e( 'Not Connected', 'remember' ); ?></strong>
 					</p>
 				</div>
@@ -2063,7 +2063,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 				<div class="notice notice-error inline remember-weak-secret-storage"><p><?php echo esc_html( $remember_weak_storage_message ); ?></p></div>
 			<?php endif; ?>
 
-			<form method="post" action="" style="margin-bottom: 30px;">
+			<form method="post" action="" class="remember-settings-section">
 				<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 				<input type="hidden" name="remember_settings_action" value="save_xero_credentials">
 
@@ -2120,8 +2120,8 @@ $im_platforms = Remember_Im_Platforms::get_all();
 			</form>
 
 			<?php if ( ! empty( $xero_settings['client_id'] ) && ! empty( $xero_settings['client_secret'] ) ) : ?>
-				<div style="margin-bottom: 30px;">
-					<form method="post" action="" style="display: inline-block; margin: 0 8px 8px 0;">
+				<div class="remember-settings-section">
+					<form method="post" action="" class="remember-settings-inline-form">
 						<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 						<input type="hidden" name="remember_settings_action" value="start_xero_oauth" />
 						<?php
@@ -2134,13 +2134,13 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						?>
 					</form>
 					<?php if ( $xero_connected ) : ?>
-						<form method="post" action="" style="display: inline-block; margin: 0 0 8px;" onsubmit="return confirm('<?php echo esc_js( __( 'Disconnect Xero? reMember will stop creating and syncing Xero invoices, Xero will be told to revoke its access, and the saved Client ID, Client Secret and sign-in will be deleted. To reconnect you will need to enter the credentials and sign in again. Invoices already in Xero are not changed.', 'remember' ) ); ?>');">
+						<form method="post" action="" class="remember-settings-inline-form remember-settings-inline-form--last" onsubmit="return confirm('<?php echo esc_js( __( 'Disconnect Xero? reMember will stop creating and syncing Xero invoices, Xero will be told to revoke its access, and the saved Client ID, Client Secret and sign-in will be deleted. To reconnect you will need to enter the credentials and sign in again. Invoices already in Xero are not changed.', 'remember' ) ); ?>');">
 							<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 							<input type="hidden" name="remember_settings_action" value="disconnect_xero">
 							<?php submit_button( __( 'Disconnect Xero', 'remember' ), 'secondary', 'submit', false ); ?>
 						</form>
 					<?php endif; ?>
-					<p class="description" style="margin-top: 8px;">
+					<p class="description remember-settings-connect-help">
 						<?php
 						if ( $xero_connected ) {
 							esc_html_e( 'Reconnect authorizes Xero again and replaces the stored tokens. Disconnect clears the connection entirely.', 'remember' );
@@ -2152,7 +2152,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 				</div>
 
 				<?php if ( $xero_connected ) : ?>
-					<form method="post" action="" style="margin-bottom: 30px;">
+					<form method="post" action="" class="remember-settings-section">
 						<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 						<input type="hidden" name="remember_settings_action" value="update">
 						<h3><?php esc_html_e( 'Sync Settings', 'remember' ); ?></h3>
@@ -2186,7 +2186,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						<?php submit_button( __( 'Save Sync Settings', 'remember' ) ); ?>
 					</form>
 
-					<form method="post" action="" style="margin-bottom: 30px;">
+					<form method="post" action="" class="remember-settings-section">
 						<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 						<input type="hidden" name="remember_settings_action" value="sync_xero_payments">
 						<h3><?php esc_html_e( 'Manual Sync', 'remember' ); ?></h3>
@@ -2223,11 +2223,11 @@ $im_platforms = Remember_Im_Platforms::get_all();
 					$xero_products = $xero_items_result;
 				}
 				?>
-				<form id="remember-xero-mapping-form" method="post" action="" class="screen-reader-text" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;">
+				<form id="remember-xero-mapping-form" method="post" action="" class="screen-reader-text">
 					<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 					<input type="hidden" name="remember_settings_action" value="save_xero_item_mappings" />
 				</form>
-				<div class="remember-xero-mapping" style="margin-top: 30px;">
+				<div class="remember-xero-mapping">
 					<h3><?php esc_html_e( 'Xero line mapping', 'remember' ); ?></h3>
 					<p class="description">
 						<?php esc_html_e( 'Map each event role and each catalog add-on to a Xero Item. Role mapping uses role_id and applies to all events. Add-ons are defined under Products.', 'remember' ); ?>
@@ -2238,14 +2238,14 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						</button>
 					</p>
 
-					<h4 style="margin-top: 18px;"><?php esc_html_e( 'Event roles', 'remember' ); ?></h4>
+					<h4 class="remember-item-mapping-heading"><?php esc_html_e( 'Event roles', 'remember' ); ?></h4>
 					<?php if ( ! empty( $xero_event_roles ) ) : ?>
-						<table class="wp-list-table widefat fixed striped" style="margin-top: 8px;">
+						<table class="wp-list-table widefat fixed striped remember-item-mapping-table">
 							<thead>
 								<tr>
 									<th><?php esc_html_e( 'Role', 'remember' ); ?></th>
 									<th><?php esc_html_e( 'Xero item', 'remember' ); ?></th>
-									<th style="width: 110px;"><?php esc_html_e( 'Xero item ID', 'remember' ); ?></th>
+									<th class="remember-item-mapping-id-col"><?php esc_html_e( 'Xero item ID', 'remember' ); ?></th>
 								</tr>
 							</thead>
 							<tbody>
@@ -2281,7 +2281,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						<p class="description"><?php esc_html_e( 'No event roles found. Create roles under Roles.', 'remember' ); ?></p>
 					<?php endif; ?>
 
-					<h4 style="margin-top: 22px;"><?php esc_html_e( 'Product catalog (add-ons)', 'remember' ); ?></h4>
+					<h4 class="remember-item-mapping-heading remember-item-mapping-heading--next"><?php esc_html_e( 'Product catalog (add-ons)', 'remember' ); ?></h4>
 					<p class="description">
 						<?php
 						echo wp_kses_post(
@@ -2294,12 +2294,12 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						?>
 					</p>
 					<?php if ( ! empty( $xero_catalog_products ) ) : ?>
-						<table class="wp-list-table widefat fixed striped" style="margin-top: 8px;">
+						<table class="wp-list-table widefat fixed striped remember-item-mapping-table">
 							<thead>
 								<tr>
 									<th><?php esc_html_e( 'Product', 'remember' ); ?></th>
 									<th><?php esc_html_e( 'Xero item', 'remember' ); ?></th>
-									<th style="width: 110px;"><?php esc_html_e( 'Xero item ID', 'remember' ); ?></th>
+									<th class="remember-item-mapping-id-col"><?php esc_html_e( 'Xero item ID', 'remember' ); ?></th>
 								</tr>
 							</thead>
 							<tbody>
@@ -2335,12 +2335,12 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						<p class="description"><?php esc_html_e( 'No active catalog products. Add add-ons under Products.', 'remember' ); ?></p>
 					<?php endif; ?>
 
-					<p class="submit" style="margin-bottom: 1.5em;">
+					<p class="submit remember-item-mapping-submit">
 						<?php submit_button( __( 'Save Xero mappings', 'remember' ), 'primary', 'submit', false, array( 'form' => 'remember-xero-mapping-form' ) ); ?>
 					</p>
 				</div>
 
-				<form id="sync-xero-items-form" method="post" action="" style="display: none;">
+				<form id="sync-xero-items-form" method="post" action="" hidden>
 					<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 					<input type="hidden" name="remember_settings_action" value="sync_xero_items">
 				</form>
@@ -2349,13 +2349,13 @@ $im_platforms = Remember_Im_Platforms::get_all();
 		</div>
 
 		<!-- Notification Settings -->
-		<div id="notifications" class="remember-settings-tab" style="display: none;">
+		<div id="notifications" class="remember-settings-tab remember-initially-hidden">
 			<form method="post" action="" id="remember-notification-settings-form">
 				<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 				<input type="hidden" name="remember_settings_action" value="update_notifications">
 				<input type="hidden" name="notification_category" id="remember-notification-category" value="vetting">
 
-				<p class="description" style="margin-bottom: 12px;">
+				<p class="description remember-notifications-intro">
 					<?php esc_html_e( 'Configure email notifications and templates. Enable or disable specific notification types and customize the subject and rich-text body. Links in {ticket_url}, {profile_url}, {review_url}, and {vetting_url} become clickable in the sent message. Staff emails also link the member name, application id, event name, and vetting case id to that record in wp-admin. Those words stay plain text in a member\'s own email.', 'remember' ); ?>
 				</p>
 
@@ -2396,8 +2396,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 					++$panel_i;
 					?>
 					<div id="notification-panel-<?php echo esc_attr( $category ); ?>"
-						class="remember-notification-panel"
-						<?php echo 1 === $panel_i ? '' : ' style="display: none;"'; ?>>
+						class="remember-notification-panel<?php echo 1 === $panel_i ? '' : ' remember-initially-hidden'; ?>">
 						<?php
 						foreach ( $notifications_by_category[ $category ] as $notification ) :
 							$type_id = 'notification_' . esc_attr( $notification->notification_type );
@@ -2411,8 +2410,8 @@ $im_platforms = Remember_Im_Platforms::get_all();
 							$editor_id = 'notif_body_' . preg_replace( '/[^a-z0-9_]/', '_', strtolower( $notification->notification_type ) );
 							?>
 							<div class="remember-notification-card">
-								<div style="display: flex; align-items: center; margin-bottom: 10px;">
-									<label class="remember-toggle-switch" style="margin-right: 10px;">
+								<div class="remember-notification-toggle-row">
+									<label class="remember-toggle-switch">
 										<input type="checkbox"
 										       id="<?php echo esc_attr( $type_id ); ?>_enabled"
 										       name="notification_settings[<?php echo esc_attr( $notification->notification_type ); ?>][enabled]"
@@ -2420,11 +2419,11 @@ $im_platforms = Remember_Im_Platforms::get_all();
 										       <?php checked( $notification->is_enabled, 1 ); ?>>
 										<span class="remember-toggle-slider"></span>
 									</label>
-									<label for="<?php echo esc_attr( $type_id ); ?>_enabled" style="font-weight: 600; cursor: pointer; margin: 0;">
+									<label for="<?php echo esc_attr( $type_id ); ?>_enabled" class="remember-notification-toggle-label">
 										<?php echo esc_html( Remember_Notification_Setting::get_type_label( $notification->notification_type ) ); ?>
 									</label>
 								</div>
-								<p class="description" style="margin: 5px 0 15px 25px; font-size: 13px;">
+								<p class="description remember-notification-desc">
 									<?php echo esc_html( Remember_Notification_Setting::get_type_description( $notification->notification_type ) ); ?>
 								</p>
 								<?php
@@ -2434,29 +2433,29 @@ $im_platforms = Remember_Im_Platforms::get_all();
 								}
 								?>
 
-								<div style="margin-left: 25px;">
-									<table class="form-table" style="margin: 0;">
+								<div class="remember-notification-fields">
+									<table class="form-table">
 										<tr>
-											<th scope="row" style="width: 120px; padding: 10px 0;">
+											<th scope="row">
 												<label for="<?php echo esc_attr( $type_id ); ?>_subject"><?php esc_html_e( 'Subject', 'remember' ); ?></label>
 											</th>
-											<td style="padding: 10px 0;">
+											<td>
 												<input type="text"
 												       id="<?php echo esc_attr( $type_id ); ?>_subject"
 												       name="notification_settings[<?php echo esc_attr( $notification->notification_type ); ?>][subject]"
 												       value="<?php echo esc_attr( $subject_template ); ?>"
 												       class="regular-text"
 												       placeholder="<?php esc_attr_e( 'Email subject line', 'remember' ); ?>">
-												<p class="description" style="margin-top: 5px; font-size: 12px;">
+												<p class="description remember-notification-help">
 													<?php esc_html_e( 'Available variables: {member_name}, {event_name}, {application_id}, {vetting_id}, {amount}, {date}', 'remember' ); ?>
 												</p>
 											</td>
 										</tr>
 										<tr>
-											<th scope="row" style="width: 120px; padding: 10px 0; vertical-align: top;">
+											<th scope="row">
 												<label for="<?php echo esc_attr( $editor_id ); ?>"><?php esc_html_e( 'Body', 'remember' ); ?></label>
 											</th>
-											<td style="padding: 10px 0;">
+											<td>
 												<?php
 												wp_editor(
 													$body_template,
@@ -2470,11 +2469,11 @@ $im_platforms = Remember_Im_Platforms::get_all();
 													)
 												);
 												?>
-												<p class="description" style="margin-top: 5px; font-size: 12px;">
+												<p class="description remember-notification-help">
 													<?php esc_html_e( 'Available variables: {member_name}, {event_name}, {application_id}, {vetting_id}, {amount}, {date}, {ticket_url}, {profile_url}', 'remember' ); ?>
 												</p>
 												<?php if ( in_array( $notification->notification_type, array( 'vetting_assigned', 'vetting_scheduled', 'vetting_completed', 'vetting_collaborator_invited' ), true ) ) : ?>
-													<p class="description" style="margin-top: 5px; font-size: 12px;">
+													<p class="description remember-notification-help">
 														<?php esc_html_e( 'This email also accepts {vetter_name} (the primary vetter) and {vetting_url} (a link to the case).', 'remember' ); ?>
 													</p>
 												<?php endif; ?>
@@ -2492,7 +2491,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 		</div>
 
 		<!-- Logging Settings -->
-		<div id="logging" class="remember-settings-tab" style="display: none;">
+		<div id="logging" class="remember-settings-tab remember-initially-hidden">
 			<h3><?php esc_html_e( 'Logging Settings', 'remember' ); ?></h3>
 			<p class="description">
 				<?php esc_html_e( 'Configure logging for the reMember plugin. Logs are stored in a web-blocked directory, not at the public /wp-content/debug.log URL.', 'remember' ); ?>
@@ -2538,9 +2537,9 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						<p>
 							<strong><?php esc_html_e( 'Status:', 'remember' ); ?></strong><br>
 							<?php if ( $log_file_exists ) : ?>
-								<span style="color: green;"><?php esc_html_e( 'File exists', 'remember' ); ?></span> (<?php echo esc_html( $log_file_size ); ?>)
+								<span class="remember-tone-success"><?php esc_html_e( 'File exists', 'remember' ); ?></span> (<?php echo esc_html( $log_file_size ); ?>)
 							<?php else : ?>
-								<span style="color: orange;"><?php esc_html_e( 'File does not exist yet', 'remember' ); ?></span>
+								<span class="remember-tone-warning"><?php esc_html_e( 'File does not exist yet', 'remember' ); ?></span>
 							<?php endif; ?>
 						</p>
 						<p class="description">
@@ -2565,7 +2564,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 			</table>
 		</div>
 
-		<p class="submit remember-settings-main-save" style="margin-top: 1.75em; padding-top: 1em; border-top: 1px solid #c3c4c7;">
+		<p class="submit remember-settings-main-save">
 			<?php submit_button( __( 'Save Changes', 'remember' ), 'primary', 'submit', false, array( 'form' => 'remember-main-settings' ) ); ?>
 		</p>
 </div>
