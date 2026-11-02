@@ -116,7 +116,7 @@
 .remember-register-form .remember-register-checkboxes {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
-	gap: 0.4rem 1rem;
+	gap: 0 1rem;
 	margin: 0 0 1rem;
 }
 
@@ -178,11 +178,15 @@
 	margin: 0;
 }
 
+/* Each row is a 44px touch target; the label text is part of the hit area. */
 .remember-register-form .remember-checkbox-label {
 	display: flex;
 	align-items: flex-start;
 	gap: 0.5em;
+	box-sizing: border-box;
+	min-height: 2.75rem;
 	margin: 0;
+	padding: 0.625rem 0;
 	font-weight: normal;
 	line-height: 1.35;
 	text-align: left;
@@ -193,9 +197,9 @@
 
 .remember-register-form .remember-checkbox-label input[type="checkbox"] {
 	flex: 0 0 auto;
-	margin: 0.15em 0 0;
-	width: 1.1em;
-	height: 1.1em;
+	margin: 0;
+	width: 1.5rem;
+	height: 1.5rem;
 }
 
 .remember-timezone-picker {
@@ -369,7 +373,7 @@
 }
 
 .remember-register-form .remember-register-button {
-	min-height: 2.5rem;
+	min-height: 2.75rem;
 	padding: 0.5rem 1.25rem;
 	font-size: 0.95rem;
 	font-weight: 600;
@@ -969,7 +973,8 @@ textarea.remember-field-invalid,
 }
 
 .remember-profile-photo-cropper-controls .remember-button {
-	min-width: 2.25rem;
+	min-width: 2.75rem;
+	min-height: 2.75rem;
 	padding: 0.35em 0.6em;
 	line-height: 1;
 }
@@ -1190,8 +1195,8 @@ button.remember-button-primary:disabled {
 .remember-checkbox-grid {
 	display: flex;
 	flex-direction: column;
-	gap: 0.5em;
-	max-height: 220px;
+	gap: 0;
+	max-height: 20rem;
 	overflow-x: hidden;
 	overflow-y: auto;
 	padding: 0.75em 1em;
@@ -1207,7 +1212,7 @@ button.remember-button-primary:disabled {
 .remember-pq-checkboxes {
 	display: flex;
 	flex-direction: column;
-	gap: 0.5em;
+	gap: 0;
 	margin-top: 0.35em;
 	width: 100%;
 }
@@ -1259,14 +1264,16 @@ button.remember-button-primary:disabled {
 	display: flex;
 	align-items: center;
 	gap: 0.5em;
+	min-height: 2.75rem;
 	cursor: pointer;
 	font-weight: normal;
 }
 
 .remember-checkbox-label input[type="checkbox"] {
+	flex: 0 0 auto;
 	margin: 0;
-	width: 18px;
-	height: 18px;
+	width: 1.5rem;
+	height: 1.5rem;
 	cursor: pointer;
 }
 
