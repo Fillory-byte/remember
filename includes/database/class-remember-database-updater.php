@@ -1871,6 +1871,15 @@ class Remember_Database_Updater {
 			}
 		}
 
+		// Update to 2.4.4 (payment email subjects lose a stray backslash before $).
+		if ( version_compare( get_option( 'remember_db_version', '0.0.0' ), '2.4.4', '<' ) ) {
+			Remember_Logger::info( 'Updating database schema', array( 'from' => get_option( 'remember_db_version', '0.0.0' ), 'to' => '2.4.4' ) );
+			if ( self::reset_backslashed_payment_subjects() ) {
+				update_option( 'remember_db_version', '2.4.4' );
+				Remember_Logger::info( 'Database schema updated successfully', array( 'version' => '2.4.4' ) );
+			}
+		}
+
 		// Always re-ensure health catalogs (idempotent). Catches sites that stalled mid-migration
 		// or activated before catalog seed rows were added.
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-seeder.php';
@@ -1926,6 +1935,59 @@ class Remember_Database_Updater {
 			return false;
 		}
 		Remember_Logger::info( 'Reset Vetting Case Assigned email body to the new default', array( 'setting_id' => (int) $row->setting_id ) );
+		return true;
+	}
+
+	/**
+	 * Clear saved payment email subjects that still match the old default.
+	 *
+	 * The old defaults put a literal backslash before $, and saving Settings
+	 * stored them as shown, so members saw "\$50.00". A cleared subject falls
+	 * back to the shipped default. Subjects an admin edited are kept.
+	 *
+	 * @return bool False only when the database update fails.
+	 */
+	private static function reset_backslashed_payment_subjects() {
+		global $wpdb;
+		$table = $wpdb->prefix . 'remember_notification_settings';
+		// The old shipped text, backslash included.
+		$old_defaults = array(
+			'payment_recorded'     => 'Payment Recorded - \${amount}',
+			'payment_due_reminder' => 'Payment Reminder - \${amount_due} Due for {event_name}',
+		);
+
+		foreach ( $old_defaults as $type => $old_subject ) {
+			$row = $wpdb->get_row( $wpdb->prepare( "SELECT setting_id, subject_template FROM {$table} WHERE notification_type = %s", $type ) );
+			if ( ! $row || trim( (string) $row->subject_template ) !== $old_subject ) {
+				continue;
+			}
+
+			$updated = $wpdb->update(
+				$table,
+				array(
+					'subject_template' => '',
+					'updated_at'       => current_time( 'mysql' ),
+				),
+				array( 'setting_id' => (int) $row->setting_id )
+			);
+			if ( false === $updated ) {
+				Remember_Logger::error(
+					'Failed to reset payment email subject',
+					array(
+						'notification_type' => $type,
+						'error'             => $wpdb->last_error,
+					)
+				);
+				return false;
+			}
+			Remember_Logger::info(
+				'Reset payment email subject to the new default',
+				array(
+					'setting_id'        => (int) $row->setting_id,
+					'notification_type' => $type,
+				)
+			);
+		}
 		return true;
 	}
 
