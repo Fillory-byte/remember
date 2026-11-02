@@ -19,12 +19,12 @@ $status_labels = array(
 	'completed' => __( 'Completed', 'remember' ),
 	'cancelled' => __( 'Cancelled', 'remember' ),
 );
-$status_colors = array(
-	'draft'     => '#72777c',
-	'open'      => '#46b450',
-	'closed'    => '#dc3232',
-	'completed' => '#00a0d2',
-	'cancelled' => '#dc3232',
+$status_tones = array(
+	'draft'     => 'muted',
+	'open'      => 'success',
+	'closed'    => 'error',
+	'completed' => 'info',
+	'cancelled' => 'error',
 );
 ?>
 
@@ -44,11 +44,11 @@ $status_colors = array(
 					<h2 style="margin: 0 0 10px 0; font-size: 24px;">
 						<?php echo esc_html( $viewing_location->location_name ); ?>
 						<?php if ( $viewing_location->is_active ) : ?>
-							<span style="color: #46b450; font-size: 14px; font-weight: normal; margin-left: 10px;">
+							<span class="remember-tone-success" style="font-size: 14px; font-weight: normal; margin-left: 10px;">
 								<span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e( 'Active', 'remember' ); ?>
 							</span>
 						<?php else : ?>
-							<span style="color: #dc3232; font-size: 14px; font-weight: normal; margin-left: 10px;">
+							<span class="remember-tone-error" style="font-size: 14px; font-weight: normal; margin-left: 10px;">
 								<span class="dashicons dashicons-dismiss"></span> <?php esc_html_e( 'Inactive', 'remember' ); ?>
 							</span>
 						<?php endif; ?>
@@ -112,16 +112,16 @@ $status_colors = array(
 								?>
 							</td>
 							<td class="column-status">
-								<span style="color: <?php echo esc_attr( $status_colors[ $event->status ] ); ?>;">
+								<span class="remember-tone-<?php echo esc_attr( $status_tones[ $event->status ] ); ?>">
 									<?php echo esc_html( $status_labels[ $event->status ] ); ?>
 								</span>
 							</td>
 							<td class="column-type">
 								<?php if ( $event->is_private ) : ?>
-									<span class="dashicons dashicons-lock" style="color: #72777c;" title="<?php esc_attr_e( 'Private', 'remember' ); ?>"></span>
+									<span class="dashicons dashicons-lock remember-tone-muted" title="<?php esc_attr_e( 'Private', 'remember' ); ?>"></span>
 									<span class="description"><?php esc_html_e( 'Private', 'remember' ); ?></span>
 								<?php else : ?>
-									<span class="dashicons dashicons-unlock" style="color: #46b450;" title="<?php esc_attr_e( 'Public', 'remember' ); ?>"></span>
+									<span class="dashicons dashicons-unlock remember-tone-success" title="<?php esc_attr_e( 'Public', 'remember' ); ?>"></span>
 									<span class="description"><?php esc_html_e( 'Public', 'remember' ); ?></span>
 								<?php endif; ?>
 							</td>

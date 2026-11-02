@@ -23,12 +23,12 @@ $status_labels = array(
 	'completed' => __( 'Completed', 'remember' ),
 	'cancelled' => __( 'Cancelled', 'remember' ),
 );
-$status_colors = array(
-	'draft'     => '#72777c',
-	'open'      => '#46b450',
-	'closed'    => '#dc3232',
-	'completed' => '#00a0d2',
-	'cancelled' => '#dc3232',
+$status_tones = array(
+	'draft'     => 'muted',
+	'open'      => 'success',
+	'closed'    => 'error',
+	'completed' => 'info',
+	'cancelled' => 'error',
 );
 
 // Application status labels and colors
@@ -39,12 +39,12 @@ $app_status_labels = array(
 	'cancelled' => __( 'Cancelled', 'remember' ),
 	'waitlisted' => __( 'Waitlisted', 'remember' ),
 );
-$app_status_colors = array(
-	'pending'   => '#f0b849',
-	'accepted'  => '#46b450',
-	'declined'  => '#dc3232',
-	'cancelled' => '#72777c',
-	'waitlisted' => '#00a0d2',
+$app_status_tones = array(
+	'pending'    => 'warning',
+	'accepted'   => 'success',
+	'declined'   => 'error',
+	'cancelled'  => 'muted',
+	'waitlisted' => 'info',
 );
 
 // Format dates
@@ -60,11 +60,11 @@ $is_multi_day = $viewing_event->start_date !== $viewing_event->end_date;
 			<div class="remember-member-detail-header__meta" style="flex: 1; min-width: 0;">
 				<h2 style="margin: 0 0 10px 0; font-size: 24px;">
 					<?php echo esc_html( $viewing_event->event_name ); ?>
-					<span class="remember-member-detail-status" style="color: <?php echo esc_attr( $status_colors[ $viewing_event->status ] ); ?>;">
+					<span class="remember-member-detail-status remember-tone-<?php echo esc_attr( $status_tones[ $viewing_event->status ] ); ?>">
 						<?php echo esc_html( $status_labels[ $viewing_event->status ] ); ?>
 					</span>
 					<?php if ( $viewing_event->is_private ) : ?>
-						<span class="dashicons dashicons-lock" style="color: #72777c; font-size: 18px; vertical-align: middle; margin-left: 5px;" title="<?php esc_attr_e( 'Private Event', 'remember' ); ?>"></span>
+						<span class="dashicons dashicons-lock remember-tone-muted" style="font-size: 18px; vertical-align: middle; margin-left: 5px;" title="<?php esc_attr_e( 'Private Event', 'remember' ); ?>"></span>
 					<?php endif; ?>
 				</h2>
 				<div style="color: #666; margin-top: 5px; line-height: 1.8;">
@@ -225,7 +225,7 @@ $is_multi_day = $viewing_event->start_date !== $viewing_event->end_date;
 								<?php echo $event_role ? esc_html( $event_role->role_name ) : '<span class="description">—</span>'; ?>
 							</td>
 							<td class="column-status" data-label="<?php echo esc_attr__( 'Status', 'remember' ); ?>">
-								<span style="color: <?php echo esc_attr( $app_status_colors[ $application->status ] ); ?>;">
+								<span class="remember-tone-<?php echo esc_attr( $app_status_tones[ $application->status ] ); ?>">
 									<?php echo esc_html( $app_status_labels[ $application->status ] ); ?>
 								</span>
 							</td>

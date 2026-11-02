@@ -21,7 +21,7 @@ if ( ! defined( 'WPINC' ) ) {
 					<h2>
 						<?php esc_html_e( 'Vetting Case #', 'remember' ); echo esc_html( $viewing_vetting->vetting_id ); ?>
 					</h2>
-					<span class="remember-vetting-detail-badge" style="color: <?php echo esc_attr( $status_colors[ $viewing_vetting->status ] ); ?>; background: <?php echo esc_attr( $status_colors[ $viewing_vetting->status ] ); ?>20;">
+					<span class="remember-vetting-detail-badge remember-tone-<?php echo esc_attr( $status_tones[ $viewing_vetting->status ] ); ?>">
 						<?php echo esc_html( $status_labels[ $viewing_vetting->status ] ); ?>
 					</span>
 				</div>
@@ -62,7 +62,7 @@ if ( ! defined( 'WPINC' ) ) {
 						<?php if ( 'completed' === $viewing_vetting->status ) : ?>
 							<span>
 								<strong><?php esc_html_e( 'Decision:', 'remember' ); ?></strong>
-								<span style="color: <?php echo 'accepted' === $viewing_vetting->decision ? '#46b450' : '#dc3232'; ?>; font-weight: bold;">
+								<span class="<?php echo 'accepted' === $viewing_vetting->decision ? 'remember-tone-success' : 'remember-tone-error'; ?>" style="font-weight: bold;">
 									<?php echo esc_html( $decision_labels[ $viewing_vetting->decision ] ); ?>
 								</span>
 								<?php if ( $viewing_vetting->decision_date ) : ?>
@@ -95,7 +95,7 @@ if ( ! defined( 'WPINC' ) ) {
 				<?php else : ?>
 					<div class="remember-vetting-detail-status__readonly">
 						<div class="remember-vetting-detail-status__label"><?php esc_html_e( 'Case Status', 'remember' ); ?></div>
-						<div style="color: <?php echo esc_attr( $status_colors[ $viewing_vetting->status ] ); ?>; font-weight: bold;">
+						<div class="remember-tone-<?php echo esc_attr( $status_tones[ $viewing_vetting->status ] ); ?>" style="font-weight: bold;">
 							<?php echo esc_html( $status_labels[ $viewing_vetting->status ] ); ?>
 						</div>
 						<?php if ( 'completed' === $viewing_vetting->status ) : ?>
@@ -252,12 +252,12 @@ if ( ! defined( 'WPINC' ) ) {
 							'cancelled' => __( 'Cancelled', 'remember' ),
 							'waitlisted' => __( 'Waitlisted', 'remember' ),
 						);
-						$app_status_colors = array(
-							'pending'   => '#f0b849',
-							'accepted'  => '#46b450',
-							'declined'  => '#dc3232',
-							'cancelled' => '#72777c',
-							'waitlisted' => '#00a0d2',
+						$app_status_tones = array(
+							'pending'    => 'warning',
+							'accepted'   => 'success',
+							'declined'   => 'error',
+							'cancelled'  => 'muted',
+							'waitlisted' => 'info',
 						);
 					?>
 						<tr>
@@ -272,7 +272,7 @@ if ( ! defined( 'WPINC' ) ) {
 							</td>
 							<td data-label="<?php echo esc_attr__( 'Role', 'remember' ); ?>"><?php echo $event_role ? esc_html( $event_role->role_name ) : '<span class="description">—</span>'; ?></td>
 							<td data-label="<?php echo esc_attr__( 'Status', 'remember' ); ?>">
-								<span style="color: <?php echo esc_attr( $app_status_colors[ $app->status ] ); ?>; font-weight: bold;">
+								<span class="remember-tone-<?php echo esc_attr( $app_status_tones[ $app->status ] ); ?>" style="font-weight: bold;">
 									<?php echo esc_html( $app_status_labels[ $app->status ] ); ?>
 								</span>
 							</td>
@@ -330,7 +330,7 @@ if ( ! defined( 'WPINC' ) ) {
 								<span class="description" style="font-size: 11px; color: #666;">
 									<?php echo esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $note->created_at ) ) ); ?>
 									<?php if ( $note->is_admin_only ) : ?>
-										<span style="color: #dc3232;">(<?php esc_html_e( 'Hidden from member', 'remember' ); ?>)</span>
+										<span class="remember-tone-error">(<?php esc_html_e( 'Hidden from member', 'remember' ); ?>)</span>
 									<?php else : ?>
 										<span>(<?php esc_html_e( 'Visible to member', 'remember' ); ?>)</span>
 									<?php endif; ?>

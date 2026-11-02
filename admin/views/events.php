@@ -1072,12 +1072,12 @@ if ( isset( $_GET['view'] ) ) {
 						'completed' => __( 'Completed', 'remember' ),
 						'cancelled' => __( 'Cancelled', 'remember' ),
 					);
-					$status_colors = array(
-						'draft'     => '#72777c',
-						'open'      => '#46b450',
-						'closed'    => '#dc3232',
-						'completed' => '#00a0d2',
-						'cancelled' => '#dc3232',
+					$status_tones = array(
+						'draft'     => 'muted',
+						'open'      => 'success',
+						'closed'    => 'error',
+						'completed' => 'info',
+						'cancelled' => 'error',
 					);
 				?>
 					<tr>
@@ -1094,7 +1094,7 @@ if ( isset( $_GET['view'] ) ) {
 							<?php endif; ?>
 						</td>
 						<td class="column-status" data-label="<?php echo esc_attr__( 'Status', 'remember' ); ?>">
-							<span style="color: <?php echo esc_attr( $status_colors[ $event->status ] ); ?>;">
+							<span class="remember-tone-<?php echo esc_attr( $status_tones[ $event->status ] ); ?>">
 								<?php echo esc_html( $status_labels[ $event->status ] ); ?>
 							</span>
 						</td>

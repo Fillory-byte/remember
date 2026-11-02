@@ -106,7 +106,7 @@ $remember_print_sensitive = ! empty( Remember_Sensitive_Profile::print_topics() 
 				<div class="remember-member-detail-header__meta">
 					<h2>
 						<?php echo esc_html( $view_user->display_name ); ?>
-						<span class="remember-member-detail-status" style="color: <?php echo esc_attr( $status_colors[ $view_member->status ] ); ?>;">
+						<span class="remember-member-detail-status remember-tone-<?php echo esc_attr( $status_tones[ $view_member->status ] ); ?>">
 							<?php echo esc_html( $status_labels[ $view_member->status ] ); ?>
 						</span>
 					</h2>
@@ -485,7 +485,7 @@ $remember_print_sensitive = ! empty( Remember_Sensitive_Profile::print_topics() 
 							<span class="description" style="font-size: 11px; color: #666;">
 								<?php echo esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $p_note->created_at ) ) ); ?>
 								<?php if ( ! empty( $p_note->is_admin_only ) ) : ?>
-									<span style="color: #dc3232;">(<?php esc_html_e( 'Private to admin', 'remember' ); ?>)</span>
+									<span class="remember-tone-error">(<?php esc_html_e( 'Private to admin', 'remember' ); ?>)</span>
 								<?php else : ?>
 									<span>(<?php esc_html_e( 'Visible to member', 'remember' ); ?>)</span>
 								<?php endif; ?>
@@ -533,11 +533,11 @@ $remember_print_sensitive = ! empty( Remember_Sensitive_Profile::print_topics() 
 								'in_progress' => __( 'In Progress', 'remember' ),
 								'completed'   => __( 'Completed', 'remember' ),
 							);
-							$vetting_status_colors = array(
-								'pending'     => '#f0b849',
-								'scheduled'   => '#00a0d2',
-								'in_progress' => '#2271b1',
-								'completed'   => '#46b450',
+							$vetting_status_tones = array(
+								'pending'     => 'warning',
+								'scheduled'   => 'info',
+								'in_progress' => 'primary',
+								'completed'   => 'success',
 							);
 							$vetting_decision_labels = array(
 								'pending'  => __( 'Pending', 'remember' ),
@@ -550,13 +550,13 @@ $remember_print_sensitive = ! empty( Remember_Sensitive_Profile::print_topics() 
 								<tr>
 									<td data-label="<?php echo esc_attr__( 'Case Start', 'remember' ); ?>"><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $case->created_at ) ) ); ?></td>
 									<td data-label="<?php echo esc_attr__( 'Status', 'remember' ); ?>">
-										<span style="color: <?php echo esc_attr( $vetting_status_colors[ $case->status ] ); ?>; font-weight: bold;">
+										<span class="remember-tone-<?php echo esc_attr( $vetting_status_tones[ $case->status ] ); ?>" style="font-weight: bold;">
 											<?php echo esc_html( $vetting_status_labels[ $case->status ] ); ?>
 										</span>
 									</td>
 									<td data-label="<?php echo esc_attr__( 'Decision', 'remember' ); ?>">
 										<?php if ( 'completed' === $case->status && ! empty( $case->decision ) && 'pending' !== $case->decision ) : ?>
-											<span style="color: <?php echo 'accepted' === $case->decision ? '#46b450' : '#dc3232'; ?>; font-weight: bold;">
+											<span class="<?php echo 'accepted' === $case->decision ? 'remember-tone-success' : 'remember-tone-error'; ?>" style="font-weight: bold;">
 												<?php echo esc_html( $vetting_decision_labels[ $case->decision ] ); ?>
 											</span>
 										<?php else : ?>
@@ -632,13 +632,13 @@ $remember_print_sensitive = ! empty( Remember_Sensitive_Profile::print_topics() 
 								<td data-label="<?php echo esc_attr__( 'Date', 'remember' ); ?>"><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $entry['date'] ) ) ); ?></td>
 								<td data-label="<?php echo esc_attr__( 'Type', 'remember' ); ?>">
 									<?php if ( 'invoice' === $entry['type'] ) : ?>
-										<span style="color: #d63638;"><?php esc_html_e( 'Invoice', 'remember' ); ?></span>
+										<span class="remember-tone-error"><?php esc_html_e( 'Invoice', 'remember' ); ?></span>
 									<?php elseif ( 'refund' === $entry['type'] ) : ?>
-										<span style="color: #b32d2e;"><?php esc_html_e( 'Refund', 'remember' ); ?></span>
+										<span class="remember-tone-error"><?php esc_html_e( 'Refund', 'remember' ); ?></span>
 									<?php elseif ( 'credit' === $entry['type'] ) : ?>
-										<span style="color: #00a32a;"><?php esc_html_e( 'Credit', 'remember' ); ?></span>
+										<span class="remember-tone-success"><?php esc_html_e( 'Credit', 'remember' ); ?></span>
 									<?php else : ?>
-										<span style="color: #00a32a;"><?php esc_html_e( 'Payment', 'remember' ); ?></span>
+										<span class="remember-tone-success"><?php esc_html_e( 'Payment', 'remember' ); ?></span>
 									<?php endif; ?>
 								</td>
 								<td data-label="<?php echo esc_attr__( 'Description', 'remember' ); ?>">
@@ -680,9 +680,9 @@ $remember_print_sensitive = ! empty( Remember_Sensitive_Profile::print_topics() 
 								</td>
 								<td class="remember-num" data-label="<?php echo esc_attr__( 'Balance', 'remember' ); ?>" style="font-weight: <?php echo $entry['balance'] > 0 ? 'bold' : 'normal'; ?>;">
 									<?php
-									$balance_color = $entry['balance'] > 0 ? '#d63638' : ( $entry['balance'] < 0 ? '#00a32a' : '#666' );
+									$balance_tone = $entry['balance'] > 0 ? 'error' : ( $entry['balance'] < 0 ? 'success' : 'muted' );
 									?>
-									<span style="color: <?php echo esc_attr( $balance_color ); ?>;">
+									<span class="remember-tone-<?php echo esc_attr( $balance_tone ); ?>">
 										<?php echo esc_html( number_format( $entry['balance'], 2 ) ); ?>
 									</span>
 								</td>
@@ -696,18 +696,18 @@ $remember_print_sensitive = ! empty( Remember_Sensitive_Profile::print_topics() 
 										'cancelled' => __( 'Voided', 'remember' ),
 										'available' => __( 'Available', 'remember' ),
 									);
-									$status_colors_billing = array(
-										'pending' => '#f0b849',
-										'partial' => '#00a0d2',
-										'paid' => '#46b450',
-										'refunded' => '#72777c',
-										'cancelled' => '#dc3232',
-										'available' => '#46b450',
+									$status_tones_billing = array(
+										'pending'   => 'warning',
+										'partial'   => 'info',
+										'paid'      => 'success',
+										'refunded'  => 'muted',
+										'cancelled' => 'error',
+										'available' => 'success',
 									);
 									$status_label = isset( $status_labels_billing[ $entry['status'] ] ) ? $status_labels_billing[ $entry['status'] ] : $entry['status'];
-									$status_color = isset( $status_colors_billing[ $entry['status'] ] ) ? $status_colors_billing[ $entry['status'] ] : '#666';
+									$status_tone  = isset( $status_tones_billing[ $entry['status'] ] ) ? $status_tones_billing[ $entry['status'] ] : 'muted';
 									?>
-									<span style="color: <?php echo esc_attr( $status_color ); ?>; font-weight: bold;">
+									<span class="remember-tone-<?php echo esc_attr( $status_tone ); ?>" style="font-weight: bold;">
 										<?php echo esc_html( $status_label ); ?>
 									</span>
 								</td>
@@ -720,9 +720,9 @@ $remember_print_sensitive = ! empty( Remember_Sensitive_Profile::print_topics() 
 								<strong><?php esc_html_e( 'Current Balance:', 'remember' ); ?></strong>
 								<?php
 								$current_balance = $running_balance;
-								$balance_color = $current_balance > 0 ? '#d63638' : ( $current_balance < 0 ? '#00a32a' : '#666' );
+								$balance_tone    = $current_balance > 0 ? 'error' : ( $current_balance < 0 ? 'success' : 'muted' );
 								?>
-								<span style="color: <?php echo esc_attr( $balance_color ); ?>; font-size: 16px; font-weight: bold; margin-left: 8px;">
+								<span class="remember-tone-<?php echo esc_attr( $balance_tone ); ?>" style="font-size: 16px; font-weight: bold; margin-left: 8px;">
 									<?php echo esc_html( number_format( $current_balance, 2 ) ); ?>
 								</span>
 							</td>

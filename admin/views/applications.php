@@ -627,15 +627,15 @@ if ( isset( $_GET['view'] ) ) {
 		$viewing_payment = $payment_model->get_by_application( $view_id );
 		$viewing_billing_label = __( 'Not invoiced yet', 'remember' );
 		$viewing_billing_html  = '';
-		$viewing_billing_color = '#72777c';
+		$viewing_billing_tone  = 'muted';
 		if ( $viewing_payment && 'paid' === $viewing_payment->payment_status && floatval( $viewing_payment->amount_due ) <= 0.001 && empty( $viewing_payment->xero_invoice_id ) && empty( $viewing_payment->quickbooks_invoice_id ) ) {
 			$viewing_billing_label = __( 'Paid', 'remember' );
-			$viewing_billing_color = '#46b450';
+			$viewing_billing_tone  = 'success';
 		}
 		if ( $viewing_payment && ( ! empty( $viewing_payment->xero_invoice_id ) || ! empty( $viewing_payment->quickbooks_invoice_id ) ) ) {
 			require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-billing-template.php';
 			$link_data = Remember_Billing_Template::get_payment_invoice_link_data( $viewing_payment );
-			$viewing_billing_color = '#46b450';
+			$viewing_billing_tone = 'success';
 
 			if ( 'xero' === $link_data['provider'] ) {
 				$num_label = ! empty( $link_data['number'] )
@@ -659,9 +659,8 @@ if ( isset( $_GET['view'] ) ) {
 
 			if ( ! empty( $link_data['url'] ) ) {
 				$viewing_billing_html = sprintf(
-					'<a href="%1$s" target="_blank" rel="noopener noreferrer" style="color: %2$s; font-weight: 600;">%3$s</a>',
+					'<a href="%1$s" target="_blank" rel="noopener noreferrer" style="color: inherit; font-weight: 600;">%2$s</a>',
 					esc_url( $link_data['url'] ),
-					esc_attr( $viewing_billing_color ),
 					esc_html( $viewing_billing_label )
 				);
 			}
@@ -701,12 +700,12 @@ $status_labels = array(
 	'cancelled' => __( 'Cancelled', 'remember' ),
 	'waitlisted' => __( 'Waitlisted', 'remember' ),
 );
-$status_colors = array(
-	'pending'   => '#f0b849',
-	'accepted'  => '#46b450',
-	'declined'  => '#dc3232',
-	'cancelled' => '#72777c',
-	'waitlisted' => '#00a0d2',
+$status_tones = array(
+	'pending'    => 'warning',
+	'accepted'   => 'success',
+	'declined'   => 'error',
+	'cancelled'  => 'muted',
+	'waitlisted' => 'info',
 );
 ?>
 
@@ -907,13 +906,13 @@ $status_colors = array(
 					$event_role = isset( $app_roles[ (int) $application->event_role_id ] ) ? $app_roles[ (int) $application->event_role_id ] : null;
 					$application_payment = $payment_model->get_by_application( $application->application_id );
 					$billing_label = __( 'Not invoiced', 'remember' );
-					$billing_color = '#72777c';
+					$billing_tone  = 'muted';
 					if ( $application_payment && ( ! empty( $application_payment->xero_invoice_id ) || ! empty( $application_payment->quickbooks_invoice_id ) ) ) {
 						$billing_label = __( 'Invoiced', 'remember' );
-						$billing_color = '#46b450';
+						$billing_tone  = 'success';
 					} elseif ( $application_payment && 'paid' === $application_payment->payment_status && floatval( $application_payment->amount_due ) <= 0.001 ) {
 						$billing_label = __( 'Paid', 'remember' );
-						$billing_color = '#46b450';
+						$billing_tone  = 'success';
 					}
 				?>
 					<tr>
@@ -938,13 +937,13 @@ $status_colors = array(
 							<?php echo $event_role ? esc_html( $event_role->role_name ) : '<span class="description">—</span>'; ?>
 						</td>
 						<td class="column-status" data-label="<?php echo esc_attr__( 'Status', 'remember' ); ?>">
-							<span style="color: <?php echo esc_attr( $status_colors[ $application->status ] ); ?>; font-weight: bold;">
+							<span class="remember-tone-<?php echo esc_attr( $status_tones[ $application->status ] ); ?>" style="font-weight: bold;">
 								<?php echo esc_html( $status_labels[ $application->status ] ); ?>
 							</span>
 						</td>
 						<?php if ( current_user_can( 'remember_read_billing' ) ) : ?>
 						<td class="column-billing" data-label="<?php echo esc_attr__( 'Billing', 'remember' ); ?>">
-							<span style="color: <?php echo esc_attr( $billing_color ); ?>; font-weight: bold;">
+							<span class="remember-tone-<?php echo esc_attr( $billing_tone ); ?>" style="font-weight: bold;">
 								<?php echo esc_html( $billing_label ); ?>
 							</span>
 						</td>

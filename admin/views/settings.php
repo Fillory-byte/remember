@@ -1069,7 +1069,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						<h3 style="margin-top: 0; display: flex; align-items: center; justify-content: space-between;">
 							<span><?php echo esc_html( $page_data['title'] ); ?></span>
 							<?php if ( $is_created ) : ?>
-								<span style="font-size: 0.875em; font-weight: normal; color: #46b450;">
+								<span class="remember-tone-success" style="font-size: 0.875em; font-weight: normal;">
 									✓ <?php esc_html_e( 'Page created', 'remember' ); ?>
 									<a href="<?php echo esc_url( get_edit_post_link( $page_id ) ); ?>" target="_blank" style="margin-left: 10px;">
 										<?php esc_html_e( 'Edit', 'remember' ); ?>

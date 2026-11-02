@@ -504,9 +504,9 @@ function remember_format_address( $location ) {
 						<td class="column-address"><?php echo remember_format_address( $location ); ?></td>
 						<td class="column-status">
 							<?php if ( $location->is_active ) : ?>
-								<span class="dashicons dashicons-yes-alt" style="color: #46b450;"></span> <?php esc_html_e( 'Active', 'remember' ); ?>
+								<span class="dashicons dashicons-yes-alt remember-tone-success"></span> <?php esc_html_e( 'Active', 'remember' ); ?>
 							<?php else : ?>
-								<span class="dashicons dashicons-dismiss" style="color: #dc3232;"></span> <?php esc_html_e( 'Inactive', 'remember' ); ?>
+								<span class="dashicons dashicons-dismiss remember-tone-error"></span> <?php esc_html_e( 'Inactive', 'remember' ); ?>
 							<?php endif; ?>
 						</td>
 						<td class="column-actions">

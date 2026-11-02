@@ -365,11 +365,11 @@ $status_labels = array(
 	'in_progress' => __( 'In Progress', 'remember' ),
 	'completed'   => __( 'Completed', 'remember' ),
 );
-$status_colors = array(
-	'pending'     => '#f0b849',
-	'scheduled'   => '#00a0d2',
-	'in_progress' => '#2271b1',
-	'completed'   => '#46b450',
+$status_tones = array(
+	'pending'     => 'warning',
+	'scheduled'   => 'info',
+	'in_progress' => 'primary',
+	'completed'   => 'success',
 );
 $decision_labels = array(
 	'pending'  => __( 'Pending', 'remember' ),
@@ -571,7 +571,7 @@ $decision_labels = array(
 							<?php endif; ?>
 						</td>
 						<td class="column-status" data-label="<?php echo esc_attr__( 'Status', 'remember' ); ?>">
-							<span style="color: <?php echo esc_attr( $status_colors[ $vetting->status ] ); ?>; font-weight: bold;">
+							<span class="remember-tone-<?php echo esc_attr( $status_tones[ $vetting->status ] ); ?>" style="font-weight: bold;">
 								<?php echo esc_html( $status_labels[ $vetting->status ] ); ?>
 							</span>
 						</td>
@@ -585,7 +585,7 @@ $decision_labels = array(
 						</td>
 						<td class="column-decision<?php echo ( 'completed' === $vetting->status ) ? '' : ' remember-list-empty'; ?>" data-label="<?php echo esc_attr__( 'Decision', 'remember' ); ?>">
 							<?php if ( 'completed' === $vetting->status ) : ?>
-								<span style="color: <?php echo 'accepted' === $vetting->decision ? '#46b450' : '#dc3232'; ?>; font-weight: bold;">
+								<span class="<?php echo 'accepted' === $vetting->decision ? 'remember-tone-success' : 'remember-tone-error'; ?>" style="font-weight: bold;">
 									<?php echo esc_html( $decision_labels[ $vetting->decision ] ); ?>
 								</span>
 							<?php else : ?>

@@ -1589,6 +1589,8 @@
 	font-weight: 600;
 	padding: 4px 10px;
 	border-radius: 3px;
+	background-color: rgba(0, 0, 0, 0.05);
+	background-color: color-mix(in srgb, currentColor 12.5%, transparent);
 }
 
 .remember-vetting-detail-summary {
@@ -3604,4 +3606,31 @@
 	color: #8a2424;
 	border-color: #8a2424;
 	background: #fcf0f1;
+}
+
+/* Status and state colours. Each keeps at least 4.5:1 on white, striped rows, the admin page
+   background and its own badge tint. Same values in public.css and the member billing sheet CSS
+   in class-remember-billing-template.php. */
+.remember-tone-success {
+	color: #00701a;
+}
+
+.remember-tone-warning {
+	color: #8a5a00;
+}
+
+.remember-tone-info {
+	color: #006b85;
+}
+
+.remember-tone-primary {
+	color: #135e96;
+}
+
+.remember-tone-error {
+	color: #b32d2e;
+}
+
+.remember-tone-muted {
+	color: #646970;
 }

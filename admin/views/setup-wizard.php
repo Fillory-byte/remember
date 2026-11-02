@@ -63,7 +63,7 @@ $all_pages = get_pages( array( 'sort_column' => 'post_title' ) );
 										<?php echo esc_html( $page_data['description'] ); ?>
 									</p>
 									<?php if ( $current_page ) : ?>
-										<p style="margin: 5px 0 0 0; color: #46b450; font-size: 0.875em;">
+										<p class="remember-tone-success" style="margin: 5px 0 0 0; font-size: 0.875em;">
 											✓ <?php esc_html_e( 'Currently linked to:', 'remember' ); ?> 
 											<a href="<?php echo esc_url( get_edit_post_link( $current_page_id ) ); ?>" target="_blank">
 												<?php echo esc_html( $current_page->post_title ); ?>

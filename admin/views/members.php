@@ -39,14 +39,14 @@ $status_labels = array(
 	'inactive'        => __( 'Inactive', 'remember' ),
 	'merged'          => __( 'Merged', 'remember' ),
 );
-$status_colors = array(
-	'pending_vetting' => '#f0b849',
-	'unvetted'        => '#72777c',
-	'in_vetting'      => '#00a0d2',
-	'vetted'          => '#46b450',
-	'rejected'        => '#dc3232',
-	'inactive'        => '#72777c',
-	'merged'          => '#50575e',
+$status_tones = array(
+	'pending_vetting' => 'warning',
+	'unvetted'        => 'muted',
+	'in_vetting'      => 'info',
+	'vetted'          => 'success',
+	'rejected'        => 'error',
+	'inactive'        => 'muted',
+	'merged'          => 'muted',
 );
 
 // Check if viewing a specific member
@@ -1573,7 +1573,7 @@ if ( $view_member_id > 0 ) {
 							</div>
 						</td>
 						<td class="column-status" data-label="<?php echo esc_attr__( 'Status', 'remember' ); ?>">
-							<span style="color: <?php echo esc_attr( $status_colors[ $member->status ] ); ?>; font-weight: bold;">
+							<span class="remember-tone-<?php echo esc_attr( $status_tones[ $member->status ] ); ?>" style="font-weight: bold;">
 								<?php echo esc_html( $status_labels[ $member->status ] ); ?>
 								</span>
 							</td>

@@ -31,17 +31,17 @@ class Remember_Billing_Template {
 	}
 
 	/**
-	 * Hex colors for payment status (admin and front end).
+	 * Colour tone for each payment status (admin and front end), used as remember-tone-{tone}.
 	 *
 	 * @return array<string, string>
 	 */
-	public static function get_payment_status_colors() {
+	public static function get_payment_status_tones() {
 		return array(
-			'pending'   => '#f0b849',
-			'partial'   => '#00a0d2',
-			'paid'      => '#46b450',
-			'refunded'  => '#dc3232',
-			'cancelled' => '#72777c',
+			'pending'   => 'warning',
+			'partial'   => 'info',
+			'paid'      => 'success',
+			'refunded'  => 'error',
+			'cancelled' => 'muted',
 		);
 	}
 
@@ -236,11 +236,11 @@ class Remember_Billing_Template {
 		$table_extra         = trim( $args['table_class'] );
 
 		$status_labels = self::get_payment_status_labels();
-		$status_colors = self::get_payment_status_colors();
+		$status_tones  = self::get_payment_status_tones();
 
 		// Front end: many themes set table { display: block } — use a div + CSS Grid instead of <table>.
 		if ( 'member' === $context ) {
-			self::render_member_billing_sheet( $payments, $payment_event_names, $status_labels, $status_colors, $args['open_credits'] );
+			self::render_member_billing_sheet( $payments, $payment_event_names, $status_labels, $status_tones, $args['open_credits'] );
 			return;
 		}
 
@@ -296,7 +296,7 @@ class Remember_Billing_Template {
 						</td>
 						<td class="column-due remember-num" data-label="<?php echo esc_attr__( 'Amount Due', 'remember' ); ?>">
 							<span class="remember-list-meta-label"><?php esc_html_e( 'Due:', 'remember' ); ?></span>
-							<strong style="color: <?php echo (float) $payment->amount_due > 0 ? '#dc3232' : '#46b450'; ?>;">
+							<strong class="<?php echo (float) $payment->amount_due > 0 ? 'remember-tone-error' : 'remember-tone-success'; ?>">
 								$<?php echo esc_html( number_format( (float) $payment->amount_due, 2 ) ); ?>
 							</strong>
 						</td>
@@ -304,9 +304,9 @@ class Remember_Billing_Template {
 							<?php
 							$ps = isset( $payment->payment_status ) ? (string) $payment->payment_status : '';
 							$sl = isset( $status_labels[ $ps ] ) ? $status_labels[ $ps ] : $ps;
-							$sc = isset( $status_colors[ $ps ] ) ? $status_colors[ $ps ] : '#646970';
+							$st = isset( $status_tones[ $ps ] ) ? $status_tones[ $ps ] : 'muted';
 							?>
-							<span style="color: <?php echo esc_attr( $sc ); ?>; font-weight: bold;"><?php echo esc_html( $sl ); ?></span>
+							<span class="remember-tone-<?php echo esc_attr( $st ); ?>" style="font-weight: bold;"><?php echo esc_html( $sl ); ?></span>
 						</td>
 						<td class="column-method" data-label="<?php echo esc_attr__( 'Method', 'remember' ); ?>">
 							<?php echo esc_html( ucfirst( $payment->payment_method ? $payment->payment_method : 'manual' ) ); ?>
@@ -332,10 +332,10 @@ class Remember_Billing_Template {
 	 * @param array<int, object>      $payments            Payment rows.
 	 * @param array<int, string>      $payment_event_names payment_id => event name.
 	 * @param array<string, string>   $status_labels       Status labels.
-	 * @param array<string, string>   $status_colors       Status hex colors.
+	 * @param array<string, string>   $status_tones        Status colour tones.
 	 * @param array<int, array>      $open_credits        Unallocated credit notes.
 	 */
-	private static function render_member_billing_sheet( $payments, $payment_event_names, $status_labels, $status_colors, $open_credits = array() ) {
+	private static function render_member_billing_sheet( $payments, $payment_event_names, $status_labels, $status_tones, $open_credits = array() ) {
 		static $member_billing_css_printed = false;
 		if ( ! $member_billing_css_printed ) {
 			$member_billing_css_printed = true;
@@ -376,7 +376,7 @@ class Remember_Billing_Template {
 						<td class="remember-billing-mt-num"><span class="remember-billing-mt-muted">&mdash;</span></td>
 						<td class="remember-billing-mt-num">$<?php echo esc_html( number_format( $credit_remaining, 2 ) ); ?></td>
 						<td class="remember-billing-mt-num"><span class="remember-billing-mt-muted">&mdash;</span></td>
-						<td><strong style="color: #46b450;"><?php esc_html_e( 'Available', 'remember' ); ?></strong></td>
+						<td><strong class="remember-tone-success"><?php esc_html_e( 'Available', 'remember' ); ?></strong></td>
 						<td><?php esc_html_e( 'Credit note', 'remember' ); ?></td>
 						<td>
 							<?php if ( '' !== $credit_date ) : ?>
@@ -392,7 +392,7 @@ class Remember_Billing_Template {
 					$ename = isset( $payment_event_names[ $payment->payment_id ] ) ? $payment_event_names[ $payment->payment_id ] : '—';
 					$ps    = isset( $payment->payment_status ) ? (string) $payment->payment_status : '';
 					$sl    = isset( $status_labels[ $ps ] ) ? $status_labels[ $ps ] : $ps;
-					$sc    = isset( $status_colors[ $ps ] ) ? $status_colors[ $ps ] : '#646970';
+					$st    = isset( $status_tones[ $ps ] ) ? $status_tones[ $ps ] : 'muted';
 					?>
 					<tr>
 						<td><?php echo esc_html( $ename ); ?></td>
@@ -409,11 +409,11 @@ class Remember_Billing_Template {
 						<td class="remember-billing-mt-num"><strong>$<?php echo esc_html( number_format( (float) $payment->total_amount, 2 ) ); ?></strong></td>
 						<td class="remember-billing-mt-num">$<?php echo esc_html( number_format( self::get_payment_and_credit_total( $payment ), 2 ) ); ?></td>
 						<td class="remember-billing-mt-num">
-							<strong style="color: <?php echo (float) $payment->amount_due > 0 ? '#dc3232' : '#46b450'; ?>;">
+							<strong class="<?php echo (float) $payment->amount_due > 0 ? 'remember-tone-error' : 'remember-tone-success'; ?>">
 								$<?php echo esc_html( number_format( (float) $payment->amount_due, 2 ) ); ?>
 							</strong>
 						</td>
-						<td><strong style="color: <?php echo esc_attr( $sc ); ?>;"><?php echo esc_html( $sl ); ?></strong></td>
+						<td><strong class="remember-tone-<?php echo esc_attr( $st ); ?>"><?php echo esc_html( $sl ); ?></strong></td>
 						<td><?php echo esc_html( ucfirst( $payment->payment_method ? $payment->payment_method : 'manual' ) ); ?></td>
 						<td>
 							<?php if ( ! empty( $payment->payment_date ) ) : ?>
@@ -449,6 +449,12 @@ class Remember_Billing_Template {
 #remember-member-billing table.remember-billing-mt .remember-billing-mt-num{text-align:right!important;font-variant-numeric:tabular-nums!important}
 #remember-member-billing table.remember-billing-mt thead th.remember-billing-mt-num{text-align:right!important}
 #remember-member-billing table.remember-billing-mt .remember-billing-mt-muted{color:#646970!important;font-size:13px!important}
+#remember-member-billing table.remember-billing-mt .remember-tone-success{color:#00701a!important}
+#remember-member-billing table.remember-billing-mt .remember-tone-warning{color:#8a5a00!important}
+#remember-member-billing table.remember-billing-mt .remember-tone-info{color:#006b85!important}
+#remember-member-billing table.remember-billing-mt .remember-tone-primary{color:#135e96!important}
+#remember-member-billing table.remember-billing-mt .remember-tone-error{color:#b32d2e!important}
+#remember-member-billing table.remember-billing-mt .remember-tone-muted{color:#646970!important}
 </style>';
 	}
 }
