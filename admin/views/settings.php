@@ -1740,7 +1740,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						?>
 					</form>
 					<?php if ( $is_connected ) : ?>
-						<form method="post" action="" style="display: inline-block; margin: 0 0 8px;">
+						<form method="post" action="" style="display: inline-block; margin: 0 0 8px;" onsubmit="return confirm('<?php echo esc_js( __( 'Disconnect QuickBooks? reMember will stop creating and syncing QuickBooks invoices, QuickBooks will be told to revoke its access, and the saved Client ID, Client Secret and sign-in will be deleted. To reconnect you will need to enter the credentials and sign in again. Invoices already in QuickBooks are not changed.', 'remember' ) ); ?>');">
 							<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 							<input type="hidden" name="remember_settings_action" value="disconnect_qb">
 							<?php submit_button( __( 'Disconnect QuickBooks', 'remember' ), 'secondary', 'submit', false ); ?>
@@ -2134,7 +2134,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						?>
 					</form>
 					<?php if ( $xero_connected ) : ?>
-						<form method="post" action="" style="display: inline-block; margin: 0 0 8px;">
+						<form method="post" action="" style="display: inline-block; margin: 0 0 8px;" onsubmit="return confirm('<?php echo esc_js( __( 'Disconnect Xero? reMember will stop creating and syncing Xero invoices, Xero will be told to revoke its access, and the saved Client ID, Client Secret and sign-in will be deleted. To reconnect you will need to enter the credentials and sign in again. Invoices already in Xero are not changed.', 'remember' ) ); ?>');">
 							<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
 							<input type="hidden" name="remember_settings_action" value="disconnect_xero">
 							<?php submit_button( __( 'Disconnect Xero', 'remember' ), 'secondary', 'submit', false ); ?>
