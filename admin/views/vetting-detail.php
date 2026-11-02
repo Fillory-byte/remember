@@ -212,7 +212,7 @@ if ( ! defined( 'WPINC' ) ) {
 								<option value="accepted"><?php esc_html_e( 'Accepted', 'remember' ); ?></option>
 								<option value="rejected"><?php esc_html_e( 'Rejected', 'remember' ); ?></option>
 							</select>
-							<input type="submit" class="button button-small button-primary" value="<?php esc_attr_e( 'Complete', 'remember' ); ?>" onclick="return confirm('<?php esc_attr_e( 'Are you sure you want to complete this vetting case?', 'remember' ); ?>');">
+							<input type="submit" class="button button-small button-primary" value="<?php esc_attr_e( 'Complete', 'remember' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to complete this vetting case?', 'remember' ) ); ?>');">
 						</div>
 					</form>
 				</div>

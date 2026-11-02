@@ -515,7 +515,7 @@ function remember_format_address( $location ) {
 								| <a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-locations&edit=' . $location->location_id ) ); ?>"><?php esc_html_e( 'Edit', 'remember' ); ?></a>
 							<?php endif; ?>
 							<?php if ( current_user_can( 'remember_delete_locations' ) ) : ?>
-								| <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-locations&delete=' . $location->location_id ), 'remember_location_action', 'remember_location_nonce' ) ); ?>" onclick="return confirm('<?php esc_attr_e( 'Are you sure you want to delete this location?', 'remember' ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
+								| <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-locations&delete=' . $location->location_id ), 'remember_location_action', 'remember_location_nonce' ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this location?', 'remember' ) ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
 							<?php endif; ?>
 						</td>
 					</tr>

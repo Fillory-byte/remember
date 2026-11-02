@@ -964,7 +964,7 @@ $status_colors = array(
 									<?php wp_nonce_field( 'remember_application_action', 'remember_application_nonce' ); ?>
 									<input type="hidden" name="remember_application_action" value="accept">
 									<input type="hidden" name="application_id" value="<?php echo esc_attr( $application->application_id ); ?>">
-									<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Accept', 'remember' ); ?>" onclick="return confirm('<?php esc_attr_e( 'Accept this application?', 'remember' ); ?>');">
+									<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Accept', 'remember' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Accept this application?', 'remember' ) ); ?>');">
 								</form>
 								
 								<form method="post" action="">
@@ -990,7 +990,7 @@ $status_colors = array(
 										<?php wp_nonce_field( 'remember_application_action', 'remember_application_nonce' ); ?>
 										<input type="hidden" name="remember_application_action" value="reopen_pending">
 										<input type="hidden" name="application_id" value="<?php echo esc_attr( $application->application_id ); ?>">
-										<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Move to Pending', 'remember' ); ?>" onclick="return confirm('<?php esc_attr_e( 'Move this accepted application back to pending?', 'remember' ); ?>');">
+										<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Move to Pending', 'remember' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Move this accepted application back to pending?', 'remember' ) ); ?>');">
 									</form>
 									<?php if ( current_user_can( 'remember_create_billing' ) ) : ?>
 									<form method="post" action="">

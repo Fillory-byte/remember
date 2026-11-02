@@ -223,13 +223,13 @@ function remember_waitlist_sort_link( $column_name, $current_orderby, $current_o
 								<?php wp_nonce_field( 'remember_waitlist_action', 'remember_waitlist_nonce' ); ?>
 								<input type="hidden" name="remember_waitlist_action" value="promote_to_pending">
 								<input type="hidden" name="application_id" value="<?php echo esc_attr( $application->application_id ); ?>">
-								<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Move to Pending', 'remember' ); ?>" onclick="return confirm('<?php esc_attr_e( 'Move this application from waitlist to pending?', 'remember' ); ?>');">
+								<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Move to Pending', 'remember' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Move this application from waitlist to pending?', 'remember' ) ); ?>');">
 							</form>
 							<form method="post" action="" style="display:inline;">
 								<?php wp_nonce_field( 'remember_waitlist_action', 'remember_waitlist_nonce' ); ?>
 								<input type="hidden" name="remember_waitlist_action" value="decline_waitlisted">
 								<input type="hidden" name="application_id" value="<?php echo esc_attr( $application->application_id ); ?>">
-								<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Decline', 'remember' ); ?>" onclick="return confirm('<?php esc_attr_e( 'Decline this waitlisted application?', 'remember' ); ?>');">
+								<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Decline', 'remember' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Decline this waitlisted application?', 'remember' ) ); ?>');">
 							</form>
 						</td>
 					</tr>

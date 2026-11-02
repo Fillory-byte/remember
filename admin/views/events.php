@@ -1126,7 +1126,7 @@ if ( isset( $_GET['view'] ) ) {
 								| <a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-events&edit=' . $event->event_id ) ); ?>"><?php esc_html_e( 'Edit', 'remember' ); ?></a>
 							<?php endif; ?>
 							<?php if ( current_user_can( 'remember_delete_events' ) ) : ?>
-								| <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-events&delete=' . $event->event_id ), 'remember_event_action', 'remember_event_nonce' ) ); ?>" onclick="return confirm('<?php esc_attr_e( 'Are you sure you want to delete this event?', 'remember' ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
+								| <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-events&delete=' . $event->event_id ), 'remember_event_action', 'remember_event_nonce' ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this event?', 'remember' ) ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
 							<?php endif; ?>
 						</td>
 					</tr>

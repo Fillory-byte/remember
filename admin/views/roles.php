@@ -387,7 +387,7 @@ if ( $editing_role ) {
 									|
 								<?php endif; ?>
 								<?php if ( current_user_can( 'remember_delete_roles' ) ) : ?>
-									<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-roles&delete=' . $role->role_id ), 'remember_role_action', 'remember_role_nonce' ) ); ?>" onclick="return confirm('<?php esc_attr_e( 'Are you sure you want to delete this role?', 'remember' ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
+									<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-roles&delete=' . $role->role_id ), 'remember_role_action', 'remember_role_nonce' ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this role?', 'remember' ) ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
 								<?php endif; ?>
 							</td>
 						</tr>
@@ -455,7 +455,7 @@ if ( $editing_role ) {
 								<?php endif; ?>
 								<?php if ( current_user_can( 'remember_delete_roles' ) && ! $is_protected ) : ?>
 									|
-									<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-roles&delete=' . $role->role_id ), 'remember_role_action', 'remember_role_nonce' ) ); ?>" onclick="return confirm('<?php esc_attr_e( 'Are you sure you want to delete this role?', 'remember' ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
+									<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-roles&delete=' . $role->role_id ), 'remember_role_action', 'remember_role_nonce' ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this role?', 'remember' ) ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
 								<?php endif; ?>
 							</td>
 						</tr>
