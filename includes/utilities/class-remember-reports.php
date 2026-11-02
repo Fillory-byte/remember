@@ -188,7 +188,7 @@ class Remember_Reports {
 			array(
 				'schedule'   => Remember_Report_Schedule::for_report( $row->report_id ),
 				'sensitive'  => ! empty( Remember_Report_Catalog::sensitive_topics( $row->subject, $definition ) ),
-				'recipients' => Remember_Report_Catalog::recipients_for_report( $row->subject, $definition, 0 ),
+				'recipients' => Remember_Report_Catalog::recipients_for_report( $row->subject, $definition, 0, get_current_user_id() ),
 				'timezone'   => wp_timezone_string(),
 			)
 		);

@@ -688,7 +688,7 @@ if ( isset( $_GET['view'] ) ) {
 	
 	<?php if ( ! $viewing_event && ! $editing_event ) : ?>
 		<?php if ( current_user_can( 'remember_create_events' ) ) : ?>
-			<button type="button" class="page-title-action" onclick="document.getElementById('remember-add-event').style.display='block'; this.style.display='none';"><?php esc_html_e( 'Add New', 'remember' ); ?></button>
+			<button type="button" class="page-title-action" data-remember-panel-toggle aria-controls="remember-add-event" aria-expanded="false"><?php esc_html_e( 'Add New', 'remember' ); ?></button>
 		<?php endif; ?>
 	<?php elseif ( $viewing_event ) : ?>
 		<?php if ( current_user_can( 'remember_update_events' ) ) : ?>
@@ -898,7 +898,7 @@ if ( isset( $_GET['view'] ) ) {
 		</div>
 	<?php else : ?>
 		<!-- Add Form -->
-		<div id="remember-add-event" style="display:none; margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
+		<div id="remember-add-event" hidden style="margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
 			<h2><?php esc_html_e( 'Add New Event', 'remember' ); ?></h2>
 			<form method="post" action="">
 				<?php wp_nonce_field( 'remember_event_action', 'remember_event_nonce' ); ?>
@@ -1043,7 +1043,7 @@ if ( isset( $_GET['view'] ) ) {
 				
 				<p class="submit">
 					<input type="submit" class="button button-primary" value="<?php esc_attr_e( 'Add Event', 'remember' ); ?>">
-					<button type="button" class="button" onclick="document.getElementById('remember-add-event').style.display='none'; document.querySelector('.page-title-action').style.display='inline-block';"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
+					<button type="button" class="button" data-remember-panel-close="remember-add-event"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
 				</p>
 			</form>
 		</div>
@@ -1072,12 +1072,12 @@ if ( isset( $_GET['view'] ) ) {
 						'completed' => __( 'Completed', 'remember' ),
 						'cancelled' => __( 'Cancelled', 'remember' ),
 					);
-					$status_colors = array(
-						'draft'     => '#72777c',
-						'open'      => '#46b450',
-						'closed'    => '#dc3232',
-						'completed' => '#00a0d2',
-						'cancelled' => '#dc3232',
+					$status_tones = array(
+						'draft'     => 'muted',
+						'open'      => 'success',
+						'closed'    => 'error',
+						'completed' => 'info',
+						'cancelled' => 'error',
 					);
 				?>
 					<tr>
@@ -1094,7 +1094,7 @@ if ( isset( $_GET['view'] ) ) {
 							<?php endif; ?>
 						</td>
 						<td class="column-status" data-label="<?php echo esc_attr__( 'Status', 'remember' ); ?>">
-							<span style="color: <?php echo esc_attr( $status_colors[ $event->status ] ); ?>;">
+							<span class="remember-tone-<?php echo esc_attr( $status_tones[ $event->status ] ); ?>">
 								<?php echo esc_html( $status_labels[ $event->status ] ); ?>
 							</span>
 						</td>
@@ -1126,7 +1126,7 @@ if ( isset( $_GET['view'] ) ) {
 								| <a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-events&edit=' . $event->event_id ) ); ?>"><?php esc_html_e( 'Edit', 'remember' ); ?></a>
 							<?php endif; ?>
 							<?php if ( current_user_can( 'remember_delete_events' ) ) : ?>
-								| <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-events&delete=' . $event->event_id ), 'remember_event_action', 'remember_event_nonce' ) ); ?>" onclick="return confirm('<?php esc_attr_e( 'Are you sure you want to delete this event?', 'remember' ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
+								| <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-events&delete=' . $event->event_id ), 'remember_event_action', 'remember_event_nonce' ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this event?', 'remember' ) ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
 							<?php endif; ?>
 						</td>
 					</tr>

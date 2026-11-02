@@ -39,14 +39,14 @@ $status_labels = array(
 	'inactive'        => __( 'Inactive', 'remember' ),
 	'merged'          => __( 'Merged', 'remember' ),
 );
-$status_colors = array(
-	'pending_vetting' => '#f0b849',
-	'unvetted'        => '#72777c',
-	'in_vetting'      => '#00a0d2',
-	'vetted'          => '#46b450',
-	'rejected'        => '#dc3232',
-	'inactive'        => '#72777c',
-	'merged'          => '#50575e',
+$status_tones = array(
+	'pending_vetting' => 'warning',
+	'unvetted'        => 'muted',
+	'in_vetting'      => 'info',
+	'vetted'          => 'success',
+	'rejected'        => 'error',
+	'inactive'        => 'muted',
+	'merged'          => 'muted',
 );
 
 // Check if viewing a specific member
@@ -82,10 +82,14 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 		// Create WordPress user first
 		$username = isset( $_POST['username'] ) ? sanitize_user( $_POST['username'] ) : '';
 		$email = isset( $_POST['email'] ) ? sanitize_email( $_POST['email'] ) : '';
-		$first_name = isset( $_POST['first_name'] ) ? sanitize_text_field( $_POST['first_name'] ) : '';
-		$last_name = isset( $_POST['last_name'] ) ? sanitize_text_field( $_POST['last_name'] ) : '';
+		$first_name = isset( $_POST['first_name'] ) ? sanitize_text_field( wp_unslash( $_POST['first_name'] ) ) : '';
+		$last_name = isset( $_POST['last_name'] ) ? sanitize_text_field( wp_unslash( $_POST['last_name'] ) ) : '';
 		$password = isset( $_POST['password'] ) ? $_POST['password'] : wp_generate_password( 12, false );
-		$status = isset( $_POST['status'] ) ? sanitize_text_field( $_POST['status'] ) : 'pending_vetting';
+		$status = isset( $_POST['status'] ) ? sanitize_key( wp_unslash( $_POST['status'] ) ) : 'pending_vetting';
+		if ( ! in_array( $status, Remember_Member::assignable_statuses(), true ) ) {
+			Remember_Logger::warning( 'Refused an unknown initial member status; using pending_vetting', array( 'status' => $status, 'by_user_id' => get_current_user_id() ) );
+			$status = 'pending_vetting';
+		}
 		
 		if ( empty( $username ) || empty( $email ) ) {
 			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Username and email are required.', 'remember' ) . '</p></div>';
@@ -122,9 +126,6 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 					if ( 'first_application' === $vetting_workflow ) {
 						// If vetting is on first application, member starts as unvetted but can apply
 						$status = 'unvetted'; // New status for members waiting for first application
-					} else {
-						// Default: vetting on join, so status is pending_vetting
-						$status = isset( $_POST['status'] ) ? sanitize_text_field( $_POST['status'] ) : 'pending_vetting';
 					}
 					
 					// Create member record
@@ -198,7 +199,7 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 		} elseif ( $member_model->get( $wp_user_id ) ) {
 			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'That WordPress user is already a reMember member.', 'remember' ) . '</p></div>';
 		} else {
-			if ( ! array_key_exists( $status, $status_labels ) ) {
+			if ( ! in_array( $status, Remember_Member::assignable_statuses(), true ) ) {
 				$vetting_workflow = Remember_Vetting_Workflow::get_workflow();
 				$status = ( 'first_application' === $vetting_workflow ) ? 'unvetted' : 'pending_vetting';
 			}
@@ -233,23 +234,6 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 				) . '</p></div>';
 			} else {
 				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Could not create the member record. Check the logs for details.', 'remember' ) . '</p></div>';
-			}
-		}
-	} elseif ( $member_id > 0 && 'update_status' === $action ) {
-		// Check capability
-		if ( ! current_user_can( 'remember_update_members' ) ) {
-			wp_die( __( 'You do not have sufficient permissions to perform this action.', 'remember' ), __( 'Access Denied', 'remember' ), array( 'response' => 403 ) );
-		}
-		
-		$status = isset( $_POST['status'] ) ? sanitize_text_field( $_POST['status'] ) : '';
-		if ( ! empty( $status ) ) {
-			$result = $member_model->update_status( $member_id, $status );
-			if ( $result !== false ) {
-				Remember_Logger::info( 'Member status updated', array( 'member_id' => $member_id, 'status' => $status ) );
-				echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Member status updated successfully.', 'remember' ) . '</p></div>';
-			} else {
-				Remember_Logger::error( 'Failed to update member status', array( 'member_id' => $member_id ) );
-				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Failed to update member status.', 'remember' ) . '</p></div>';
 			}
 		}
 	} elseif ( $member_id > 0 && 'update_profile' === $action ) {
@@ -290,6 +274,8 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 		$remember_email_error = isset( $_POST['user_email'] )
 			? Remember_Profile_Fields::user_email_change_error( $member_id, wp_unslash( $_POST['user_email'] ) )
 			: '';
+		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-timezone.php';
+		$remember_posted_timezone = isset( $_POST['timezone_string'] ) ? sanitize_text_field( wp_unslash( $_POST['timezone_string'] ) ) : '';
 		$member_number_error = '';
 		if ( null === $member_number ) {
 			$member_number_error = __( 'Member number must be alphanumeric (letters and numbers only).', 'remember' );
@@ -317,6 +303,15 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( Remember_Profile_Fields::user_email_change_message( $remember_email_error ) ) . '</p></div>';
 		} elseif ( ! empty( Remember_Platform_Handles::at_errors_from_request() ) ) {
 			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( Remember_Platform_Handles::at_message() ) . '</p></div>';
+		} elseif ( '' !== $remember_posted_timezone && ! Remember_Timezone::is_valid_timezone( $remember_posted_timezone ) ) {
+			Remember_Logger::warning(
+				'Member profile not saved because the time zone is not valid',
+				array(
+					'member_id'  => $member_id,
+					'by_user_id' => get_current_user_id(),
+				)
+			);
+			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Please select a valid time zone.', 'remember' ) . '</p></div>';
 		} else {
 		
 		global $wpdb;
@@ -398,9 +393,8 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 		
 		// Save timezone to WP user meta (not member_profiles)
 		if ( isset( $_POST['timezone_string'] ) ) {
-			$timezone_string = sanitize_text_field( wp_unslash( $_POST['timezone_string'] ) );
-			if ( ! empty( $timezone_string ) ) {
-				update_user_meta( $member_id, 'timezone_string', $timezone_string );
+			if ( '' !== $remember_posted_timezone ) {
+				update_user_meta( $member_id, 'timezone_string', $remember_posted_timezone );
 			} else {
 				// Default if empty
 				update_user_meta( $member_id, 'timezone_string', 'America/Los_Angeles' );
@@ -1273,8 +1267,8 @@ if ( $view_member_id > 0 ) {
 	<?php if ( $view_member_id > 0 ) : ?>
 		<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-members' ) ); ?>" class="page-title-action"><?php esc_html_e( '← Back to Members', 'remember' ); ?></a>
 	<?php elseif ( ! isset( $_GET['add'] ) && current_user_can( 'remember_create_members' ) ) : ?>
-		<button type="button" class="page-title-action" onclick="document.getElementById('remember-add-member').style.display='block'; document.getElementById('remember-convert-wp-user').style.display='none'; this.style.display='none'; var c=document.getElementById('remember-convert-toggle'); if(c){c.style.display='inline-block';}"><?php esc_html_e( 'Add New', 'remember' ); ?></button>
-		<button type="button" class="page-title-action" id="remember-convert-toggle" onclick="document.getElementById('remember-convert-wp-user').style.display='block'; document.getElementById('remember-add-member').style.display='none'; this.style.display='none'; var a=document.querySelector('.remember-members .page-title-action'); if(a){a.style.display='inline-block';}"><?php esc_html_e( 'Convert WP User', 'remember' ); ?></button>
+		<button type="button" class="page-title-action" data-remember-panel-toggle aria-controls="remember-add-member" aria-expanded="false"><?php esc_html_e( 'Add New', 'remember' ); ?></button>
+		<button type="button" class="page-title-action" id="remember-convert-toggle" data-remember-panel-toggle aria-controls="remember-convert-wp-user" aria-expanded="false"><?php esc_html_e( 'Convert WP User', 'remember' ); ?></button>
 	<?php endif; ?>
 	<hr class="wp-header-end">
 	
@@ -1288,7 +1282,7 @@ if ( $view_member_id > 0 ) {
 	<?php else : ?>
 		<!-- Add Form -->
 	<?php if ( current_user_can( 'remember_create_members' ) ) : ?>
-	<div id="remember-add-member" style="display:none; margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
+	<div id="remember-add-member" hidden data-remember-panel-group="remember-members-add" style="margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
 		<h2><?php esc_html_e( 'Add New Member', 'remember' ); ?></h2>
 		<form method="post" action="">
 			<?php wp_nonce_field( 'remember_member_action', 'remember_member_nonce' ); ?>
@@ -1335,7 +1329,7 @@ if ( $view_member_id > 0 ) {
 			
 			<p class="submit">
 				<input type="submit" class="button button-primary" value="<?php esc_attr_e( 'Add Member', 'remember' ); ?>">
-				<button type="button" class="button" onclick="document.getElementById('remember-add-member').style.display='none'; document.querySelectorAll('.remember-members .page-title-action').forEach(function(b){b.style.display='inline-block';});"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
+				<button type="button" class="button" data-remember-panel-close="remember-add-member"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
 			</p>
 		</form>
 	</div>
@@ -1343,13 +1337,13 @@ if ( $view_member_id > 0 ) {
 	<?php
 	$non_member_wp_users = $member_model->get_non_member_wp_users();
 	?>
-	<div id="remember-convert-wp-user" style="display:none; margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
+	<div id="remember-convert-wp-user" hidden data-remember-panel-group="remember-members-add" style="margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
 		<h2><?php esc_html_e( 'Convert WordPress User to Member', 'remember' ); ?></h2>
 		<p class="description"><?php esc_html_e( 'Existing WordPress users (including site admins) are not members until you convert them here, or until they register via the public member form. This does not change their WordPress login or display name.', 'remember' ); ?></p>
 		<?php if ( empty( $non_member_wp_users ) ) : ?>
 			<p><?php esc_html_e( 'Every WordPress user on this site already has a reMember member record.', 'remember' ); ?></p>
 			<p>
-				<button type="button" class="button" onclick="document.getElementById('remember-convert-wp-user').style.display='none'; document.querySelectorAll('.remember-members .page-title-action').forEach(function(b){b.style.display='inline-block';});"><?php esc_html_e( 'Close', 'remember' ); ?></button>
+				<button type="button" class="button" data-remember-panel-close="remember-convert-wp-user"><?php esc_html_e( 'Close', 'remember' ); ?></button>
 			</p>
 		<?php else : ?>
 			<form method="post" action="">
@@ -1403,7 +1397,7 @@ if ( $view_member_id > 0 ) {
 				</table>
 				<p class="submit">
 					<input type="submit" class="button button-primary" value="<?php esc_attr_e( 'Make Member', 'remember' ); ?>">
-					<button type="button" class="button" onclick="document.getElementById('remember-convert-wp-user').style.display='none'; document.querySelectorAll('.remember-members .page-title-action').forEach(function(b){b.style.display='inline-block';});"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
+					<button type="button" class="button" data-remember-panel-close="remember-convert-wp-user"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
 				</p>
 			</form>
 		<?php endif; ?>
@@ -1579,7 +1573,7 @@ if ( $view_member_id > 0 ) {
 							</div>
 						</td>
 						<td class="column-status" data-label="<?php echo esc_attr__( 'Status', 'remember' ); ?>">
-							<span style="color: <?php echo esc_attr( $status_colors[ $member->status ] ); ?>; font-weight: bold;">
+							<span class="remember-tone-<?php echo esc_attr( $status_tones[ $member->status ] ); ?>" style="font-weight: bold;">
 								<?php echo esc_html( $status_labels[ $member->status ] ); ?>
 								</span>
 							</td>

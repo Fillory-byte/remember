@@ -62,7 +62,7 @@ if ( isset( $_POST['remember_role_action'] ) && check_admin_referer( 'remember_r
 		}
 		
 		$data = array(
-			'role_name'     => sanitize_text_field( $_POST['role_name'] ),
+			'role_name'     => sanitize_text_field( wp_unslash( $_POST['role_name'] ) ),
 			'role_type'     => sanitize_text_field( $_POST['role_type'] ),
 			'is_event_role' => ( 'event' === $_POST['role_type'] ) ? 1 : 0,
 			'description'   => isset( $_POST['description'] ) ? sanitize_textarea_field( wp_unslash( $_POST['description'] ) ) : '',
@@ -93,7 +93,7 @@ if ( isset( $_POST['remember_role_action'] ) && check_admin_referer( 'remember_r
 		} elseif ( Remember_Capabilities::is_protected_system_role( $existing_role ) && ! current_user_can( 'manage_options' ) ) {
 			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Only a WordPress administrator can edit the System Administrator role.', 'remember' ) . '</p></div>';
 		} else {
-			$role_name = sanitize_text_field( $_POST['role_name'] );
+			$role_name = sanitize_text_field( wp_unslash( $_POST['role_name'] ) );
 			// Keep the protected role name stable.
 			if ( Remember_Capabilities::is_protected_system_role( $existing_role ) ) {
 				$role_name = 'System Administrator';
@@ -270,7 +270,7 @@ if ( $editing_role ) {
 	<h1 class="wp-heading-inline"><?php echo esc_html( get_admin_page_title() ); ?></h1>
 	<?php if ( ! $editing_role ) : ?>
 		<?php if ( current_user_can( 'remember_create_roles' ) ) : ?>
-			<button type="button" class="page-title-action" onclick="document.getElementById('remember-add-role').style.display='block'; this.style.display='none';"><?php esc_html_e( 'Add New', 'remember' ); ?></button>
+			<button type="button" class="page-title-action" data-remember-panel-toggle aria-controls="remember-add-role" aria-expanded="false"><?php esc_html_e( 'Add New', 'remember' ); ?></button>
 		<?php endif; ?>
 	<?php else : ?>
 		<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-roles' ) ); ?>" class="page-title-action"><?php esc_html_e( 'Back to Roles', 'remember' ); ?></a>
@@ -280,7 +280,7 @@ if ( $editing_role ) {
 	<?php if ( ! $editing_role ) : ?>
 		<!-- Add Form -->
 		<?php if ( current_user_can( 'remember_create_roles' ) ) : ?>
-		<div id="remember-add-role" style="display:none; margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
+		<div id="remember-add-role" hidden style="margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
 			<h2><?php esc_html_e( 'Add New Role', 'remember' ); ?></h2>
 			<form method="post" action="">
 				<?php wp_nonce_field( 'remember_role_action', 'remember_role_nonce' ); ?>
@@ -329,7 +329,7 @@ if ( $editing_role ) {
 				
 				<p class="submit">
 					<input type="submit" class="button button-primary" value="<?php esc_attr_e( 'Add Role', 'remember' ); ?>">
-					<button type="button" class="button" onclick="document.getElementById('remember-add-role').style.display='none'; document.querySelector('.page-title-action').style.display='inline-block';"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
+					<button type="button" class="button" data-remember-panel-close="remember-add-role"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
 				</p>
 			</form>
 		</div>
@@ -387,7 +387,7 @@ if ( $editing_role ) {
 									|
 								<?php endif; ?>
 								<?php if ( current_user_can( 'remember_delete_roles' ) ) : ?>
-									<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-roles&delete=' . $role->role_id ), 'remember_role_action', 'remember_role_nonce' ) ); ?>" onclick="return confirm('<?php esc_attr_e( 'Are you sure you want to delete this role?', 'remember' ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
+									<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-roles&delete=' . $role->role_id ), 'remember_role_action', 'remember_role_nonce' ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this role?', 'remember' ) ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
 								<?php endif; ?>
 							</td>
 						</tr>
@@ -455,7 +455,7 @@ if ( $editing_role ) {
 								<?php endif; ?>
 								<?php if ( current_user_can( 'remember_delete_roles' ) && ! $is_protected ) : ?>
 									|
-									<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-roles&delete=' . $role->role_id ), 'remember_role_action', 'remember_role_nonce' ) ); ?>" onclick="return confirm('<?php esc_attr_e( 'Are you sure you want to delete this role?', 'remember' ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
+									<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-roles&delete=' . $role->role_id ), 'remember_role_action', 'remember_role_nonce' ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this role?', 'remember' ) ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
 								<?php endif; ?>
 							</td>
 						</tr>

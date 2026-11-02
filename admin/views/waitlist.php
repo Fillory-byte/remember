@@ -68,7 +68,22 @@ if ( isset( $_POST['remember_waitlist_action'] ) && check_admin_referer( 'rememb
 		$event = $application ? $event_model->get( $application->event_id ) : null;
 		$event_name = $event ? $event->event_name : __( 'Unknown Event', 'remember' );
 
-		if ( 'promote_to_pending' === $action ) {
+		if ( in_array( $action, array( 'promote_to_pending', 'decline_waitlisted' ), true ) && ( ! $application || 'waitlisted' !== $application->status ) ) {
+			Remember_Logger::warning(
+				'Waitlist action refused for an application that is not waitlisted',
+				array(
+					'application_id' => $application_id,
+					'action'         => $action,
+					'status'         => $application ? $application->status : '',
+					'user_id'        => get_current_user_id(),
+				)
+			);
+			$message = $application
+				/* translators: %s: current application status, e.g. accepted. */
+				? sprintf( __( 'That application is no longer on the waitlist (it is now %s), so nothing was changed. Refresh the page to see the current waitlist.', 'remember' ), str_replace( '_', ' ', $application->status ) )
+				: __( 'That application was not found, so nothing was changed.', 'remember' );
+			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( $message ) . '</p></div>';
+		} elseif ( 'promote_to_pending' === $action ) {
 			$result = $application_model->update_status( $application_id, 'pending', get_current_user_id() );
 			if ( false !== $result && $application ) {
 				remember_notify_event_admins(
@@ -208,13 +223,13 @@ function remember_waitlist_sort_link( $column_name, $current_orderby, $current_o
 								<?php wp_nonce_field( 'remember_waitlist_action', 'remember_waitlist_nonce' ); ?>
 								<input type="hidden" name="remember_waitlist_action" value="promote_to_pending">
 								<input type="hidden" name="application_id" value="<?php echo esc_attr( $application->application_id ); ?>">
-								<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Move to Pending', 'remember' ); ?>" onclick="return confirm('<?php esc_attr_e( 'Move this application from waitlist to pending?', 'remember' ); ?>');">
+								<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Move to Pending', 'remember' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Move this application from waitlist to pending?', 'remember' ) ); ?>');">
 							</form>
 							<form method="post" action="" style="display:inline;">
 								<?php wp_nonce_field( 'remember_waitlist_action', 'remember_waitlist_nonce' ); ?>
 								<input type="hidden" name="remember_waitlist_action" value="decline_waitlisted">
 								<input type="hidden" name="application_id" value="<?php echo esc_attr( $application->application_id ); ?>">
-								<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Decline', 'remember' ); ?>" onclick="return confirm('<?php esc_attr_e( 'Decline this waitlisted application?', 'remember' ); ?>');">
+								<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Decline', 'remember' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Decline this waitlisted application?', 'remember' ) ); ?>');">
 							</form>
 						</td>
 					</tr>

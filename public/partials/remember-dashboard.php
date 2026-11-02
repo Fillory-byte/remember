@@ -223,13 +223,13 @@ $status_labels = array(
 	'inactive'        => __( 'Inactive', 'remember' ),
 );
 
-$status_colors = array(
-	'pending_vetting' => '#666',
-	'unvetted'        => '#666',
-	'in_vetting'      => '#2271b1',
-	'vetted'          => '#46b450',
-	'rejected'        => '#dc3232',
-	'inactive'        => '#666',
+$status_tones = array(
+	'pending_vetting' => 'muted',
+	'unvetted'        => 'muted',
+	'in_vetting'      => 'primary',
+	'vetted'          => 'success',
+	'rejected'        => 'error',
+	'inactive'        => 'muted',
 );
 
 $app_status_labels = array(
@@ -379,13 +379,13 @@ foreach ( $selected_application_addons as $selected_addon_row ) {
 		<div class="remember-header-left">
 			<?php if ( $member && ! empty( $member->photo_url ) ) : ?>
 				<div class="remember-member-avatar-large">
-					<img src="<?php echo esc_url( $member->photo_url ); ?>" alt="<?php echo esc_attr( $user->display_name ); ?>">
+					<img src="<?php echo esc_url( $member->photo_url ); ?>" alt="">
 				</div>
 			<?php endif; ?>
 			<div class="remember-header-info">
 				<h2><?php echo esc_html( sprintf( __( 'Welcome, %s', 'remember' ), $user->display_name ) ); ?></h2>
 				<?php if ( $member ) : ?>
-					<p class="remember-member-status" style="color: <?php echo esc_attr( $status_colors[ $member->status ] ?? '#666' ); ?>;">
+					<p class="remember-member-status remember-tone-<?php echo esc_attr( $status_tones[ $member->status ] ?? 'muted' ); ?>">
 						<?php echo esc_html( $status_labels[ $member->status ] ?? $member->status ); ?>
 					</p>
 				<?php endif; ?>

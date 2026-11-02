@@ -26,9 +26,7 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remem
 // Get timezone from WP user meta (not from member_profiles)
 $selected_timezone = get_user_meta( $view_user->ID, 'timezone_string', true );
 if ( empty( $selected_timezone ) ) {
-	$selected_timezone = 'America/Los_Angeles'; // Default
-	// Auto-assign default timezone
-	update_user_meta( $view_user->ID, 'timezone_string', $selected_timezone );
+	$selected_timezone = 'America/Los_Angeles'; // Preselected only; saved when the form is saved.
 }
 
 // Load countries helper
@@ -249,7 +247,7 @@ if ( $photo_max_bytes < 1 ) {
 		<tr>
 			<th><label for="cell_phone"><?php esc_html_e( 'Cell Phone', 'remember' ); ?> <span class="description">(required)</span></label></th>
 			<td>
-				<input type="text" id="cell_phone" name="cell_phone" class="regular-text" value="<?php echo esc_attr( $view_profile ? $view_profile->cell_phone : '' ); ?>" placeholder="<?php esc_attr_e( '+18055551212', 'remember' ); ?>" required>
+				<input type="text" id="cell_phone" name="cell_phone" class="regular-text" value="<?php echo esc_attr( $view_profile ? $view_profile->cell_phone : '' ); ?>" placeholder="+18055551212" required>
 				<p class="description"><?php esc_html_e( 'Include a leading + and country code. Examples: +18055551212 (USA/Canada), +447700900123 (UK).', 'remember' ); ?></p>
 			</td>
 		</tr>

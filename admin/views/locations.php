@@ -151,12 +151,12 @@ if ( isset( $_POST['remember_location_action'] ) && check_admin_referer( 'rememb
 		}
 		
 		$data = array(
-			'location_name'  => sanitize_text_field( $_POST['location_name'] ),
-			'address_street' => sanitize_text_field( $_POST['address_street'] ),
-			'address_city'   => sanitize_text_field( $_POST['address_city'] ),
-			'address_state'  => sanitize_text_field( $_POST['address_state'] ),
-			'address_postal' => sanitize_text_field( $_POST['address_postal'] ),
-			'address_country' => sanitize_text_field( $_POST['address_country'] ),
+			'location_name'  => sanitize_text_field( wp_unslash( $_POST['location_name'] ) ),
+			'address_street' => sanitize_text_field( wp_unslash( $_POST['address_street'] ) ),
+			'address_city'   => sanitize_text_field( wp_unslash( $_POST['address_city'] ) ),
+			'address_state'  => sanitize_text_field( wp_unslash( $_POST['address_state'] ) ),
+			'address_postal' => sanitize_text_field( wp_unslash( $_POST['address_postal'] ) ),
+			'address_country' => sanitize_text_field( wp_unslash( $_POST['address_country'] ) ),
 			'details'        => isset( $_POST['details'] ) ? wp_kses_post( wp_unslash( $_POST['details'] ) ) : '',
 			'is_active'      => isset( $_POST['is_active'] ) ? 1 : 0,
 		);
@@ -184,12 +184,12 @@ if ( isset( $_POST['remember_location_action'] ) && check_admin_referer( 'rememb
 		$location = $location_model->get( $location_id );
 		
 		$data = array(
-			'location_name'  => sanitize_text_field( $_POST['location_name'] ),
-			'address_street' => sanitize_text_field( $_POST['address_street'] ),
-			'address_city'   => sanitize_text_field( $_POST['address_city'] ),
-			'address_state'  => sanitize_text_field( $_POST['address_state'] ),
-			'address_postal' => sanitize_text_field( $_POST['address_postal'] ),
-			'address_country' => sanitize_text_field( $_POST['address_country'] ),
+			'location_name'  => sanitize_text_field( wp_unslash( $_POST['location_name'] ) ),
+			'address_street' => sanitize_text_field( wp_unslash( $_POST['address_street'] ) ),
+			'address_city'   => sanitize_text_field( wp_unslash( $_POST['address_city'] ) ),
+			'address_state'  => sanitize_text_field( wp_unslash( $_POST['address_state'] ) ),
+			'address_postal' => sanitize_text_field( wp_unslash( $_POST['address_postal'] ) ),
+			'address_country' => sanitize_text_field( wp_unslash( $_POST['address_country'] ) ),
 			'details'        => isset( $_POST['details'] ) ? wp_kses_post( wp_unslash( $_POST['details'] ) ) : '',
 			'is_active'      => isset( $_POST['is_active'] ) ? 1 : 0,
 		);
@@ -302,7 +302,7 @@ function remember_format_address( $location ) {
 	
 	<?php if ( ! $viewing_location && ! $editing_location ) : ?>
 		<?php if ( current_user_can( 'remember_create_locations' ) ) : ?>
-			<button type="button" class="page-title-action" onclick="document.getElementById('remember-add-location').style.display='block'; this.style.display='none';"><?php esc_html_e( 'Add New', 'remember' ); ?></button>
+			<button type="button" class="page-title-action" data-remember-panel-toggle aria-controls="remember-add-location" aria-expanded="false"><?php esc_html_e( 'Add New', 'remember' ); ?></button>
 		<?php endif; ?>
 	<?php elseif ( $viewing_location ) : ?>
 		<?php if ( current_user_can( 'remember_update_locations' ) ) : ?>
@@ -415,7 +415,7 @@ function remember_format_address( $location ) {
 		</div>
 
 		<!-- Add Form -->
-		<div id="remember-add-location" style="display:none; margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
+		<div id="remember-add-location" hidden style="margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
 			<h2><?php esc_html_e( 'Add New Location', 'remember' ); ?></h2>
 			<form method="post" action="" enctype="multipart/form-data">
 				<?php wp_nonce_field( 'remember_location_action', 'remember_location_nonce' ); ?>
@@ -473,7 +473,7 @@ function remember_format_address( $location ) {
 				
 				<p class="submit">
 					<input type="submit" class="button button-primary" value="<?php esc_attr_e( 'Add Location', 'remember' ); ?>">
-					<button type="button" class="button" onclick="document.getElementById('remember-add-location').style.display='none'; document.querySelector('.page-title-action').style.display='inline-block';"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
+					<button type="button" class="button" data-remember-panel-close="remember-add-location"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
 				</p>
 			</form>
 		</div>
@@ -504,9 +504,9 @@ function remember_format_address( $location ) {
 						<td class="column-address"><?php echo remember_format_address( $location ); ?></td>
 						<td class="column-status">
 							<?php if ( $location->is_active ) : ?>
-								<span class="dashicons dashicons-yes-alt" style="color: #46b450;"></span> <?php esc_html_e( 'Active', 'remember' ); ?>
+								<span class="dashicons dashicons-yes-alt remember-tone-success"></span> <?php esc_html_e( 'Active', 'remember' ); ?>
 							<?php else : ?>
-								<span class="dashicons dashicons-dismiss" style="color: #dc3232;"></span> <?php esc_html_e( 'Inactive', 'remember' ); ?>
+								<span class="dashicons dashicons-dismiss remember-tone-error"></span> <?php esc_html_e( 'Inactive', 'remember' ); ?>
 							<?php endif; ?>
 						</td>
 						<td class="column-actions">
@@ -515,7 +515,7 @@ function remember_format_address( $location ) {
 								| <a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-locations&edit=' . $location->location_id ) ); ?>"><?php esc_html_e( 'Edit', 'remember' ); ?></a>
 							<?php endif; ?>
 							<?php if ( current_user_can( 'remember_delete_locations' ) ) : ?>
-								| <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-locations&delete=' . $location->location_id ), 'remember_location_action', 'remember_location_nonce' ) ); ?>" onclick="return confirm('<?php esc_attr_e( 'Are you sure you want to delete this location?', 'remember' ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
+								| <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-locations&delete=' . $location->location_id ), 'remember_location_action', 'remember_location_nonce' ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this location?', 'remember' ) ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
 							<?php endif; ?>
 						</td>
 					</tr>

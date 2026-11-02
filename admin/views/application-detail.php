@@ -22,12 +22,12 @@ $status_labels = array(
 	'cancelled' => __( 'Cancelled', 'remember' ),
 	'waitlisted' => __( 'Waitlisted', 'remember' ),
 );
-$status_colors = array(
-	'pending'   => '#f0b849',
-	'accepted'  => '#46b450',
-	'declined'  => '#dc3232',
-	'cancelled' => '#72777c',
-	'waitlisted' => '#00a0d2',
+$status_tones = array(
+	'pending'    => 'warning',
+	'accepted'   => 'success',
+	'declined'   => 'error',
+	'cancelled'  => 'muted',
+	'waitlisted' => 'info',
 );
 ?>
 
@@ -38,7 +38,7 @@ $status_colors = array(
 			<div style="flex: 1;">
 				<h2 style="margin: 0 0 10px 0; font-size: 24px;">
 					<?php esc_html_e( 'Application', 'remember' ); ?> #<?php echo esc_html( $viewing_application->application_id ); ?>
-					<span style="color: <?php echo esc_attr( $status_colors[ $viewing_application->status ] ); ?>; font-size: 14px; font-weight: normal; margin-left: 10px;">
+					<span class="remember-tone-<?php echo esc_attr( $status_tones[ $viewing_application->status ] ); ?>" style="font-size: 14px; font-weight: normal; margin-left: 10px;">
 						<?php echo esc_html( $status_labels[ $viewing_application->status ] ); ?>
 					</span>
 				</h2>
@@ -90,7 +90,7 @@ $status_colors = array(
 				<p style="margin: 5px 0;">
 					<strong><?php esc_html_e( 'Billing:', 'remember' ); ?></strong>
 					<?php if ( current_user_can( 'remember_read_billing' ) ) : ?>
-					<span style="color: <?php echo esc_attr( isset( $viewing_billing_color ) ? $viewing_billing_color : '#72777c' ); ?>;">
+					<span class="remember-tone-<?php echo esc_attr( isset( $viewing_billing_tone ) ? $viewing_billing_tone : 'muted' ); ?>">
 						<?php
 						if ( ! empty( $viewing_billing_html ) ) {
 							echo wp_kses(
@@ -360,7 +360,7 @@ $status_colors = array(
 					<tr>
 						<th><?php esc_html_e( 'Amount Due:', 'remember' ); ?></th>
 						<td>
-							<strong style="color: <?php echo $viewing_payment->amount_due > 0 ? '#dc3232' : '#46b450'; ?>;">
+							<strong class="<?php echo $viewing_payment->amount_due > 0 ? 'remember-tone-error' : 'remember-tone-success'; ?>">
 								$<?php echo esc_html( number_format( $viewing_payment->amount_due, 2 ) ); ?>
 							</strong>
 						</td>
@@ -376,15 +376,15 @@ $status_colors = array(
 								'refunded' => __( 'Refunded', 'remember' ),
 								'cancelled' => __( 'Cancelled', 'remember' ),
 							);
-							$payment_status_colors = array(
-								'pending'  => '#f0b849',
-								'partial'  => '#00a0d2',
-								'paid'     => '#46b450',
-								'refunded' => '#72777c',
-								'cancelled' => '#dc3232',
+							$payment_status_tones = array(
+								'pending'   => 'warning',
+								'partial'   => 'info',
+								'paid'      => 'success',
+								'refunded'  => 'muted',
+								'cancelled' => 'error',
 							);
 							?>
-							<span style="color: <?php echo esc_attr( $payment_status_colors[ $viewing_payment->payment_status ] ); ?>;">
+							<span class="remember-tone-<?php echo esc_attr( $payment_status_tones[ $viewing_payment->payment_status ] ); ?>">
 								<?php echo esc_html( $payment_status_labels[ $viewing_payment->payment_status ] ); ?>
 							</span>
 						</td>
@@ -484,7 +484,7 @@ $status_colors = array(
 					<?php wp_nonce_field( 'remember_application_action', 'remember_application_nonce' ); ?>
 					<input type="hidden" name="remember_application_action" value="accept">
 					<input type="hidden" name="application_id" value="<?php echo esc_attr( $viewing_application->application_id ); ?>">
-					<input type="submit" class="button button-primary" value="<?php esc_attr_e( 'Accept Application', 'remember' ); ?>" onclick="return confirm('<?php esc_attr_e( 'Accept this application?', 'remember' ); ?>');">
+					<input type="submit" class="button button-primary" value="<?php esc_attr_e( 'Accept Application', 'remember' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Accept this application?', 'remember' ) ); ?>');">
 				</form>
 			<?php endif; ?>
 
@@ -502,7 +502,7 @@ $status_colors = array(
 					<?php wp_nonce_field( 'remember_application_action', 'remember_application_nonce' ); ?>
 					<input type="hidden" name="remember_application_action" value="reopen_pending">
 					<input type="hidden" name="application_id" value="<?php echo esc_attr( $viewing_application->application_id ); ?>">
-					<input type="submit" class="button" value="<?php esc_attr_e( 'Move to Pending', 'remember' ); ?>" onclick="return confirm('<?php esc_attr_e( 'Move this accepted application back to pending?', 'remember' ); ?>');">
+					<input type="submit" class="button" value="<?php esc_attr_e( 'Move to Pending', 'remember' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Move this accepted application back to pending?', 'remember' ) ); ?>');">
 				</form>
 				<?php if ( current_user_can( 'remember_create_billing' ) ) : ?>
 				<form method="post" action="" style="display: inline-block; margin-right: 10px;">

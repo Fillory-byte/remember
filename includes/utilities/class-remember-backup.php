@@ -780,12 +780,22 @@ class Remember_Backup {
 			if ( $existing && $existing->ID ) {
 				$new_id = (int) $existing->ID;
 				if ( $name && $name !== $existing->display_name ) {
-					wp_update_user(
-						array(
-							'ID'           => $new_id,
-							'display_name' => $name,
-						)
-					);
+					if ( Remember_Capabilities::current_user_can_administer_account( $new_id ) ) {
+						wp_update_user(
+							array(
+								'ID'           => $new_id,
+								'display_name' => $name,
+							)
+						);
+					} else {
+						Remember_Logger::warning(
+							'Restore kept the display name of a privileged WordPress account',
+							array(
+								'user_id'    => $new_id,
+								'by_user_id' => get_current_user_id(),
+							)
+						);
+					}
 				}
 				$map[ $old_id ] = $new_id;
 				$used_emails[ strtolower( $existing->user_email ) ] = $new_id;

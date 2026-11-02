@@ -36,6 +36,98 @@ class Remember_Vetting extends Remember_Base_Model {
 	protected $primary_key = 'vetting_id';
 
 	/**
+	 * Every status a vetting case can hold.
+	 *
+	 * @return string[]
+	 */
+	public static function statuses() {
+		return array( 'pending', 'scheduled', 'in_progress', 'completed' );
+	}
+
+	/**
+	 * Statuses staff may pick by hand. Completed is set only by recording an
+	 * accepted or rejected decision, so the member status and result email follow.
+	 *
+	 * @return string[]
+	 */
+	public static function manual_statuses() {
+		return array_values( array_diff( self::statuses(), array( 'completed' ) ) );
+	}
+
+	/**
+	 * Whether a WordPress account may be a primary vetter or collaborator.
+	 *
+	 * @param int $user_id WordPress user ID.
+	 * @return bool
+	 */
+	public static function user_can_be_vetter( $user_id ) {
+		$user_id = absint( $user_id );
+		return $user_id > 0 && false !== get_userdata( $user_id ) && user_can( $user_id, 'remember_update_vetting' );
+	}
+
+	/**
+	 * Whether a user is an active (not declined) collaborator on a case.
+	 *
+	 * @param int $vetting_id Vetting ID.
+	 * @param int $user_id    WordPress user ID.
+	 * @return bool
+	 */
+	public function is_collaborator( $vetting_id, $user_id ) {
+		global $wpdb;
+		$table_name = $wpdb->prefix . 'remember_vetting_collaborators';
+		return (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM $table_name WHERE vetting_id = %d AND member_id = %d AND status != 'declined'",
+				absint( $vetting_id ),
+				absint( $user_id )
+			)
+		) > 0;
+	}
+
+	/**
+	 * Whether a user may work a case: schedule, change status, record the
+	 * decision and add collaborators. Every vetter can see every case, but only
+	 * the primary vetter, collaborators and users with Access Settings work it.
+	 *
+	 * @param object $vetting Vetting row.
+	 * @param int    $user_id WordPress user ID.
+	 * @return bool
+	 */
+	public function user_can_work( $vetting, $user_id ) {
+		$user_id = absint( $user_id );
+		if ( ! $vetting || ! self::user_can_be_vetter( $user_id ) ) {
+			return false;
+		}
+		if ( user_can( $user_id, 'remember_access_settings' ) ) {
+			return true;
+		}
+		if ( (int) $vetting->primary_vetter_id === $user_id ) {
+			return true;
+		}
+		return $this->is_collaborator( $vetting->vetting_id, $user_id );
+	}
+
+	/**
+	 * Whether a user may set the primary vetter. Any vetter may while the case
+	 * is unassigned; after that only the primary vetter or a user with Access
+	 * Settings may reassign it.
+	 *
+	 * @param object $vetting Vetting row.
+	 * @param int    $user_id WordPress user ID.
+	 * @return bool
+	 */
+	public function user_can_assign( $vetting, $user_id ) {
+		$user_id = absint( $user_id );
+		if ( ! $vetting || ! self::user_can_be_vetter( $user_id ) ) {
+			return false;
+		}
+		if ( empty( $vetting->primary_vetter_id ) || user_can( $user_id, 'remember_access_settings' ) ) {
+			return true;
+		}
+		return (int) $vetting->primary_vetter_id === $user_id;
+	}
+
+	/**
 	 * Create a new vetting record.
 	 *
 	 * @param int    $member_id         Member ID.

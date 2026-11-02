@@ -47,12 +47,12 @@ $status_labels = array(
 	'completed' => __( 'Completed', 'remember' ),
 );
 
-$status_colors = array(
-	'draft'    => '#666',
-	'open'     => '#46b450',
-	'closed'   => '#dc3232',
-	'cancelled' => '#dc3232',
-	'completed' => '#666',
+$status_tones = array(
+	'draft'     => 'muted',
+	'open'      => 'success',
+	'closed'    => 'error',
+	'cancelled' => 'error',
+	'completed' => 'muted',
 );
 ?>
 
@@ -80,7 +80,7 @@ $status_colors = array(
 							</span>
 						<?php endif; ?>
 					</h3>
-					<span class="remember-event-status remember-status-<?php echo esc_attr( $event->status ); ?>" style="color: <?php echo esc_attr( $status_colors[ $event->status ] ); ?>;">
+					<span class="remember-event-status remember-status-<?php echo esc_attr( $event->status ); ?> remember-tone-<?php echo esc_attr( $status_tones[ $event->status ] ); ?>">
 						<?php echo esc_html( $status_labels[ $event->status ] ); ?>
 					</span>
 				</header>

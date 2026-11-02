@@ -59,12 +59,12 @@ $status_labels = array(
 	'completed' => __( 'Completed', 'remember' ),
 );
 
-$status_colors = array(
-	'draft'     => '#666',
-	'open'      => '#46b450',
-	'closed'    => '#dc3232',
-	'cancelled' => '#dc3232',
-	'completed' => '#666',
+$status_tones = array(
+	'draft'     => 'muted',
+	'open'      => 'success',
+	'closed'    => 'error',
+	'cancelled' => 'error',
+	'completed' => 'muted',
 );
 
 // Format dates
@@ -121,7 +121,7 @@ $is_multi_day = ( $event->start_date !== $event->end_date );
 
 			<div class="remember-event-info-item">
 				<strong><?php esc_html_e( 'Status:', 'remember' ); ?></strong><br>
-				<span style="color: <?php echo esc_attr( $status_colors[ $event->status ] ?? '#666' ); ?>;">
+				<span class="remember-tone-<?php echo esc_attr( $status_tones[ $event->status ] ?? 'muted' ); ?>">
 					<?php echo esc_html( $status_labels[ $event->status ] ?? $event->status ); ?>
 				</span>
 			</div>

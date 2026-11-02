@@ -744,13 +744,13 @@ if (window.history && history.replaceState) {
 					$on_application = Remember_Surveys::PLACEMENT_APPLICATION === $row->placement;
 					if ( $on_application ) {
 						$status_label = __( 'On the application', 'remember' );
-						$status_color = '#2271b1';
+						$status_tone  = 'primary';
 					} elseif ( 'issued' === $row->status ) {
 						$status_label = __( 'Issued', 'remember' );
-						$status_color = '#46b450';
+						$status_tone  = 'success';
 					} else {
 						$status_label = __( 'Draft', 'remember' );
-						$status_color = '#996800';
+						$status_tone  = 'warning';
 					}
 					?>
 					<tr>
@@ -775,7 +775,7 @@ if (window.history && history.replaceState) {
 							<?php echo esc_html( (string) $row->question_count ); ?>
 						</td>
 						<td class="column-status" data-label="<?php echo esc_attr__( 'Status', 'remember' ); ?>">
-							<span style="color: <?php echo esc_attr( $status_color ); ?>; font-weight: bold;"><?php echo esc_html( $status_label ); ?></span>
+							<span class="remember-tone-<?php echo esc_attr( $status_tone ); ?>" style="font-weight: bold;"><?php echo esc_html( $status_label ); ?></span>
 						</td>
 						<td class="column-actions" data-label="<?php echo esc_attr__( 'Actions', 'remember' ); ?>">
 							<a href="<?php echo esc_url( $edit_url ); ?>"><?php esc_html_e( 'Edit', 'remember' ); ?></a>

@@ -314,9 +314,7 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remem
 // Get timezone from WP user meta (not from member_profiles)
 $selected_timezone = get_user_meta( $user->ID, 'timezone_string', true );
 if ( empty( $selected_timezone ) && ! $remember_sticky ) {
-	$selected_timezone = 'America/Los_Angeles'; // Default
-	// Auto-assign default timezone
-	update_user_meta( $user->ID, 'timezone_string', $selected_timezone );
+	$selected_timezone = 'America/Los_Angeles'; // Preselected only; saved when the profile is saved.
 }
 
 // Get social media platforms
@@ -761,7 +759,7 @@ if ( $remember_sticky ) {
 							<span class="remember-required">*</span>
 						</label>
 						<input type="text" id="cell_phone" name="cell_phone" class="<?php echo esc_attr( $remember_ifc( 'cell_phone' ) ); ?>" required<?php echo $remember_ifa( 'cell_phone' ); ?>
-							value="<?php echo esc_attr( $profile ? $profile->cell_phone : '' ); ?>" placeholder="<?php esc_attr_e( '+18055551212', 'remember' ); ?>">
+							value="<?php echo esc_attr( $profile ? $profile->cell_phone : '' ); ?>" placeholder="+18055551212">
 						<?php Remember_Profile_Fields::render_field_error( 'cell_phone', $remember_invalid_fields, $remember_field_messages ); ?>
 						<p class="remember-form-help"><?php esc_html_e( 'Include a leading + and country code. Examples: +18055551212 (USA/Canada), +447700900123 (UK).', 'remember' ); ?></p>
 					</div>
@@ -1063,7 +1061,7 @@ if ( $remember_sticky ) {
 					<div class="remember-form-col">
 						<label for="emergency_contact_phone" class="remember-form-label"><?php esc_html_e( 'Phone', 'remember' ); ?> <span class="remember-required">*</span></label>
 						<input type="text" id="emergency_contact_phone" name="emergency_contact_phone" class="<?php echo esc_attr( $remember_ifc( 'emergency_contact_phone' ) ); ?>" required<?php echo $remember_ifa( 'emergency_contact_phone' ); ?>
-							value="<?php echo esc_attr( $profile ? $profile->emergency_contact_phone : '' ); ?>" placeholder="<?php esc_attr_e( '+18055551212', 'remember' ); ?>">
+							value="<?php echo esc_attr( $profile ? $profile->emergency_contact_phone : '' ); ?>" placeholder="+18055551212">
 						<?php Remember_Profile_Fields::render_field_error( 'emergency_contact_phone', $remember_invalid_fields, $remember_field_messages ); ?>
 					</div>
 					<div class="remember-form-col">
@@ -1153,7 +1151,7 @@ if ( $remember_sticky ) {
 		<div class="remember-profile-edit-header">
 			<?php if ( $member && ! empty( $member->photo_url ) ) : ?>
 				<div class="remember-profile-photo-preview remember-profile-photo-preview--header">
-					<img src="<?php echo esc_url( $member->photo_url ); ?>" alt="<?php echo esc_attr( $user->display_name ); ?>">
+					<img src="<?php echo esc_url( $member->photo_url ); ?>" alt="">
 				</div>
 			<?php endif; ?>
 			<h2><?php echo esc_html( $user->display_name ); ?></h2>

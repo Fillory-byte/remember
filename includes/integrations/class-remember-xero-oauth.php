@@ -95,7 +95,12 @@ class Remember_Xero_OAuth {
 	}
 
 	/**
-	 * Start an OAuth attempt: store state, redirect URI, and PKCE verifier for the callback.
+	 * Transient prefix for an in-flight authorization; the user ID is appended.
+	 */
+	const PENDING_TRANSIENT = 'remember_xero_oauth_pending_';
+
+	/**
+	 * Start an OAuth attempt for the current user: store state, redirect URI, and PKCE verifier for the callback.
 	 *
 	 * @return array{state:string,redirect_uri:string,code_verifier:string,user_id:int}
 	 */
@@ -106,23 +111,29 @@ class Remember_Xero_OAuth {
 			'code_verifier' => wp_generate_password( 64, false, false ),
 			'user_id'       => get_current_user_id(),
 		);
-		set_transient( 'remember_xero_oauth_pending', $pending, 15 * MINUTE_IN_SECONDS );
+		set_transient( self::PENDING_TRANSIENT . $pending['user_id'], $pending, 15 * MINUTE_IN_SECONDS );
 		return $pending;
 	}
 
 	/**
-	 * @return array|false Pending OAuth payload.
+	 * In-flight authorization attempt started by the current user.
+	 *
+	 * @return array|false Pending payload, or false when none (expired, never started, or another user's).
 	 */
 	public static function get_pending_oauth() {
-		$pending = get_transient( 'remember_xero_oauth_pending' );
-		return is_array( $pending ) ? $pending : false;
+		$user_id = get_current_user_id();
+		$pending = get_transient( self::PENDING_TRANSIENT . $user_id );
+		if ( ! is_array( $pending ) || empty( $pending['state'] ) || ! isset( $pending['user_id'] ) || (int) $pending['user_id'] !== $user_id ) {
+			return false;
+		}
+		return $pending;
 	}
 
 	/**
-	 * Drop the in-flight OAuth attempt.
+	 * Drop the current user's in-flight OAuth attempt.
 	 */
 	public static function clear_pending_oauth() {
-		delete_transient( 'remember_xero_oauth_pending' );
+		delete_transient( self::PENDING_TRANSIENT . get_current_user_id() );
 	}
 
 	/**
