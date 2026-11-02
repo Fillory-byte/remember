@@ -936,7 +936,487 @@
 		$file.removeClass('remember-field-invalid').removeAttr('aria-invalid');
 	}
 
+	/**
+	 * Apply page: roles, add-ons, survey and agreements for the chosen event,
+	 * restoring a failed submit and keeping a draft across the profile round trip.
+	 * Page data comes from rememberApply (wp_localize_script in remember-apply.php).
+	 */
+	function initApplyForm() {
+		if (typeof rememberApply === 'undefined' || !$('.remember-apply-form form').length) {
+			return;
+		}
+		var config = rememberApply;
+		var i18n = config.i18n || {};
+		var nonces = config.nonces || {};
+		var ajaxUrl = typeof rememberPublic !== 'undefined' && rememberPublic.ajaxurl ? rememberPublic.ajaxurl : '';
+		var eventId = parseInt(config.eventId, 10) || 0;
+		var $roleSelect = $('#event_role_id');
+		var $eventSelect = $('#event_id');
+		var $addonsContainer = $('#remember-event-addons');
+		var $agreementsContainer = $('#remember-event-agreements');
+		var $surveyWrap = $('#remember-event-survey');
+		var $surveyFields = $('#remember-event-survey-fields');
+		var restore = {
+			roleId: config.restore ? parseInt(config.restore.roleId, 10) || 0 : 0,
+			addons: config.restore && config.restore.addons ? config.restore.addons : {}
+		};
+		var pendingAddons = restore.addons;
+		var draftFields = [];
+		var draftKept = [];
+		var waitingAgreements = false;
+		var draftNoted = false;
+		var draftKey = 'rememberApplyDraft';
+
+		function helpText(text) {
+			return $('<p>', { 'class': 'remember-form-help' }).text(text || '');
+		}
+
+		function placeholderOption(text) {
+			return $('<option>', { value: '' }).text(text || '');
+		}
+
+		function currentEventId() {
+			var fromSelect = $eventSelect.val();
+			if (fromSelect) {
+				return fromSelect;
+			}
+			var hidden = $('input[name="event_id"]').val();
+			return hidden || eventId || '';
+		}
+
+		function loadEventSurvey(selectedEventId, selectedRoleId, done) {
+			if (!selectedEventId || !selectedRoleId) {
+				$surveyFields.empty();
+				$surveyWrap.prop('hidden', true);
+				if (typeof done === 'function') {
+					done();
+				}
+				return;
+			}
+			$.ajax({
+				url: ajaxUrl,
+				type: 'POST',
+				data: {
+					action: 'remember_get_event_survey',
+					event_id: selectedEventId,
+					event_role_id: selectedRoleId,
+					nonce: nonces.survey
+				},
+				success: function(response) {
+					var html = response.success && response.data ? response.data.html : '';
+					if (html) {
+						$surveyFields.html(html);
+						$surveyWrap.prop('hidden', false);
+						rememberInitSurvey($surveyFields);
+					} else {
+						$surveyFields.empty();
+						$surveyWrap.prop('hidden', true);
+					}
+					if (typeof done === 'function') {
+						done();
+					}
+				},
+				error: function() {
+					if (typeof done === 'function') {
+						done();
+					}
+				}
+			});
+		}
+
+		function loadEventAgreements(selectedEventId) {
+			if (!selectedEventId) {
+				$agreementsContainer.empty().append(helpText(i18n.selectEventForAgreements));
+				return;
+			}
+			$agreementsContainer.empty().append(helpText(i18n.loadingAgreements));
+			$.ajax({
+				url: ajaxUrl,
+				type: 'POST',
+				data: {
+					action: 'remember_get_event_agreements',
+					event_id: selectedEventId,
+					nonce: nonces.agreements
+				},
+				success: function(response) {
+					if (response.success && response.data && response.data.html) {
+						$agreementsContainer.html(response.data.html);
+					} else {
+						$agreementsContainer.empty().append(helpText(i18n.noAgreements));
+					}
+					if (draftKept.length) {
+						applyDraft(draftKept);
+					}
+					if (waitingAgreements) {
+						waitingAgreements = false;
+						draftKept = [];
+						clearDraft();
+						showKeptNotice();
+					}
+				},
+				error: function() {
+					$agreementsContainer.empty().append(helpText(i18n.errorAgreements));
+					if (waitingAgreements) {
+						waitingAgreements = false;
+						draftKept = [];
+						clearDraft();
+						showKeptNotice();
+					}
+				}
+			});
+		}
+
+		function loadEventRoles(selectedEventId) {
+			if (!selectedEventId) {
+				$roleSelect.empty().append(placeholderOption(i18n.selectEventFirst)).prop('disabled', true);
+				return;
+			}
+
+			$roleSelect.empty().append(placeholderOption(i18n.loadingRoles)).prop('disabled', true);
+
+			$.ajax({
+				url: ajaxUrl,
+				type: 'POST',
+				data: {
+					action: 'remember_get_event_roles',
+					event_id: selectedEventId,
+					nonce: nonces.roles
+				},
+				success: function(response) {
+					if (response.success && response.data && response.data.length > 0) {
+						$roleSelect.empty().append(placeholderOption(i18n.selectRole));
+						$.each(response.data, function(index, role) {
+							$roleSelect.append($('<option>', { value: String(role.event_role_id) }).text(role.role_name || ''));
+						});
+						$roleSelect.prop('disabled', false);
+						restoreRole();
+					} else {
+						$roleSelect.empty().append(placeholderOption(i18n.noRoles)).prop('disabled', true);
+					}
+				},
+				error: function() {
+					$roleSelect.empty().append(placeholderOption(i18n.errorRoles)).prop('disabled', true);
+				}
+			});
+		}
+
+		function readDraft() {
+			try {
+				return JSON.parse(sessionStorage.getItem(draftKey) || 'null');
+			} catch (err) {
+				return null;
+			}
+		}
+
+		function clearDraft() {
+			try {
+				sessionStorage.removeItem(draftKey);
+			} catch (err) {}
+		}
+
+		function applyDraft(fields) {
+			var $form = $('.remember-apply-form form');
+			$.each(fields, function(index, field) {
+				if (!field || !field.name || field.name === 'remember_profile_currency_confirm') {
+					return;
+				}
+				var $els = $form.find('input, select, textarea').filter(function() {
+					return this.name === field.name;
+				});
+				if (!$els.length) {
+					return;
+				}
+				if (field.check) {
+					$els.filter(function() {
+						return this.value === String(field.value);
+					}).prop('checked', true);
+					return;
+				}
+				$els.val(field.value);
+			});
+			$form.find('.remember-addon-toggle:checked').trigger('change');
+			$form.find('[data-remember-survey]').each(function() {
+				$(this).find(':input').first().trigger('input');
+			});
+		}
+
+		function showKeptNotice() {
+			if (draftNoted) {
+				return;
+			}
+			draftNoted = true;
+			$('.remember-apply-form h2').first().after(
+				$('<div>', { 'class': 'remember-notice remember-success', role: 'status' }).append(
+					$('<p>').text(i18n.keptNotice || '')
+				)
+			);
+		}
+
+		function finishDraft() {
+			if (!draftFields.length) {
+				return;
+			}
+			draftKept = draftFields;
+			draftFields = [];
+			applyDraft(draftKept);
+			if (waitingAgreements) {
+				return;
+			}
+			draftKept = [];
+			clearDraft();
+			showKeptNotice();
+		}
+
+		function absorbDraft() {
+			if (restore.roleId) {
+				clearDraft();
+				return;
+			}
+			var draft = readDraft();
+			if (!draft || !draft.fields || !draft.fields.length) {
+				return;
+			}
+			if (!draft.savedAt || (Date.now() - draft.savedAt) > (2 * 60 * 60 * 1000)) {
+				clearDraft();
+				return;
+			}
+			var pageEvent = String(eventId || '');
+			var draftEvent = String(draft.eventId || '');
+			if (!draftEvent || (pageEvent && pageEvent !== '0' && pageEvent !== draftEvent)) {
+				return;
+			}
+			draftFields = draft.fields;
+			if (!pageEvent || pageEvent === '0') {
+				eventId = parseInt(draftEvent, 10) || 0;
+				if ($eventSelect.length) {
+					$eventSelect.val(String(eventId));
+				}
+				waitingAgreements = true;
+				loadEventAgreements(eventId);
+			}
+			var selected = {};
+			$.each(draft.fields, function(index, field) {
+				if (!field || !field.name) {
+					return;
+				}
+				if (field.name === 'event_role_id' && field.value) {
+					restore.roleId = parseInt(field.value, 10) || 0;
+				}
+				var chosen = /^event_addons\[(\d+)\]\[selected\]$/.exec(field.name);
+				if (chosen && field.check) {
+					selected[chosen[1]] = true;
+				}
+			});
+			$.each(draft.fields, function(index, field) {
+				var qty = field && field.name ? /^event_addons\[(\d+)\]\[quantity\]$/.exec(field.name) : null;
+				if (qty && selected[qty[1]] && !field.check) {
+					pendingAddons[qty[1]] = parseInt(field.value, 10) || 1;
+				}
+			});
+		}
+
+		// Re-select the role from a failed submit once. The survey for it is already rendered with the posted answers.
+		function restoreRole() {
+			var roleId = restore.roleId ? String(restore.roleId) : '';
+			restore.roleId = 0;
+			if (!roleId) {
+				finishDraft();
+				return;
+			}
+			var offered = $roleSelect.find('option').filter(function() {
+				return this.value === roleId;
+			}).length > 0;
+			if (!offered) {
+				pendingAddons = {};
+				loadEventSurvey('', '', finishDraft);
+				return;
+			}
+			$roleSelect.val(roleId);
+			loadEventAddons(currentEventId(), roleId);
+			if (draftFields.length) {
+				loadEventSurvey(currentEventId(), roleId, finishDraft);
+			}
+		}
+
+		function renderAddons(addons) {
+			if (!addons || addons.length === 0) {
+				$addonsContainer.empty().append(helpText(i18n.noAddonsEvent));
+				return;
+			}
+
+			$addonsContainer.empty();
+			$.each(addons, function(index, addon) {
+				var id = parseInt(addon.merchandise_id, 10);
+				if (!id) {
+					return;
+				}
+				var cost = Number(addon.cost);
+				if (isNaN(cost)) {
+					cost = 0;
+				}
+				var maxQty = parseInt(addon.max_quantity, 10);
+				if (isNaN(maxQty) || maxQty < 1) {
+					maxQty = 0;
+				}
+
+				var $item = $('<div>', {
+					'class': 'remember-addon-item',
+					css: { border: '1px solid #ddd', padding: '10px', marginBottom: '10px' }
+				});
+
+				var $label = $('<label>', { css: { display: 'block', marginBottom: '6px' } });
+				$label.append($('<input>', {
+					type: 'checkbox',
+					'class': 'remember-addon-toggle',
+					name: 'event_addons[' + id + '][selected]',
+					value: '1',
+					'data-addon-id': id
+				}));
+				$label.append(' ');
+				$label.append($('<strong>').text(addon.merchandise_name || ''));
+				$label.append(document.createTextNode(' - $' + cost.toFixed(2) + ' ' + (i18n.subtotal || '')));
+				$item.append($label);
+
+				if (addon.description) {
+					$item.append($('<p>', {
+						'class': 'remember-form-help',
+						css: { margin: '0 0 8px 0' }
+					}).text(addon.description));
+				}
+
+				var $qty = $('<input>', {
+					type: 'number',
+					'class': 'small-text remember-addon-qty',
+					name: 'event_addons[' + id + '][quantity]',
+					value: 1,
+					min: 1,
+					disabled: true
+				});
+				if (maxQty > 0) {
+					$qty.attr('max', maxQty);
+				}
+				if (pendingAddons[id]) {
+					var keptQty = parseInt(pendingAddons[id], 10) || 1;
+					if (maxQty > 0 && keptQty > maxQty) {
+						keptQty = maxQty;
+					}
+					$label.find('.remember-addon-toggle').prop('checked', true);
+					$qty.val(keptQty).prop('disabled', false);
+				}
+				$item.append($('<label>').text((i18n.quantity || '') + ' ').append($qty));
+				if (maxQty > 0) {
+					$item.append($('<span>', {
+						'class': 'remember-form-help',
+						css: { marginLeft: '8px' }
+					}).text(' (max ' + maxQty + ')'));
+				}
+
+				$addonsContainer.append($item);
+			});
+		}
+
+		function loadEventAddons(selectedEventId, selectedRoleId) {
+			if (!selectedEventId) {
+				$addonsContainer.empty().append(helpText(i18n.selectEventAndRole));
+				return;
+			}
+			if (!selectedRoleId) {
+				$addonsContainer.empty().append(helpText(i18n.selectRoleForAddons));
+				return;
+			}
+
+			$addonsContainer.empty().append(helpText(i18n.loadingAddons));
+
+			$.ajax({
+				url: ajaxUrl,
+				type: 'POST',
+				data: {
+					action: 'remember_get_event_addons',
+					event_id: selectedEventId,
+					event_role_id: selectedRoleId,
+					nonce: nonces.addons
+				},
+				success: function(response) {
+					if (response.success && response.data && response.data.length) {
+						renderAddons(response.data);
+					} else {
+						$addonsContainer.empty().append(helpText(i18n.noAddonsRole));
+					}
+					pendingAddons = {};
+				},
+				error: function() {
+					$addonsContainer.empty().append(helpText(i18n.errorAddons));
+					pendingAddons = {};
+				}
+			});
+		}
+
+		absorbDraft();
+
+		if (eventId > 0) {
+			loadEventRoles(eventId);
+			rememberInitSurvey($surveyFields);
+		}
+
+		$eventSelect.on('change', function() {
+			var selectedEventId = $(this).val();
+			loadEventRoles(selectedEventId);
+			loadEventAddons(selectedEventId, '');
+			loadEventAgreements(selectedEventId);
+			loadEventSurvey(selectedEventId, '');
+		});
+
+		$roleSelect.on('change', function() {
+			loadEventAddons(currentEventId(), $(this).val());
+			loadEventSurvey(currentEventId(), $(this).val());
+		});
+
+		$(document).on('change', '.remember-addon-toggle', function() {
+			var addonId = $(this).data('addon-id');
+			var $qtyInput = $('.remember-addon-qty[name="event_addons[' + addonId + '][quantity]"]');
+			$qtyInput.prop('disabled', !$(this).is(':checked'));
+		});
+
+		$('.remember-apply-form').on('click', 'a[data-remember-profile-return]', function(e) {
+			if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.which === 2) {
+				return;
+			}
+			var $form = $(this).closest('form');
+			var fields = [];
+			$form.find('input, select, textarea').each(function() {
+				if (!this.name || this.name === 'remember_apply_nonce' || this.name === 'remember_apply_action' || this.name === 'remember_profile_currency_confirm') {
+					return;
+				}
+				if ((this.type === 'checkbox' || this.type === 'radio') && !this.checked) {
+					return;
+				}
+				if (this.disabled) {
+					return;
+				}
+				fields.push({
+					name: this.name,
+					value: $(this).val(),
+					check: this.type === 'checkbox' || this.type === 'radio'
+				});
+			});
+			try {
+				sessionStorage.setItem(draftKey, JSON.stringify({
+					eventId: String(currentEventId() || ''),
+					fields: fields,
+					savedAt: Date.now()
+				}));
+			} catch (err) {}
+			e.preventDefault();
+			window.location.href = $(this).attr('data-remember-profile-return');
+		});
+
+		$('.remember-apply-form form').on('submit', function() {
+			clearDraft();
+		});
+	}
+
 	$(function() {
+		initApplyForm();
 		initDisplayNameNicknameSync();
 		initProfilePhotoCropper();
 		initRegistrationPhotoRetention();
