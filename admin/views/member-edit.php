@@ -247,7 +247,7 @@ if ( $photo_max_bytes < 1 ) {
 		<tr>
 			<th><label for="cell_phone"><?php esc_html_e( 'Cell Phone', 'remember' ); ?> <span class="description">(required)</span></label></th>
 			<td>
-				<input type="text" id="cell_phone" name="cell_phone" class="regular-text" value="<?php echo esc_attr( $view_profile ? $view_profile->cell_phone : '' ); ?>" placeholder="<?php esc_attr_e( '+18055551212', 'remember' ); ?>" required>
+				<input type="text" id="cell_phone" name="cell_phone" class="regular-text" value="<?php echo esc_attr( $view_profile ? $view_profile->cell_phone : '' ); ?>" placeholder="+18055551212" required>
 				<p class="description"><?php esc_html_e( 'Include a leading + and country code. Examples: +18055551212 (USA/Canada), +447700900123 (UK).', 'remember' ); ?></p>
 			</td>
 		</tr>
