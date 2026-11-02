@@ -302,7 +302,7 @@ function remember_format_address( $location ) {
 	
 	<?php if ( ! $viewing_location && ! $editing_location ) : ?>
 		<?php if ( current_user_can( 'remember_create_locations' ) ) : ?>
-			<button type="button" class="page-title-action" onclick="document.getElementById('remember-add-location').style.display='block'; this.style.display='none';"><?php esc_html_e( 'Add New', 'remember' ); ?></button>
+			<button type="button" class="page-title-action" data-remember-panel-toggle aria-controls="remember-add-location" aria-expanded="false"><?php esc_html_e( 'Add New', 'remember' ); ?></button>
 		<?php endif; ?>
 	<?php elseif ( $viewing_location ) : ?>
 		<?php if ( current_user_can( 'remember_update_locations' ) ) : ?>
@@ -415,7 +415,7 @@ function remember_format_address( $location ) {
 		</div>
 
 		<!-- Add Form -->
-		<div id="remember-add-location" style="display:none; margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
+		<div id="remember-add-location" hidden style="margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
 			<h2><?php esc_html_e( 'Add New Location', 'remember' ); ?></h2>
 			<form method="post" action="" enctype="multipart/form-data">
 				<?php wp_nonce_field( 'remember_location_action', 'remember_location_nonce' ); ?>
@@ -473,7 +473,7 @@ function remember_format_address( $location ) {
 				
 				<p class="submit">
 					<input type="submit" class="button button-primary" value="<?php esc_attr_e( 'Add Location', 'remember' ); ?>">
-					<button type="button" class="button" onclick="document.getElementById('remember-add-location').style.display='none'; document.querySelector('.page-title-action').style.display='inline-block';"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
+					<button type="button" class="button" data-remember-panel-close="remember-add-location"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
 				</p>
 			</form>
 		</div>

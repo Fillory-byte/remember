@@ -715,7 +715,7 @@ $status_colors = array(
 	<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-waitlist' ) ); ?>" class="page-title-action"><?php esc_html_e( 'Open Waitlist', 'remember' ); ?></a>
 	
 	<?php if ( ! $viewing_application ) : ?>
-		<button type="button" class="page-title-action" onclick="document.getElementById('remember-add-application').style.display='block'; this.style.display='none';"><?php esc_html_e( 'Add New', 'remember' ); ?></button>
+		<button type="button" class="page-title-action" data-remember-panel-toggle aria-controls="remember-add-application" aria-expanded="false"><?php esc_html_e( 'Add New', 'remember' ); ?></button>
 	<?php else : ?>
 		<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-applications' ) ); ?>" class="page-title-action"><?php esc_html_e( 'Back to List', 'remember' ); ?></a>
 	<?php endif; ?>
@@ -734,7 +734,7 @@ $status_colors = array(
 	<?php else : ?>
 
 	<!-- Add Form -->
-	<div id="remember-add-application" style="display:none; margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
+	<div id="remember-add-application" hidden style="margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
 		<h2><?php esc_html_e( 'Add New Application', 'remember' ); ?></h2>
 		<form method="post" action="">
 			<?php wp_nonce_field( 'remember_application_action', 'remember_application_nonce' ); ?>
@@ -791,7 +791,7 @@ $status_colors = array(
 			
 			<p class="submit">
 				<input type="submit" class="button button-primary" value="<?php esc_attr_e( 'Add Application', 'remember' ); ?>">
-				<button type="button" class="button" onclick="document.getElementById('remember-add-application').style.display='none'; document.querySelector('.page-title-action').style.display='inline-block';"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
+				<button type="button" class="button" data-remember-panel-close="remember-add-application"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
 			</p>
 		</form>
 	</div>

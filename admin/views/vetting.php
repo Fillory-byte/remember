@@ -389,8 +389,8 @@ $decision_labels = array(
 	<?php if ( $viewing_vetting ) : ?>
 		<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-vetting' ) ); ?>" class="page-title-action"><?php esc_html_e( 'Back to Vetting Queue', 'remember' ); ?></a>
 	<?php else : ?>
-		<?php if ( ! $show_create_form && current_user_can( 'remember_create_vetting' ) ) : ?>
-			<button type="button" class="page-title-action" onclick="document.getElementById('remember-create-vetting').style.display='block'; this.style.display='none';"><?php esc_html_e( 'Create Vetting Case', 'remember' ); ?></button>
+		<?php if ( current_user_can( 'remember_create_vetting' ) ) : ?>
+			<button type="button" class="page-title-action" data-remember-panel-toggle aria-controls="remember-create-vetting" aria-expanded="<?php echo $show_create_form ? 'true' : 'false'; ?>"><?php esc_html_e( 'Create Vetting Case', 'remember' ); ?></button>
 		<?php endif; ?>
 	<?php endif; ?>
 	<hr class="wp-header-end">
@@ -399,7 +399,7 @@ $decision_labels = array(
 		<?php include 'vetting-detail.php'; ?>
 	<?php else : ?>
 	<!-- Create Vetting Case Form -->
-	<div id="remember-create-vetting" style="<?php echo $show_create_form ? 'display:block;' : 'display:none;'; ?> margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
+	<div id="remember-create-vetting"<?php echo $show_create_form ? '' : ' hidden'; ?> style="margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
 		<h2><?php esc_html_e( 'Create New Vetting Case', 'remember' ); ?></h2>
 		<form method="post" action="">
 			<?php wp_nonce_field( 'remember_vetting_action', 'remember_vetting_nonce' ); ?>
@@ -490,7 +490,7 @@ $decision_labels = array(
 				<?php if ( $pre_selected_member_id > 0 ) : ?>
 					<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-members&view=' . $pre_selected_member_id ) ); ?>" class="button"><?php esc_html_e( 'Cancel', 'remember' ); ?></a>
 				<?php else : ?>
-					<button type="button" class="button" onclick="document.getElementById('remember-create-vetting').style.display='none'; document.querySelector('.page-title-action').style.display='inline-block';"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
+					<button type="button" class="button" data-remember-panel-close="remember-create-vetting"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
 				<?php endif; ?>
 			</p>
 		</form>

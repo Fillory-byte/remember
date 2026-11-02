@@ -688,7 +688,7 @@ if ( isset( $_GET['view'] ) ) {
 	
 	<?php if ( ! $viewing_event && ! $editing_event ) : ?>
 		<?php if ( current_user_can( 'remember_create_events' ) ) : ?>
-			<button type="button" class="page-title-action" onclick="document.getElementById('remember-add-event').style.display='block'; this.style.display='none';"><?php esc_html_e( 'Add New', 'remember' ); ?></button>
+			<button type="button" class="page-title-action" data-remember-panel-toggle aria-controls="remember-add-event" aria-expanded="false"><?php esc_html_e( 'Add New', 'remember' ); ?></button>
 		<?php endif; ?>
 	<?php elseif ( $viewing_event ) : ?>
 		<?php if ( current_user_can( 'remember_update_events' ) ) : ?>
@@ -898,7 +898,7 @@ if ( isset( $_GET['view'] ) ) {
 		</div>
 	<?php else : ?>
 		<!-- Add Form -->
-		<div id="remember-add-event" style="display:none; margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
+		<div id="remember-add-event" hidden style="margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
 			<h2><?php esc_html_e( 'Add New Event', 'remember' ); ?></h2>
 			<form method="post" action="">
 				<?php wp_nonce_field( 'remember_event_action', 'remember_event_nonce' ); ?>
@@ -1043,7 +1043,7 @@ if ( isset( $_GET['view'] ) ) {
 				
 				<p class="submit">
 					<input type="submit" class="button button-primary" value="<?php esc_attr_e( 'Add Event', 'remember' ); ?>">
-					<button type="button" class="button" onclick="document.getElementById('remember-add-event').style.display='none'; document.querySelector('.page-title-action').style.display='inline-block';"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
+					<button type="button" class="button" data-remember-panel-close="remember-add-event"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
 				</p>
 			</form>
 		</div>

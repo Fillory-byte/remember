@@ -1267,8 +1267,8 @@ if ( $view_member_id > 0 ) {
 	<?php if ( $view_member_id > 0 ) : ?>
 		<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-members' ) ); ?>" class="page-title-action"><?php esc_html_e( '← Back to Members', 'remember' ); ?></a>
 	<?php elseif ( ! isset( $_GET['add'] ) && current_user_can( 'remember_create_members' ) ) : ?>
-		<button type="button" class="page-title-action" onclick="document.getElementById('remember-add-member').style.display='block'; document.getElementById('remember-convert-wp-user').style.display='none'; this.style.display='none'; var c=document.getElementById('remember-convert-toggle'); if(c){c.style.display='inline-block';}"><?php esc_html_e( 'Add New', 'remember' ); ?></button>
-		<button type="button" class="page-title-action" id="remember-convert-toggle" onclick="document.getElementById('remember-convert-wp-user').style.display='block'; document.getElementById('remember-add-member').style.display='none'; this.style.display='none'; var a=document.querySelector('.remember-members .page-title-action'); if(a){a.style.display='inline-block';}"><?php esc_html_e( 'Convert WP User', 'remember' ); ?></button>
+		<button type="button" class="page-title-action" data-remember-panel-toggle aria-controls="remember-add-member" aria-expanded="false"><?php esc_html_e( 'Add New', 'remember' ); ?></button>
+		<button type="button" class="page-title-action" id="remember-convert-toggle" data-remember-panel-toggle aria-controls="remember-convert-wp-user" aria-expanded="false"><?php esc_html_e( 'Convert WP User', 'remember' ); ?></button>
 	<?php endif; ?>
 	<hr class="wp-header-end">
 	
@@ -1282,7 +1282,7 @@ if ( $view_member_id > 0 ) {
 	<?php else : ?>
 		<!-- Add Form -->
 	<?php if ( current_user_can( 'remember_create_members' ) ) : ?>
-	<div id="remember-add-member" style="display:none; margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
+	<div id="remember-add-member" hidden data-remember-panel-group="remember-members-add" style="margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
 		<h2><?php esc_html_e( 'Add New Member', 'remember' ); ?></h2>
 		<form method="post" action="">
 			<?php wp_nonce_field( 'remember_member_action', 'remember_member_nonce' ); ?>
@@ -1329,7 +1329,7 @@ if ( $view_member_id > 0 ) {
 			
 			<p class="submit">
 				<input type="submit" class="button button-primary" value="<?php esc_attr_e( 'Add Member', 'remember' ); ?>">
-				<button type="button" class="button" onclick="document.getElementById('remember-add-member').style.display='none'; document.querySelectorAll('.remember-members .page-title-action').forEach(function(b){b.style.display='inline-block';});"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
+				<button type="button" class="button" data-remember-panel-close="remember-add-member"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
 			</p>
 		</form>
 	</div>
@@ -1337,13 +1337,13 @@ if ( $view_member_id > 0 ) {
 	<?php
 	$non_member_wp_users = $member_model->get_non_member_wp_users();
 	?>
-	<div id="remember-convert-wp-user" style="display:none; margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
+	<div id="remember-convert-wp-user" hidden data-remember-panel-group="remember-members-add" style="margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
 		<h2><?php esc_html_e( 'Convert WordPress User to Member', 'remember' ); ?></h2>
 		<p class="description"><?php esc_html_e( 'Existing WordPress users (including site admins) are not members until you convert them here, or until they register via the public member form. This does not change their WordPress login or display name.', 'remember' ); ?></p>
 		<?php if ( empty( $non_member_wp_users ) ) : ?>
 			<p><?php esc_html_e( 'Every WordPress user on this site already has a reMember member record.', 'remember' ); ?></p>
 			<p>
-				<button type="button" class="button" onclick="document.getElementById('remember-convert-wp-user').style.display='none'; document.querySelectorAll('.remember-members .page-title-action').forEach(function(b){b.style.display='inline-block';});"><?php esc_html_e( 'Close', 'remember' ); ?></button>
+				<button type="button" class="button" data-remember-panel-close="remember-convert-wp-user"><?php esc_html_e( 'Close', 'remember' ); ?></button>
 			</p>
 		<?php else : ?>
 			<form method="post" action="">
@@ -1397,7 +1397,7 @@ if ( $view_member_id > 0 ) {
 				</table>
 				<p class="submit">
 					<input type="submit" class="button button-primary" value="<?php esc_attr_e( 'Make Member', 'remember' ); ?>">
-					<button type="button" class="button" onclick="document.getElementById('remember-convert-wp-user').style.display='none'; document.querySelectorAll('.remember-members .page-title-action').forEach(function(b){b.style.display='inline-block';});"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
+					<button type="button" class="button" data-remember-panel-close="remember-convert-wp-user"><?php esc_html_e( 'Cancel', 'remember' ); ?></button>
 				</p>
 			</form>
 		<?php endif; ?>

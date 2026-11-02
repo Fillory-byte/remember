@@ -516,5 +516,65 @@
 			updateCount();
 		});
 	});
-	
+
+	// Add New panels: the trigger stays visible and reports its state, focus moves into the
+	// panel on open and back to its own trigger on close. Panels sharing data-remember-panel-group
+	// are mutually exclusive.
+	$(document).ready(function() {
+		function triggersFor(panel) {
+			return $('[data-remember-panel-toggle]').filter(function() {
+				return this.getAttribute('aria-controls') === panel.id;
+			});
+		}
+
+		function closePanel(panel, returnFocus) {
+			panel.hidden = true;
+			var $triggers = triggersFor(panel).attr('aria-expanded', 'false');
+			if (returnFocus) {
+				$triggers.first().trigger('focus');
+			}
+		}
+
+		function openPanel(panel) {
+			var group = panel.getAttribute('data-remember-panel-group');
+			if (group) {
+				$('[data-remember-panel-group]').each(function() {
+					if (this !== panel && this.getAttribute('data-remember-panel-group') === group && !this.hidden) {
+						closePanel(this, false);
+					}
+				});
+			}
+			panel.hidden = false;
+			triggersFor(panel).attr('aria-expanded', 'true');
+			var $field = $(panel).find('input, select, textarea, button')
+				.not('[type="hidden"], :disabled')
+				.filter(':visible')
+				.first();
+			if ($field.length) {
+				$field.trigger('focus');
+			} else {
+				$(panel).attr('tabindex', '-1').trigger('focus');
+			}
+		}
+
+		$(document).on('click', '[data-remember-panel-toggle]', function() {
+			var panel = document.getElementById(this.getAttribute('aria-controls') || '');
+			if (!panel) {
+				return;
+			}
+			if (panel.hidden) {
+				openPanel(panel);
+			} else {
+				closePanel(panel, true);
+			}
+		});
+
+		$(document).on('click', '[data-remember-panel-close]', function() {
+			var panel = document.getElementById(this.getAttribute('data-remember-panel-close') || '');
+			if (panel) {
+				closePanel(panel, true);
+			}
+		});
+	});
+
 })(jQuery);
