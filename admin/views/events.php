@@ -383,6 +383,103 @@ function remember_render_registration_window_fields( $event = null ) {
 }
 
 /**
+ * Optional invoice due-date setting from the event form.
+ *
+ * @return array|WP_Error
+ */
+function remember_event_invoice_due_fields() {
+	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-invoice-due.php';
+	$days = isset( $_POST['invoice_due_days'] ) ? sanitize_text_field( wp_unslash( $_POST['invoice_due_days'] ) ) : '';
+	$by   = isset( $_POST['invoice_due_by'] ) ? sanitize_text_field( wp_unslash( $_POST['invoice_due_by'] ) ) : '';
+	return Remember_Invoice_Due::fields_from_input( $days, $by );
+}
+
+/**
+ * Invoice due-date inputs, with what applies today and any update in progress.
+ *
+ * @param object|null $event Event being edited.
+ * @return void
+ */
+function remember_render_invoice_due_fields( $event = null ) {
+	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-invoice-due.php';
+	$days       = $event && isset( $event->invoice_due_days ) && '' !== (string) $event->invoice_due_days ? (string) (int) $event->invoice_due_days : '';
+	$by         = $event && ! empty( $event->invoice_due_by ) && '0000-00-00' !== substr( (string) $event->invoice_due_by, 0, 10 ) ? substr( (string) $event->invoice_due_by, 0, 10 ) : '';
+	$current    = Remember_Invoice_Due::describe_setting( $event );
+	$job_status = $event && ! empty( $event->event_id ) ? Remember_Invoice_Due::describe_job( (int) $event->event_id ) : '';
+	?>
+	<tr>
+		<th><label for="invoice_due_days"><?php esc_html_e( 'Invoice due after', 'remember' ); ?></label></th>
+		<td>
+			<input type="number" id="invoice_due_days" name="invoice_due_days" class="small-text" min="0" max="<?php echo esc_attr( (string) Remember_Invoice_Due::MAX_DAYS ); ?>" step="1" value="<?php echo esc_attr( $days ); ?>">
+			<?php esc_html_e( 'days from the invoice date', 'remember' ); ?>
+		</td>
+	</tr>
+	<tr>
+		<th><label for="invoice_due_by"><?php esc_html_e( 'Invoice due no later than', 'remember' ); ?></label></th>
+		<td>
+			<input type="date" id="invoice_due_by" name="invoice_due_by" value="<?php echo esc_attr( $by ); ?>">
+			<p class="description"><?php esc_html_e( 'Both optional. With both set, the invoice is due on whichever date comes first. An invoice created after the latest date is due on the day it is created. These dates override any terms set in the billing system.', 'remember' ); ?></p>
+			<p class="description">
+				<?php
+				echo esc_html( '' !== $current ? $current : Remember_Invoice_Due::provider_default_text() );
+				?>
+			</p>
+			<?php if ( $event && ! empty( $event->event_id ) ) : ?>
+				<p class="description"><?php esc_html_e( 'Changing these dates updates the due date on this event\'s unpaid invoices and emails each member the updated invoice. Clearing both leaves existing invoices as they are.', 'remember' ); ?></p>
+			<?php endif; ?>
+			<?php if ( '' !== $job_status ) : ?>
+				<p class="description"><strong><?php echo esc_html( $job_status ); ?></strong></p>
+			<?php endif; ?>
+		</td>
+	</tr>
+	<?php
+}
+
+/**
+ * Queue re-dating of unpaid invoices when an edit changed the event's due-date setting.
+ *
+ * @param object|null $before Event before the save.
+ * @param object|null $after  Event after the save.
+ * @return void
+ */
+function remember_event_invoice_due_after_save( $before, $after ) {
+	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-invoice-due.php';
+	if ( ! $before || ! $after || ! Remember_Invoice_Due::setting_changed( $before, $after ) ) {
+		return;
+	}
+	Remember_Logger::info(
+		'Event invoice due-date setting changed',
+		array(
+			'event_id'   => (int) $after->event_id,
+			'days_from'  => isset( $before->invoice_due_days ) ? $before->invoice_due_days : null,
+			'days_to'    => isset( $after->invoice_due_days ) ? $after->invoice_due_days : null,
+			'by_from'    => isset( $before->invoice_due_by ) ? $before->invoice_due_by : null,
+			'by_to'      => isset( $after->invoice_due_by ) ? $after->invoice_due_by : null,
+			'user_id'    => get_current_user_id(),
+		)
+	);
+	if ( ! Remember_Invoice_Due::has_setting( $after ) ) {
+		echo '<div class="notice notice-info is-dismissible"><p>' . esc_html__( 'The invoice due dates were cleared. New invoices follow the billing system\'s terms; existing invoices keep their current due date.', 'remember' ) . '</p></div>';
+		return;
+	}
+	$queued = Remember_Invoice_Due::start_job( (int) $after->event_id );
+	if ( $queued > 0 ) {
+		echo '<div class="notice notice-info is-dismissible"><p>' . esc_html(
+			sprintf(
+				/* translators: %d: number of unpaid invoices */
+				_n(
+					'%d unpaid invoice for this event is being updated to the new due date in the background. The member will be emailed the updated invoice.',
+					'%d unpaid invoices for this event are being updated to the new due date in the background. Each member will be emailed their updated invoice.',
+					$queued,
+					'remember'
+				),
+				$queued
+			)
+		) . '</p></div>';
+	}
+}
+
+/**
  * Whether the event form turned door check-in on.
  *
  * @return int
@@ -529,6 +626,10 @@ if ( isset( $_POST['remember_event_action'] ) && check_admin_referer( 'remember_
 			wp_die( __( 'You do not have sufficient permissions to perform this action.', 'remember' ), __( 'Access Denied', 'remember' ), array( 'response' => 403 ) );
 		}
 		$registration_fields = remember_event_registration_fields();
+		if ( ! is_wp_error( $registration_fields ) ) {
+			$invoice_due_fields  = remember_event_invoice_due_fields();
+			$registration_fields = is_wp_error( $invoice_due_fields ) ? $invoice_due_fields : array_merge( $registration_fields, $invoice_due_fields );
+		}
 		$data = array(
 			'event_name'        => sanitize_text_field( wp_unslash( $_POST['event_name'] ) ),
 			'event_description' => isset( $_POST['event_description'] ) ? wp_kses_post( wp_unslash( $_POST['event_description'] ) ) : '',
@@ -574,6 +675,11 @@ if ( isset( $_POST['remember_event_action'] ) && check_admin_referer( 'remember_
 		
 		$event_id = absint( $_POST['event_id'] );
 		$registration_fields = remember_event_registration_fields();
+		if ( ! is_wp_error( $registration_fields ) ) {
+			$invoice_due_fields  = remember_event_invoice_due_fields();
+			$registration_fields = is_wp_error( $invoice_due_fields ) ? $invoice_due_fields : array_merge( $registration_fields, $invoice_due_fields );
+		}
+		$event_before = $event_model->get( $event_id );
 		$data = array(
 			'event_name'        => sanitize_text_field( wp_unslash( $_POST['event_name'] ) ),
 			'event_description' => isset( $_POST['event_description'] ) ? wp_kses_post( wp_unslash( $_POST['event_description'] ) ) : '',
@@ -606,6 +712,7 @@ if ( isset( $_POST['remember_event_action'] ) && check_admin_referer( 'remember_
 
 			Remember_Logger::info( 'Event updated', array( 'event_id' => $event_id, 'role_configs' => $role_configs ) );
 			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Event updated successfully.', 'remember' ) . '</p></div>';
+			remember_event_invoice_due_after_save( $event_before, $event_model->get( $event_id ) );
 			// Reload the event data to reflect changes
 			$editing_event = $event_model->get( $event_id );
 			if ( $editing_event ) {
@@ -775,6 +882,7 @@ if ( isset( $_GET['view'] ) ) {
 						<td><input type="date" id="end_date" name="end_date" class="regular-text" value="<?php echo esc_attr( $editing_event->end_date ); ?>" required></td>
 					</tr>
 					<?php remember_render_registration_window_fields( $editing_event ); ?>
+					<?php remember_render_invoice_due_fields( $editing_event ); ?>
 					<?php remember_render_private_invite_fields( $editing_event ); ?>
 					<tr>
 						<th><label for="status"><?php esc_html_e( 'Status', 'remember' ); ?></label></th>
@@ -967,6 +1075,7 @@ if ( isset( $_GET['view'] ) ) {
 						<td><input type="date" id="end_date" name="end_date" class="regular-text" required></td>
 					</tr>
 					<?php remember_render_registration_window_fields(); ?>
+					<?php remember_render_invoice_due_fields(); ?>
 					<?php remember_render_private_invite_fields(); ?>
 					<tr>
 						<th><label for="status"><?php esc_html_e( 'Status', 'remember' ); ?></label></th>

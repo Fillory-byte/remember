@@ -524,7 +524,9 @@ class Remember_QuickBooks_API {
 	/**
 	 * Create invoice in QuickBooks.
 	 *
-	 * @param array $invoice_data Invoice data.
+	 * Without due_date, QuickBooks applies the customer's or the company's default terms.
+	 *
+	 * @param array $invoice_data Keys: customer_id, line_items, memo?, bill_email?, txn_date?, due_date?.
 	 * @return array|WP_Error Invoice data or error.
 	 */
 	public static function create_invoice( $invoice_data ) {
@@ -534,6 +536,13 @@ class Remember_QuickBooks_API {
 			),
 			'Line' => array(),
 		);
+
+		if ( ! empty( $invoice_data['txn_date'] ) ) {
+			$data['TxnDate'] = (string) $invoice_data['txn_date'];
+		}
+		if ( ! empty( $invoice_data['due_date'] ) ) {
+			$data['DueDate'] = (string) $invoice_data['due_date'];
+		}
 
 		if ( ! empty( $invoice_data['memo'] ) ) {
 			$data['CustomerMemo'] = array( 'value' => substr( (string) $invoice_data['memo'], 0, 1000 ) );
@@ -695,6 +704,208 @@ class Remember_QuickBooks_API {
 			return $response['Invoice'];
 		}
 		return new WP_Error( 'qb_invoice_unreadable', __( 'QuickBooks did not return the invoice.', 'remember' ) );
+	}
+
+	/**
+	 * Fetch many invoices by Id, 200 per query.
+	 *
+	 * Ids QuickBooks does not return are simply absent from the result.
+	 *
+	 * @param string[] $invoice_ids Invoice Ids.
+	 * @return array<string,array>|WP_Error Invoices keyed by Id, or the first error.
+	 */
+	public static function get_invoices_by_ids( $invoice_ids ) {
+		$ids = array();
+		foreach ( (array) $invoice_ids as $invoice_id ) {
+			$invoice_id = trim( (string) $invoice_id );
+			if ( preg_match( '/^\d+$/', $invoice_id ) ) {
+				$ids[ $invoice_id ] = true;
+			}
+		}
+		$skipped = count( (array) $invoice_ids ) - count( $ids );
+		if ( $skipped > 0 ) {
+			Remember_Logger::warning( 'Skipped malformed or repeated QuickBooks invoice IDs in a batch fetch', array( 'skipped' => $skipped ) );
+		}
+
+		$out    = array();
+		$chunks = array_chunk( array_keys( $ids ), 200 );
+		foreach ( $chunks as $index => $chunk ) {
+			$rows = self::query_all( 'Invoice', 'Id IN (' . implode( ',', array_map( array( __CLASS__, 'qb_quote' ), $chunk ) ) . ')' );
+			if ( is_wp_error( $rows ) ) {
+				Remember_Logger::warning(
+					'Batched QuickBooks invoice fetch stopped',
+					array(
+						'batch'   => $index + 1,
+						'batches' => count( $chunks ),
+						'error'   => $rows->get_error_message(),
+					)
+				);
+				return $rows;
+			}
+			foreach ( $rows as $invoice ) {
+				if ( is_array( $invoice ) && isset( $invoice['Id'] ) ) {
+					$out[ (string) $invoice['Id'] ] = $invoice;
+				}
+			}
+			Remember_Logger::debug(
+				'Fetched a batch of QuickBooks invoices',
+				array(
+					'batch'     => $index + 1,
+					'batches'   => count( $chunks ),
+					'requested' => count( $chunk ),
+					'returned'  => count( $rows ),
+				)
+			);
+		}
+		return $out;
+	}
+
+	/**
+	 * Change the due date on many invoices, 30 per batch call (the QuickBooks batch limit).
+	 *
+	 * @param array<string,array{sync_token:string,due_date:string}> $changes Keyed by invoice Id.
+	 * @return array<string,true|WP_Error> Result keyed by invoice Id.
+	 */
+	public static function update_invoice_due_dates( $changes ) {
+		$out    = array();
+		$chunks = array_chunk( (array) $changes, 30, true );
+		foreach ( $chunks as $index => $chunk ) {
+			$items = array();
+			$by_id = array();
+			foreach ( $chunk as $invoice_id => $change ) {
+				$bid           = 'due' . count( $items );
+				$by_id[ $bid ] = (string) $invoice_id;
+				$items[]       = array(
+					'bId'       => $bid,
+					'operation' => 'update',
+					'Invoice'   => array(
+						'Id'        => (string) $invoice_id,
+						'SyncToken' => (string) $change['sync_token'],
+						'sparse'    => true,
+						'DueDate'   => (string) $change['due_date'],
+					),
+				);
+			}
+			$response = self::api_request( 'POST', 'batch', array( 'BatchItemRequest' => $items ) );
+			if ( is_wp_error( $response ) ) {
+				Remember_Logger::warning(
+					'QuickBooks due-date batch update failed',
+					array(
+						'batch'    => $index + 1,
+						'batches'  => count( $chunks ),
+						'invoices' => count( $chunk ),
+						'error'    => $response->get_error_message(),
+					)
+				);
+				foreach ( $by_id as $invoice_id ) {
+					$out[ $invoice_id ] = $response;
+				}
+				continue;
+			}
+
+			$refused = 0;
+			$items   = isset( $response['BatchItemResponse'] ) && is_array( $response['BatchItemResponse'] ) ? $response['BatchItemResponse'] : array();
+			foreach ( $items as $item ) {
+				$bid = is_array( $item ) && isset( $item['bId'] ) ? (string) $item['bId'] : '';
+				if ( ! isset( $by_id[ $bid ] ) ) {
+					continue;
+				}
+				if ( ! empty( $item['Invoice'] ) ) {
+					$out[ $by_id[ $bid ] ] = true;
+					continue;
+				}
+				++$refused;
+				$message = '';
+				if ( ! empty( $item['Fault']['Error'] ) && is_array( $item['Fault']['Error'] ) ) {
+					$first   = reset( $item['Fault']['Error'] );
+					$message = is_array( $first ) ? trim( ( isset( $first['Message'] ) ? (string) $first['Message'] : '' ) . ' ' . ( isset( $first['Detail'] ) ? (string) $first['Detail'] : '' ) ) : '';
+				}
+				$out[ $by_id[ $bid ] ] = new WP_Error( 'qb_due_date_refused', '' !== $message ? $message : __( 'QuickBooks refused the new due date.', 'remember' ) );
+			}
+			Remember_Logger::debug(
+				'QuickBooks due-date batch update sent',
+				array(
+					'batch'    => $index + 1,
+					'batches'  => count( $chunks ),
+					'invoices' => count( $chunk ),
+					'refused'  => $refused,
+				)
+			);
+		}
+		return $out;
+	}
+
+	/**
+	 * The company's default invoice terms, cached for 12 hours.
+	 *
+	 * @return array|WP_Error Keys name, type, due_days, day_of_month; empty when none are set; or an error.
+	 */
+	public static function get_default_terms() {
+		$company_id = self::get_company_id();
+		if ( ! $company_id ) {
+			return new WP_Error( 'no_company_id', __( 'No company ID available. Please reconnect QuickBooks.', 'remember' ) );
+		}
+		$cache_key = 'remember_qb_default_terms_' . md5( (string) $company_id );
+		$cached    = get_transient( $cache_key );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+
+		$prefs = self::api_request( 'GET', 'preferences' );
+		if ( is_wp_error( $prefs ) ) {
+			Remember_Logger::warning( 'Could not read the QuickBooks default terms', array( 'error' => $prefs->get_error_message() ) );
+			return $prefs;
+		}
+		$term_id = isset( $prefs['Preferences']['SalesFormsPrefs']['DefaultTerms']['value'] ) ? trim( (string) $prefs['Preferences']['SalesFormsPrefs']['DefaultTerms']['value'] ) : '';
+		$terms   = array();
+		if ( '' !== $term_id ) {
+			$response = self::api_request( 'GET', 'term/' . rawurlencode( $term_id ) );
+			if ( is_wp_error( $response ) ) {
+				Remember_Logger::warning( 'Could not read the QuickBooks default term', array( 'term_id' => $term_id, 'error' => $response->get_error_message() ) );
+				return $response;
+			}
+			$term = isset( $response['Term'] ) && is_array( $response['Term'] ) ? $response['Term'] : array();
+			if ( ! empty( $term ) ) {
+				$terms = array(
+					'name'         => isset( $term['Name'] ) ? (string) $term['Name'] : '',
+					'type'         => isset( $term['Type'] ) ? strtoupper( (string) $term['Type'] ) : '',
+					'due_days'     => isset( $term['DueDays'] ) ? (int) $term['DueDays'] : null,
+					'day_of_month' => isset( $term['DayOfMonthDue'] ) ? (int) $term['DayOfMonthDue'] : null,
+				);
+			}
+		}
+		set_transient( $cache_key, $terms, 12 * HOUR_IN_SECONDS );
+		Remember_Logger::debug( 'Read the QuickBooks default terms', $terms ? $terms : array( 'terms' => 'none' ) );
+		return $terms;
+	}
+
+	/**
+	 * Plain-language default terms, e.g. "Net 30 (30 days after the invoice date)".
+	 *
+	 * @param array $terms From get_default_terms().
+	 * @return string
+	 */
+	public static function describe_terms( $terms ) {
+		$name = isset( $terms['name'] ) ? (string) $terms['name'] : '';
+		if ( isset( $terms['type'] ) && 'DATE_DRIVEN' === $terms['type'] && ! empty( $terms['day_of_month'] ) ) {
+			$detail = sprintf(
+				/* translators: %d: day of the month */
+				__( 'due on day %d of the month', 'remember' ),
+				(int) $terms['day_of_month']
+			);
+		} elseif ( isset( $terms['due_days'] ) && null !== $terms['due_days'] ) {
+			$detail = sprintf(
+				/* translators: %d: number of days */
+				_n( 'due %d day after the invoice date', 'due %d days after the invoice date', (int) $terms['due_days'], 'remember' ),
+				(int) $terms['due_days']
+			);
+		} else {
+			$detail = '';
+		}
+		if ( '' === $name ) {
+			return $detail;
+		}
+		return '' === $detail ? $name : sprintf( '%1$s (%2$s)', $name, $detail );
 	}
 
 	/**

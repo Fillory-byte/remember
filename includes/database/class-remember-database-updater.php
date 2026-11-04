@@ -1907,6 +1907,32 @@ class Remember_Database_Updater {
 			}
 		}
 
+		// Update to 2.4.6 (per-event invoice due interval and latest due date).
+		if ( version_compare( get_option( 'remember_db_version', '0.0.0' ), '2.4.6', '<' ) ) {
+			Remember_Logger::info( 'Updating database schema', array( 'from' => get_option( 'remember_db_version', '0.0.0' ), 'to' => '2.4.6' ) );
+			$schema_ok    = true;
+			$events_table = $wpdb->prefix . 'remember_events';
+			$columns      = array(
+				'invoice_due_days' => 'SMALLINT UNSIGNED NULL DEFAULT NULL AFTER waitlist_mode',
+				'invoice_due_by'   => 'DATE NULL DEFAULT NULL AFTER invoice_due_days',
+			);
+			foreach ( $columns as $column_name => $definition ) {
+				$found = $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$events_table} LIKE %s", $column_name ) );
+				if ( $column_name === $found ) {
+					continue;
+				}
+				$added = $wpdb->query( "ALTER TABLE {$events_table} ADD COLUMN {$column_name} {$definition}" );
+				if ( false === $added ) {
+					$schema_ok = false;
+					Remember_Logger::error( 'Failed to add column', array( 'table' => $events_table, 'column' => $column_name, 'error' => $wpdb->last_error ) );
+				}
+			}
+			if ( $schema_ok ) {
+				update_option( 'remember_db_version', '2.4.6' );
+				Remember_Logger::info( 'Database schema updated successfully', array( 'version' => '2.4.6' ) );
+			}
+		}
+
 		// Always re-ensure health catalogs (idempotent). Catches sites that stalled mid-migration
 		// or activated before catalog seed rows were added.
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-seeder.php';

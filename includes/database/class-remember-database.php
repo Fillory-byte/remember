@@ -529,6 +529,8 @@ class Remember_Database {
 			registration_opens_at DATETIME DEFAULT NULL,
 			registration_closes_at DATETIME DEFAULT NULL,
 			waitlist_mode VARCHAR(20) NOT NULL DEFAULT 'off',
+			invoice_due_days SMALLINT UNSIGNED DEFAULT NULL,
+			invoice_due_by DATE DEFAULT NULL,
 			checkin_enabled TINYINT(1) NOT NULL DEFAULT 0,
 			is_private BOOLEAN DEFAULT 0,
 			status ENUM('draft', 'open', 'closed', 'completed', 'cancelled') DEFAULT 'draft',

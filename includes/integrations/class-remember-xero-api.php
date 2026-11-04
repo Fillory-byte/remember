@@ -365,6 +365,175 @@ class Remember_Xero_API {
 	}
 
 	/**
+	 * The organisation's default sales payment terms, cached for 12 hours.
+	 *
+	 * @return array|WP_Error Keys day and type, an empty array when none are set, or an error.
+	 */
+	public static function get_organisation_sales_terms() {
+		$settings  = Remember_Xero_OAuth::get_settings();
+		$tenant_id = is_array( $settings ) && ! empty( $settings['tenant_id'] ) ? (string) $settings['tenant_id'] : '';
+		if ( '' === $tenant_id ) {
+			return new WP_Error( 'xero_no_tenant', __( 'No Xero organisation (tenant) is connected.', 'remember' ) );
+		}
+		$cache_key = 'remember_xero_sales_terms_' . md5( $tenant_id );
+		$cached    = get_transient( $cache_key );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+
+		$organisation = self::get_organisation();
+		if ( is_wp_error( $organisation ) ) {
+			Remember_Logger::warning( 'Could not read the Xero organisation payment terms', array( 'error' => $organisation->get_error_message() ) );
+			return $organisation;
+		}
+		$terms = self::sales_terms_from( $organisation );
+		set_transient( $cache_key, $terms, 12 * HOUR_IN_SECONDS );
+		Remember_Logger::debug(
+			'Read the Xero organisation payment terms',
+			array(
+				'day'  => isset( $terms['day'] ) ? $terms['day'] : null,
+				'type' => isset( $terms['type'] ) ? $terms['type'] : '',
+			)
+		);
+		return $terms;
+	}
+
+	/**
+	 * Sales payment terms from a Xero contact or organisation.
+	 *
+	 * @param mixed $entity Contact or Organisation payload.
+	 * @return array Keys day and type, or empty when none are set.
+	 */
+	public static function sales_terms_from( $entity ) {
+		if ( ! is_array( $entity ) || empty( $entity['PaymentTerms']['Sales'] ) || ! is_array( $entity['PaymentTerms']['Sales'] ) ) {
+			return array();
+		}
+		$sales = $entity['PaymentTerms']['Sales'];
+		$type  = isset( $sales['Type'] ) ? strtoupper( (string) $sales['Type'] ) : '';
+		if ( ! in_array( $type, array( 'DAYSAFTERBILLDATE', 'DAYSAFTERBILLMONTH', 'OFCURRENTMONTH', 'OFFOLLOWINGMONTH' ), true ) || ! isset( $sales['Day'] ) ) {
+			return array();
+		}
+		return array(
+			'day'  => (int) $sales['Day'],
+			'type' => $type,
+		);
+	}
+
+	/**
+	 * Plain-language payment terms, completing "due …".
+	 *
+	 * @param array $terms Keys day and type.
+	 * @return string
+	 */
+	public static function describe_sales_terms( $terms ) {
+		$day  = isset( $terms['day'] ) ? (int) $terms['day'] : 0;
+		$type = isset( $terms['type'] ) ? (string) $terms['type'] : '';
+		switch ( $type ) {
+			case 'DAYSAFTERBILLDATE':
+				/* translators: %d: number of days */
+				return sprintf( _n( '%d day after the invoice date', '%d days after the invoice date', $day, 'remember' ), $day );
+			case 'DAYSAFTERBILLMONTH':
+				/* translators: %d: number of days */
+				return sprintf( _n( '%d day after the end of the invoice month', '%d days after the end of the invoice month', $day, 'remember' ), $day );
+			case 'OFCURRENTMONTH':
+				/* translators: %d: day of the month */
+				return sprintf( __( 'on day %d of the invoice month', 'remember' ), $day );
+			case 'OFFOLLOWINGMONTH':
+				/* translators: %d: day of the month */
+				return sprintf( __( 'on day %d of the month after the invoice', 'remember' ), $day );
+		}
+		return '';
+	}
+
+	/**
+	 * Change the due date on many invoices, INVOICE_BATCH_SIZE per call.
+	 *
+	 * Xero reports each invoice separately, so one refusal does not block the rest.
+	 * After a rate limit, the remaining invoices get that error without being sent.
+	 *
+	 * @param array<string,string> $due_dates Due date (Y-m-d) keyed by InvoiceID.
+	 * @return array<string,true|WP_Error> Result keyed by lower-case InvoiceID.
+	 */
+	public static function update_invoice_due_dates( $due_dates ) {
+		$out    = array();
+		$chunks = array_chunk( (array) $due_dates, self::INVOICE_BATCH_SIZE, true );
+		$halt   = null;
+		foreach ( $chunks as $index => $chunk ) {
+			if ( $halt ) {
+				foreach ( array_keys( $chunk ) as $invoice_id ) {
+					$out[ strtolower( (string) $invoice_id ) ] = $halt;
+				}
+				continue;
+			}
+			$invoices = array();
+			foreach ( $chunk as $invoice_id => $due_date ) {
+				$invoices[] = array(
+					'InvoiceID' => (string) $invoice_id,
+					'DueDate'   => (string) $due_date,
+				);
+			}
+			$result = self::request( 'POST', 'Invoices', array( 'Invoices' => $invoices ), array( 'summarizeErrors' => 'false' ) );
+			if ( is_wp_error( $result ) ) {
+				Remember_Logger::warning(
+					'Xero due-date batch update failed',
+					array(
+						'batch'    => $index + 1,
+						'batches'  => count( $chunks ),
+						'invoices' => count( $chunk ),
+						'error'    => $result->get_error_message(),
+					)
+				);
+				foreach ( array_keys( $chunk ) as $invoice_id ) {
+					$out[ strtolower( (string) $invoice_id ) ] = $result;
+				}
+				if ( self::is_rate_limit_error( $result ) ) {
+					$halt = $result;
+				}
+				continue;
+			}
+
+			$returned = ! empty( $result['Invoices'] ) && is_array( $result['Invoices'] ) ? array_values( $result['Invoices'] ) : array();
+			$sent_ids = array_keys( $chunk );
+			$refused  = 0;
+			foreach ( $returned as $position => $invoice ) {
+				if ( ! is_array( $invoice ) ) {
+					continue;
+				}
+				$invoice_id = ! empty( $invoice['InvoiceID'] ) ? (string) $invoice['InvoiceID'] : ( isset( $sent_ids[ $position ] ) ? (string) $sent_ids[ $position ] : '' );
+				if ( '' === $invoice_id ) {
+					continue;
+				}
+				$state = isset( $invoice['StatusAttributeString'] ) ? strtoupper( (string) $invoice['StatusAttributeString'] ) : 'OK';
+				if ( 'ERROR' === $state || ! empty( $invoice['ValidationErrors'] ) ) {
+					$messages = array();
+					foreach ( (array) ( isset( $invoice['ValidationErrors'] ) ? $invoice['ValidationErrors'] : array() ) as $error ) {
+						if ( is_array( $error ) && ! empty( $error['Message'] ) ) {
+							$messages[] = (string) $error['Message'];
+						}
+					}
+					++$refused;
+					$out[ strtolower( $invoice_id ) ] = new WP_Error(
+						'xero_due_date_refused',
+						$messages ? implode( ' ', $messages ) : __( 'Xero refused the new due date.', 'remember' )
+					);
+					continue;
+				}
+				$out[ strtolower( $invoice_id ) ] = true;
+			}
+			Remember_Logger::debug(
+				'Xero due-date batch update sent',
+				array(
+					'batch'    => $index + 1,
+					'batches'  => count( $chunks ),
+					'invoices' => count( $chunk ),
+					'refused'  => $refused,
+				)
+			);
+		}
+		return $out;
+	}
+
+	/**
 	 * Deep link into the Xero UI for an ACCREC invoice (staff browser).
 	 *
 	 * @param string $invoice_id Xero InvoiceID.
@@ -704,7 +873,10 @@ class Remember_Xero_API {
 	/**
 	 * Create an ACCREC (sales) invoice in Xero.
 	 *
-	 * @param array $invoice_data Keys: contact_id, line_items[{item_code, quantity, unit_amount, description, tax_type?, discount_rate?}], reference?, date?, due_date?.
+	 * Without due_date, Xero applies the contact's or organisation's payment terms when
+	 * use_xero_terms is set, and the invoice is otherwise due 30 days after its date.
+	 *
+	 * @param array $invoice_data Keys: contact_id, line_items[{item_code, quantity, unit_amount, description, tax_type?, discount_rate?}], reference?, date?, due_date?, use_xero_terms?.
 	 * @return array|WP_Error Invoice entity or error.
 	 */
 	public static function create_invoice( $invoice_data ) {
@@ -744,18 +916,23 @@ class Remember_Xero_API {
 			$line_items[] = $line;
 		}
 
-		$today = gmdate( 'Y-m-d' );
+		$date    = ! empty( $invoice_data['date'] ) ? (string) $invoice_data['date'] : current_time( 'Y-m-d' );
 		$invoice = array(
 			'Type'            => 'ACCREC',
 			'Contact'         => array(
 				'ContactID' => (string) $invoice_data['contact_id'],
 			),
 			'LineItems'       => $line_items,
-			'Date'            => ! empty( $invoice_data['date'] ) ? (string) $invoice_data['date'] : $today,
-			'DueDate'         => ! empty( $invoice_data['due_date'] ) ? (string) $invoice_data['due_date'] : gmdate( 'Y-m-d', strtotime( '+30 days' ) ),
+			'Date'            => $date,
 			'LineAmountTypes' => 'NoTax',
 			'Status'          => ! empty( $invoice_data['status'] ) ? (string) $invoice_data['status'] : 'AUTHORISED',
 		);
+		if ( ! empty( $invoice_data['due_date'] ) ) {
+			$invoice['DueDate'] = (string) $invoice_data['due_date'];
+		} elseif ( empty( $invoice_data['use_xero_terms'] ) ) {
+			$base               = date_create_immutable( substr( $date, 0, 10 ), wp_timezone() );
+			$invoice['DueDate'] = $base ? $base->modify( '+30 days' )->format( 'Y-m-d' ) : $date;
+		}
 		if ( ! empty( $invoice_data['reference'] ) ) {
 			$invoice['Reference'] = (string) $invoice_data['reference'];
 		}

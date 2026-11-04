@@ -201,13 +201,23 @@ class Remember_Xero_Sync {
 			update_user_meta( $member_id, 'remember_xero_contact_id', $result['ContactID'] );
 		}
 
-		// The save sends no Discount, so the contact read before it still holds the current rate.
-		if ( ! isset( $result['Discount'] ) && is_array( $existing ) && isset( $existing['Discount'] )
-			&& ! empty( $result['ContactID'] ) && ! empty( $existing['ContactID'] )
-			&& strtolower( (string) $result['ContactID'] ) === strtolower( (string) $existing['ContactID'] ) ) {
+		// The save sends no Discount or PaymentTerms, so the contact read before it still holds the current values.
+		$same_contact = is_array( $existing ) && ! empty( $result['ContactID'] ) && ! empty( $existing['ContactID'] )
+			&& strtolower( (string) $result['ContactID'] ) === strtolower( (string) $existing['ContactID'] );
+		if ( $same_contact && ! isset( $result['Discount'] ) && isset( $existing['Discount'] ) ) {
 			$result['Discount'] = $existing['Discount'];
 			Remember_Logger::debug(
 				'Reused the Xero contact discount read before the save',
+				array(
+					'member_id'       => $member_id,
+					'xero_contact_id' => $result['ContactID'],
+				)
+			);
+		}
+		if ( $same_contact && ! isset( $result['PaymentTerms'] ) && isset( $existing['PaymentTerms'] ) ) {
+			$result['PaymentTerms'] = $existing['PaymentTerms'];
+			Remember_Logger::debug(
+				'Reused the Xero contact payment terms read before the save',
 				array(
 					'member_id'       => $member_id,
 					'xero_contact_id' => $result['ContactID'],
@@ -532,18 +542,22 @@ class Remember_Xero_Sync {
 			$total_amount += floatval( $li['unit_amount'] ) * floatval( $li['quantity'] ) * $discount_factor;
 		}
 
-		$invoice_result = Remember_Xero_API::create_invoice(
+		$invoice_date = current_time( 'Y-m-d' );
+		$invoice_data = array_merge(
 			array(
 				'contact_id' => $xero_contact_id,
 				'line_items' => $line_items,
+				'date'       => $invoice_date,
 				'reference'  => sprintf(
 					/* translators: 1: event name, 2: application ID */
 					__( '%1$s - Application #%2$d', 'remember' ),
 					$event && ! empty( $event->event_name ) ? $event->event_name : __( 'Event', 'remember' ),
 					absint( $application_id )
 				),
-			)
+			),
+			self::invoice_due_terms( $event, $invoice_date, $sync_result, $application_id )
 		);
+		$invoice_result = Remember_Xero_API::create_invoice( $invoice_data );
 
 		if ( is_wp_error( $invoice_result ) ) {
 			Remember_Logger::error(
@@ -639,6 +653,55 @@ class Remember_Xero_Sync {
 		}
 
 		return $invoice_result;
+	}
+
+	/**
+	 * Due-date arguments for a new invoice.
+	 *
+	 * The event's own setting wins. Otherwise Xero applies the contact's or the
+	 * organisation's payment terms, and with neither the invoice is due in 30 days.
+	 *
+	 * @param object|null $event          Event row.
+	 * @param string      $invoice_date   Invoice date (Y-m-d).
+	 * @param mixed       $contact        Contact returned by the member sync.
+	 * @param int         $application_id Application ID, for logging.
+	 * @return array Keys due_date and/or use_xero_terms for create_invoice().
+	 */
+	private static function invoice_due_terms( $event, $invoice_date, $contact, $application_id ) {
+		require_once plugin_dir_path( __FILE__ ) . '../utilities/class-remember-invoice-due.php';
+
+		$due_date = Remember_Invoice_Due::due_date_for( $event, $invoice_date );
+		if ( '' !== $due_date ) {
+			Remember_Logger::info(
+				'New Xero invoice uses the event\'s due date',
+				array(
+					'application_id' => (int) $application_id,
+					'invoice_date'   => $invoice_date,
+					'due_date'       => $due_date,
+				)
+			);
+			return array( 'due_date' => $due_date );
+		}
+
+		if ( ! empty( Remember_Xero_API::sales_terms_from( $contact ) ) ) {
+			Remember_Logger::debug( 'New Xero invoice uses the contact\'s payment terms', array( 'application_id' => (int) $application_id ) );
+			return array( 'use_xero_terms' => true );
+		}
+
+		$org_terms = Remember_Xero_API::get_organisation_sales_terms();
+		if ( ! is_wp_error( $org_terms ) && ! empty( $org_terms ) ) {
+			Remember_Logger::debug( 'New Xero invoice uses the organisation\'s payment terms', array( 'application_id' => (int) $application_id ) );
+			return array( 'use_xero_terms' => true );
+		}
+
+		Remember_Logger::debug(
+			'New Xero invoice is due in 30 days: no payment terms found in Xero',
+			array(
+				'application_id' => (int) $application_id,
+				'terms_error'    => is_wp_error( $org_terms ) ? $org_terms->get_error_message() : '',
+			)
+		);
+		return array();
 	}
 
 	/**

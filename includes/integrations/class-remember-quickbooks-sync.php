@@ -397,6 +397,24 @@ class Remember_QuickBooks_Sync {
 			'bill_email'  => isset( $sync_result['PrimaryEmailAddr']['Address'] ) ? (string) $sync_result['PrimaryEmailAddr']['Address'] : '',
 		);
 
+		require_once plugin_dir_path( __FILE__ ) . '../utilities/class-remember-invoice-due.php';
+		$invoice_date = current_time( 'Y-m-d' );
+		$due_date     = Remember_Invoice_Due::due_date_for( $event, $invoice_date );
+		if ( '' !== $due_date ) {
+			$invoice_data['txn_date'] = $invoice_date;
+			$invoice_data['due_date'] = $due_date;
+			Remember_Logger::info(
+				'New QuickBooks invoice uses the event\'s due date',
+				array(
+					'application_id' => (int) $application_id,
+					'invoice_date'   => $invoice_date,
+					'due_date'       => $due_date,
+				)
+			);
+		} else {
+			Remember_Logger::debug( 'New QuickBooks invoice uses the terms set in QuickBooks', array( 'application_id' => (int) $application_id ) );
+		}
+
 		$invoice_result = Remember_QuickBooks_API::create_invoice( $invoice_data );
 
 		if ( is_wp_error( $invoice_result ) ) {
