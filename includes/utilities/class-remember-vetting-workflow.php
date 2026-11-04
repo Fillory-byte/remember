@@ -270,6 +270,10 @@ class Remember_Vetting_Workflow {
 	 * Event roles a vetter may award when accepting a member.
 	 *
 	 * System roles and event administration roles are never offered, whatever the vetter holds.
+	 * WordPress administrators are offered every other event role. Anyone else is offered only
+	 * roles whose capabilities are all read capabilities an unflagged event role may carry
+	 * (see Remember_Capabilities::event_role_allowed_capabilities()), or that have none. This
+	 * covers older roles that already hold staff capabilities. What the vetter holds does not matter.
 	 *
 	 * @return object[] Rows with role_id and role_name, ordered by name.
 	 */
@@ -279,12 +283,25 @@ class Remember_Vetting_Workflow {
 		$roles = $wpdb->get_results(
 			"SELECT role_id, role_name FROM {$wpdb->prefix}remember_roles WHERE is_event_role = 1 ORDER BY role_name ASC" // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		);
-		$excluded = Remember_Capabilities::event_admin_role_ids();
+		$excluded  = Remember_Capabilities::event_admin_role_ids();
+		$any_role  = current_user_can( 'manage_options' );
+		$allowed   = Remember_Capabilities::event_role_allowed_capabilities();
+		$role_caps = array();
+		if ( ! $any_role ) {
+			$rows = $wpdb->get_results( "SELECT role_id, capability FROM {$wpdb->prefix}remember_role_capabilities" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			foreach ( (array) $rows as $row ) {
+				$role_caps[ (int) $row->role_id ][] = $row->capability;
+			}
+		}
 		return array_values(
 			array_filter(
 				(array) $roles,
-				static function ( $role ) use ( $excluded ) {
-					return ! in_array( (int) $role->role_id, $excluded, true );
+				static function ( $role ) use ( $excluded, $any_role, $allowed, $role_caps ) {
+					$role_id = (int) $role->role_id;
+					if ( in_array( $role_id, $excluded, true ) ) {
+						return false;
+					}
+					return $any_role || array() === array_diff( isset( $role_caps[ $role_id ] ) ? $role_caps[ $role_id ] : array(), $allowed );
 				}
 			)
 		);

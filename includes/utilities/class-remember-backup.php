@@ -324,7 +324,7 @@ class Remember_Backup {
 		);
 
 		$dropped_caps = 0;
-		$roles        = $wpdb->get_results( "SELECT role_id, role_name FROM `{$roles_table}`" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$roles        = $wpdb->get_results( "SELECT role_id, role_name, is_event_role FROM `{$roles_table}`" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		if ( is_array( $roles ) ) {
 			foreach ( $roles as $role ) {
 				$role_id = (int) $role->role_id;
@@ -338,6 +338,8 @@ class Remember_Backup {
 				$posted  = is_array( $posted ) ? $posted : array();
 				$before  = isset( $existing[ $name ] ) ? $existing[ $name ] : array();
 				$merged  = Remember_Capabilities::merge_role_capabilities( $before, $posted );
+				// Event roles without the event administration flag keep only the read capabilities.
+				$merged  = Remember_Capabilities::restrict_capabilities_for_role( $merged, ! empty( $role->is_event_role ), Remember_Capabilities::is_event_admin_role( $role_id ) );
 				$posted_sorted = $posted;
 				$merged_sorted = $merged;
 				sort( $posted_sorted );

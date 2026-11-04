@@ -269,6 +269,35 @@ class Remember_Capabilities {
 	}
 
 	/**
+	 * Capabilities an event role may carry unless it is flagged as event administration.
+	 *
+	 * @return string[]
+	 */
+	public static function event_role_allowed_capabilities() {
+		return array( 'remember_read_members', 'remember_read_events', 'remember_read_attendees' );
+	}
+
+	/**
+	 * Limit an event role's capabilities when it is not an event administration role.
+	 *
+	 * Event administration roles and system roles keep every capability given.
+	 * Any other event role keeps only the read capabilities from
+	 * event_role_allowed_capabilities().
+	 *
+	 * @param array $capabilities   Capability keys.
+	 * @param bool  $is_event_role  Whether the role is an event role.
+	 * @param bool  $is_event_admin Whether the role is flagged as event administration.
+	 * @return string[]
+	 */
+	public static function restrict_capabilities_for_role( $capabilities, $is_event_role, $is_event_admin ) {
+		$capabilities = is_array( $capabilities ) ? array_values( array_unique( $capabilities ) ) : array();
+		if ( ! $is_event_role || $is_event_admin ) {
+			return $capabilities;
+		}
+		return array_values( array_intersect( $capabilities, self::event_role_allowed_capabilities() ) );
+	}
+
+	/**
 	 * Whether a role is the protected System Administrator seed role.
 	 *
 	 * @param object|null $role Role row.
