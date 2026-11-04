@@ -36,6 +36,13 @@ class Remember_Xero_Sync {
 	private static $credit_apply = null;
 
 	/**
+	 * What the latest sync_payment_status() call did: unchanged, updated, unlinked or cancelled.
+	 *
+	 * @var string
+	 */
+	private static $last_sync_outcome = '';
+
+	/**
 	 * Sync a member to a Xero Contact.
 	 *
 	 * @param int $member_id Member ID (WordPress user ID).
@@ -110,6 +117,7 @@ class Remember_Xero_Sync {
 			);
 		}
 
+		$existing        = null;
 		$xero_contact_id = get_user_meta( $member_id, 'remember_xero_contact_id', true );
 		if ( $xero_contact_id ) {
 			$existing = Remember_Xero_API::get_contact( $xero_contact_id );
@@ -191,6 +199,20 @@ class Remember_Xero_Sync {
 
 		if ( ! empty( $result['ContactID'] ) ) {
 			update_user_meta( $member_id, 'remember_xero_contact_id', $result['ContactID'] );
+		}
+
+		// The save sends no Discount, so the contact read before it still holds the current rate.
+		if ( ! isset( $result['Discount'] ) && is_array( $existing ) && isset( $existing['Discount'] )
+			&& ! empty( $result['ContactID'] ) && ! empty( $existing['ContactID'] )
+			&& strtolower( (string) $result['ContactID'] ) === strtolower( (string) $existing['ContactID'] ) ) {
+			$result['Discount'] = $existing['Discount'];
+			Remember_Logger::debug(
+				'Reused the Xero contact discount read before the save',
+				array(
+					'member_id'       => $member_id,
+					'xero_contact_id' => $result['ContactID'],
+				)
+			);
 		}
 
 		Remember_Logger::info(
@@ -593,7 +615,18 @@ class Remember_Xero_Sync {
 
 		$payment_row = $payment_model->get_by_application( $application_id );
 		if ( $payment_row && ! empty( $payment_row->xero_invoice_id ) ) {
-			$synced = self::sync_payment_status( $payment_row->payment_id );
+			// The saved invoice is current unless credit was allocated onto it afterwards.
+			$credit_applied = is_array( self::$credit_apply ) && self::$credit_apply['applied'] > 0;
+			Remember_Logger::debug(
+				$credit_applied
+					? 'Re-reading the new Xero invoice because credit was applied to it'
+					: 'Recording the new Xero invoice from the create response',
+				array(
+					'application_id' => $application_id,
+					'payment_id'     => $payment_row->payment_id,
+				)
+			);
+			$synced = self::sync_payment_status( $payment_row->payment_id, $credit_applied ? null : $invoice_result );
 			if ( is_wp_error( $synced ) ) {
 				Remember_Logger::warning(
 					'Xero invoice created but payment sync after credit allocation failed',
@@ -896,20 +929,55 @@ class Remember_Xero_Sync {
 	}
 
 	/**
+	 * Fingerprint of the invoice fields that move when Xero records a payment, credit, void or edit.
+	 *
+	 * @param array $invoice Invoice entity.
+	 * @return string
+	 */
+	private static function invoice_sync_state( $invoice ) {
+		$parts = array();
+		foreach ( array( 'Status', 'Total', 'AmountDue', 'AmountPaid', 'AmountCredited', 'UpdatedDateUTC', 'InvoiceNumber' ) as $key ) {
+			$parts[] = ( isset( $invoice[ $key ] ) && is_scalar( $invoice[ $key ] ) ) ? (string) $invoice[ $key ] : '';
+		}
+		return md5( implode( '|', $parts ) );
+	}
+
+	/**
 	 * Sync payment/refund status for one payment row from Xero.
 	 *
-	 * @param int $payment_id Payment ID.
+	 * With a prefetched invoice (batched re-check), an invoice unchanged since the
+	 * last check is skipped without further calls.
+	 *
+	 * @param int        $payment_id Payment ID.
+	 * @param array|null $invoice    Invoice already fetched from Xero, or null to fetch it here.
 	 * @return true|WP_Error
 	 */
-	public static function sync_payment_status( $payment_id ) {
-		$payment_model = new Remember_Payment();
-		$payment       = $payment_model->get( $payment_id );
+	public static function sync_payment_status( $payment_id, $invoice = null ) {
+		self::$last_sync_outcome = '';
+		$payment_model           = new Remember_Payment();
+		$payment                 = $payment_model->get( $payment_id );
 
 		if ( ! $payment || empty( $payment->xero_invoice_id ) ) {
+			Remember_Logger::warning( 'Xero payment sync skipped: no invoice linked', array( 'payment_id' => $payment_id ) );
 			return new WP_Error( 'no_invoice', __( 'No Xero invoice ID found for this payment.', 'remember' ) );
 		}
 
-		$invoice = Remember_Xero_API::get_invoice( $payment->xero_invoice_id );
+		if ( is_array( $invoice ) ) {
+			$sync_state = self::invoice_sync_state( $invoice );
+			if ( ! empty( $payment->xero_sync_state ) && hash_equals( (string) $payment->xero_sync_state, $sync_state ) ) {
+				self::$last_sync_outcome = 'unchanged';
+				Remember_Logger::debug(
+					'Xero invoice unchanged since the last check; skipped',
+					array(
+						'payment_id'      => $payment_id,
+						'xero_invoice_id' => $payment->xero_invoice_id,
+					)
+				);
+				return true;
+			}
+		} else {
+			$invoice = Remember_Xero_API::get_invoice( $payment->xero_invoice_id );
+		}
 		if ( is_wp_error( $invoice ) ) {
 			if ( self::is_xero_invoice_missing_error( $invoice ) ) {
 				Remember_Logger::info(
@@ -920,10 +988,20 @@ class Remember_Xero_Sync {
 					)
 				);
 				self::clear_local_xero_invoice_link( $payment_id );
+				self::$last_sync_outcome = 'unlinked';
 				return true;
 			}
+			Remember_Logger::warning(
+				'Could not read the Xero invoice for a payment sync',
+				array(
+					'payment_id'      => $payment_id,
+					'xero_invoice_id' => $payment->xero_invoice_id,
+					'error'           => $invoice->get_error_message(),
+				)
+			);
 			return $invoice;
 		}
+		$sync_state = self::invoice_sync_state( $invoice );
 
 		if ( self::is_xero_invoice_voided_or_deleted( $invoice ) ) {
 			Remember_Logger::info(
@@ -934,12 +1012,35 @@ class Remember_Xero_Sync {
 					'status'          => isset( $invoice['Status'] ) ? $invoice['Status'] : '',
 				)
 			);
-			self::mark_xero_invoice_gone( $payment_id, false );
+			self::mark_xero_invoice_gone( $payment_id, false, $sync_state );
+			self::$last_sync_outcome = 'cancelled';
 			return true;
 		}
 
-		$detail_lines = Remember_Xero_API::get_invoice_payment_lines( $payment->xero_invoice_id );
+		// Payment lines need AmountPaid above zero and credit allocations need AmountCredited above zero.
+		$nothing_applied = isset( $invoice['AmountPaid'], $invoice['AmountCredited'] )
+			&& is_numeric( $invoice['AmountPaid'] ) && is_numeric( $invoice['AmountCredited'] )
+			&& floatval( $invoice['AmountPaid'] ) <= 0.001 && floatval( $invoice['AmountCredited'] ) <= 0.001;
+		if ( $nothing_applied ) {
+			Remember_Logger::debug(
+				'Xero invoice has no payments or credit; skipped payment and credit note lookups',
+				array(
+					'payment_id'      => $payment_id,
+					'xero_invoice_id' => $payment->xero_invoice_id,
+				)
+			);
+		}
+
+		$detail_lines = $nothing_applied ? array() : Remember_Xero_API::get_invoice_payment_lines( $payment->xero_invoice_id );
 		if ( is_wp_error( $detail_lines ) ) {
+			Remember_Logger::warning(
+				'Could not read Xero payments for an invoice',
+				array(
+					'payment_id'      => $payment_id,
+					'xero_invoice_id' => $payment->xero_invoice_id,
+					'error'           => $detail_lines->get_error_message(),
+				)
+			);
 			return $detail_lines;
 		}
 
@@ -975,8 +1076,16 @@ class Remember_Xero_Sync {
 		if ( ! $xero_contact_id && ! empty( $invoice['Contact']['ContactID'] ) ) {
 			$xero_contact_id = $invoice['Contact']['ContactID'];
 		}
-		$refund_lines = Remember_Xero_API::get_invoice_refund_lines( $payment->xero_invoice_id, $xero_contact_id );
+		$refund_lines = $nothing_applied ? array() : Remember_Xero_API::get_invoice_refund_lines( $payment->xero_invoice_id, $xero_contact_id );
 		if ( is_wp_error( $refund_lines ) ) {
+			Remember_Logger::warning(
+				'Could not read Xero credit notes for an invoice',
+				array(
+					'payment_id'      => $payment_id,
+					'xero_invoice_id' => $payment->xero_invoice_id,
+					'error'           => $refund_lines->get_error_message(),
+				)
+			);
 			return $refund_lines;
 		}
 
@@ -1079,25 +1188,53 @@ class Remember_Xero_Sync {
 			'xero_payment_lines'   => ! empty( $detail_lines ) ? wp_json_encode( $detail_lines ) : null,
 			'xero_refund_lines'    => ! empty( $refund_lines ) ? wp_json_encode( $refund_lines ) : null,
 			'xero_invoice_sort_ts' => $invoice_sort_ts > 0 ? $invoice_sort_ts : null,
+			'xero_sync_state'      => $sync_state,
 		);
 		if ( isset( $invoice['InvoiceNumber'] ) ) {
 			$update_data['xero_invoice_number'] = sanitize_text_field( (string) $invoice['InvoiceNumber'] );
 		}
+		$invoice_status = isset( $invoice['Status'] ) ? strtoupper( (string) $invoice['Status'] ) : '';
+		// Xero has no online invoice for drafts, so asking would only spend a call.
 		if ( empty( $payment->xero_online_invoice_url ) ) {
-			$online_url = Remember_Xero_API::get_online_invoice_url( $payment->xero_invoice_id );
-			if ( '' !== $online_url ) {
-				$update_data['xero_online_invoice_url'] = $online_url;
+			if ( in_array( $invoice_status, array( 'DRAFT', 'SUBMITTED' ), true ) ) {
+				Remember_Logger::debug(
+					'Skipped the Xero online invoice lookup for an unapproved invoice',
+					array(
+						'payment_id' => $payment_id,
+						'status'     => $invoice_status,
+					)
+				);
+			} else {
+				$online_url = Remember_Xero_API::get_online_invoice_url( $payment->xero_invoice_id );
+				if ( '' !== $online_url ) {
+					$update_data['xero_online_invoice_url'] = $online_url;
+				}
 			}
 		}
-		$payment_model->update( $payment_id, $update_data );
+		$updated = $payment_model->update( $payment_id, $update_data );
+		if ( false === $updated ) {
+			global $wpdb;
+			Remember_Logger::error(
+				'Failed to save Xero payment status',
+				array(
+					'payment_id' => $payment_id,
+					'error'      => $wpdb->last_error,
+				)
+			);
+			return new WP_Error( 'payment_update_failed', __( 'Could not save the payment status from Xero.', 'remember' ) );
+		}
+		self::$last_sync_outcome = 'updated';
 
 		Remember_Logger::info(
 			'Payment status synced from Xero',
 			array(
-				'payment_id'     => $payment_id,
-				'amount_paid'    => $amount_paid_out,
-				'total_refunded' => $total_refunded,
-				'payment_status' => $payment_status,
+				'payment_id'      => $payment_id,
+				'amount_paid'     => $amount_paid_out,
+				'amount_due'      => $amount_due,
+				'total_refunded'  => $total_refunded,
+				'payment_status'  => $payment_status,
+				'invoice_status'  => $invoice_status,
+				'lookups_skipped' => $nothing_applied,
 			)
 		);
 
@@ -1122,21 +1259,123 @@ class Remember_Xero_Sync {
 		}
 
 		$payment_model = new Remember_Payment();
-		$payments      = $payment_model->get_by_member( $member_id );
-		foreach ( $payments as $payment ) {
-			if ( empty( $payment->xero_invoice_id ) ) {
-				continue;
+		$linked        = array();
+		foreach ( (array) $payment_model->get_by_member( $member_id ) as $payment ) {
+			if ( ! empty( $payment->xero_invoice_id ) ) {
+				$linked[] = $payment;
 			}
-			$result = self::sync_payment_status( $payment->payment_id );
+		}
+
+		return self::sync_payment_rows( $linked );
+	}
+
+	/**
+	 * Re-check payment rows against Xero, fetching their invoices in batches.
+	 *
+	 * Rows whose invoice is unchanged since the last check cost no further calls.
+	 * Stops at the first rate-limit refusal so the rest of the allowance is not wasted.
+	 *
+	 * @param object[] $payments Rows with payment_id and xero_invoice_id.
+	 * @return array{success:int,error:int,errors:array}
+	 */
+	private static function sync_payment_rows( $payments ) {
+		$results = array(
+			'success' => 0,
+			'error'   => 0,
+			'errors'  => array(),
+		);
+		if ( empty( $payments ) ) {
+			return $results;
+		}
+
+		$calls_before = Remember_Xero_API::request_count();
+		Remember_Logger::debug( 'Xero payment re-check started', array( 'rows' => count( $payments ) ) );
+
+		$invoices = Remember_Xero_API::get_invoices_by_ids( wp_list_pluck( $payments, 'xero_invoice_id' ) );
+		if ( Remember_Xero_API::is_rate_limit_error( $invoices ) ) {
+			Remember_Logger::warning(
+				'Xero payment re-check stopped: rate limit reached while fetching invoices',
+				array(
+					'rows'  => count( $payments ),
+					'error' => $invoices->get_error_message(),
+				)
+			);
+			$results['error']    = count( $payments );
+			$results['errors'][] = array(
+				'payment_id' => 0,
+				'error'      => $invoices->get_error_message(),
+			);
+			return $results;
+		}
+		if ( is_wp_error( $invoices ) ) {
+			Remember_Logger::warning(
+				'Batched Xero invoice fetch failed; checking invoices one at a time',
+				array( 'error' => $invoices->get_error_message() )
+			);
+			$invoices = null;
+		}
+
+		$outcomes = array(
+			'unchanged' => 0,
+			'updated'   => 0,
+			'unlinked'  => 0,
+			'cancelled' => 0,
+		);
+		$checked = 0;
+		foreach ( $payments as $payment ) {
+			++$checked;
+			$invoice = null;
+			$key     = strtolower( trim( (string) $payment->xero_invoice_id ) );
+			if ( is_array( $invoices ) && isset( $invoices[ $key ] ) ) {
+				$invoice = $invoices[ $key ];
+			} elseif ( is_array( $invoices ) ) {
+				Remember_Logger::info(
+					'Xero did not return this invoice in the batch; checking it on its own',
+					array(
+						'payment_id'      => $payment->payment_id,
+						'xero_invoice_id' => $payment->xero_invoice_id,
+					)
+				);
+			}
+			// An invoice missing from the batch goes through the single fetch, which handles not-found.
+			$result = self::sync_payment_status( $payment->payment_id, $invoice );
 			if ( is_wp_error( $result ) ) {
 				$results['error']++;
 				$results['errors'][] = array(
 					'payment_id' => $payment->payment_id,
 					'error'      => $result->get_error_message(),
 				);
+				if ( Remember_Xero_API::is_rate_limit_error( $result ) ) {
+					Remember_Logger::warning(
+						'Xero payment re-check stopped early: rate limit',
+						array(
+							'checked'   => $checked,
+							'remaining' => count( $payments ) - $checked,
+						)
+					);
+					break;
+				}
 			} else {
 				$results['success']++;
+				if ( isset( $outcomes[ self::$last_sync_outcome ] ) ) {
+					++$outcomes[ self::$last_sync_outcome ];
+				}
 			}
+		}
+
+		$summary = array(
+			'rows'       => count( $payments ),
+			'unchanged'  => $outcomes['unchanged'],
+			'updated'    => $outcomes['updated'],
+			'unlinked'   => $outcomes['unlinked'],
+			'cancelled'  => $outcomes['cancelled'],
+			'errors'     => $results['error'],
+			'xero_calls' => Remember_Xero_API::request_count() - $calls_before,
+		);
+		if ( $results['error'] > 0 ) {
+			Remember_Logger::warning( 'Xero payment re-check finished with errors', $summary );
+		} else {
+			Remember_Logger::info( 'Xero payment re-check finished', $summary );
 		}
 
 		return $results;
@@ -1151,30 +1390,13 @@ class Remember_Xero_Sync {
 		global $wpdb;
 
 		$payments = $wpdb->get_results(
-			"SELECT payment_id FROM {$wpdb->prefix}remember_payments
+			"SELECT payment_id, xero_invoice_id FROM {$wpdb->prefix}remember_payments
 			WHERE xero_invoice_id IS NOT NULL
 			AND xero_invoice_id != ''
 			ORDER BY payment_id ASC"
 		);
 
-		$results = array(
-			'success' => 0,
-			'error'   => 0,
-			'errors'  => array(),
-		);
-
-		foreach ( $payments as $payment ) {
-			$result = self::sync_payment_status( $payment->payment_id );
-			if ( is_wp_error( $result ) ) {
-				$results['error']++;
-				$results['errors'][] = array(
-					'payment_id' => $payment->payment_id,
-					'error'      => $result->get_error_message(),
-				);
-			} else {
-				$results['success']++;
-			}
-		}
+		$results = self::sync_payment_rows( is_array( $payments ) ? $payments : array() );
 
 		$wpdb->update(
 			$wpdb->prefix . 'remember_payment_processors',
@@ -1190,9 +1412,11 @@ class Remember_Xero_Sync {
 	/**
 	 * Clear Xero invoice fields on a local payment row.
 	 *
-	 * @param int $payment_id Payment ID.
+	 * @param int         $payment_id Payment ID.
+	 * @param bool        $clear_ids  Also drop the invoice link (recreate path).
+	 * @param string|null $sync_state Fingerprint of the voided invoice, so later re-checks skip it.
 	 */
-	private static function mark_xero_invoice_gone( $payment_id, $clear_ids = true ) {
+	private static function mark_xero_invoice_gone( $payment_id, $clear_ids = true, $sync_state = null ) {
 		$payment_model = new Remember_Payment();
 		$data          = array(
 			'amount_paid'         => 0,
@@ -1201,6 +1425,7 @@ class Remember_Xero_Sync {
 			'payment_date'        => null,
 			'xero_payment_lines'  => null,
 			'xero_refund_lines'   => null,
+			'xero_sync_state'     => $clear_ids ? null : $sync_state,
 		);
 		if ( $clear_ids ) {
 			$data['xero_invoice_id']         = null;

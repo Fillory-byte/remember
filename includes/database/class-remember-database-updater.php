@@ -1880,6 +1880,33 @@ class Remember_Database_Updater {
 			}
 		}
 
+		// Update to 2.4.5 (failed invoice reason on the application; Xero re-check skips unchanged invoices).
+		if ( version_compare( get_option( 'remember_db_version', '0.0.0' ), '2.4.5', '<' ) ) {
+			Remember_Logger::info( 'Updating database schema', array( 'from' => get_option( 'remember_db_version', '0.0.0' ), 'to' => '2.4.5' ) );
+			$schema_ok = true;
+			$columns   = array(
+				array( $wpdb->prefix . 'remember_event_applications', 'billing_error', 'TEXT NULL DEFAULT NULL' ),
+				array( $wpdb->prefix . 'remember_event_applications', 'billing_error_at', 'DATETIME NULL DEFAULT NULL' ),
+				array( $wpdb->prefix . 'remember_payments', 'xero_sync_state', 'VARCHAR(64) NULL DEFAULT NULL' ),
+			);
+			foreach ( $columns as $column ) {
+				list( $table, $column_name, $definition ) = $column;
+				$found = $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$table} LIKE %s", $column_name ) );
+				if ( $column_name === $found ) {
+					continue;
+				}
+				$added = $wpdb->query( "ALTER TABLE {$table} ADD COLUMN {$column_name} {$definition}" );
+				if ( false === $added ) {
+					$schema_ok = false;
+					Remember_Logger::error( 'Failed to add column', array( 'table' => $table, 'column' => $column_name, 'error' => $wpdb->last_error ) );
+				}
+			}
+			if ( $schema_ok ) {
+				update_option( 'remember_db_version', '2.4.5' );
+				Remember_Logger::info( 'Database schema updated successfully', array( 'version' => '2.4.5' ) );
+			}
+		}
+
 		// Always re-ensure health catalogs (idempotent). Catches sites that stalled mid-migration
 		// or activated before catalog seed rows were added.
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-seeder.php';

@@ -12,6 +12,7 @@ if ( ! defined( 'WPINC' ) ) {
 }
 
 require_once plugin_dir_path( __FILE__ ) . 'class-remember-base-model.php';
+require_once plugin_dir_path( __FILE__ ) . '../utilities/class-remember-logger.php';
 
 /**
  * Event Application model class.
@@ -80,6 +81,89 @@ class Remember_Application extends Remember_Base_Model {
 		
 		$data['applied_at'] = current_time( 'mysql' );
 		return $this->insert( $data );
+	}
+
+	/**
+	 * Record why the billing provider did not invoice this application.
+	 *
+	 * @param int    $application_id Application ID.
+	 * @param string $message        Reason shown to staff.
+	 * @return int|false
+	 */
+	public function set_billing_error( $application_id, $message ) {
+		$result = $this->update(
+			$application_id,
+			array(
+				'billing_error'    => sanitize_text_field( (string) $message ),
+				'billing_error_at' => current_time( 'mysql' ),
+			)
+		);
+		if ( false === $result ) {
+			Remember_Logger::error(
+				'Failed to record the invoicing failure on the application',
+				array(
+					'application_id' => $application_id,
+					'error'          => $this->wpdb->last_error,
+				)
+			);
+		} else {
+			Remember_Logger::info( 'Recorded invoicing failure on the application', array( 'application_id' => $application_id ) );
+		}
+		return $result;
+	}
+
+	/**
+	 * Recorded invoicing failure that staff still need to act on.
+	 *
+	 * Empty once the application is no longer accepted, has an invoice, or was settled at $0.
+	 *
+	 * @param object|null $application Application row.
+	 * @param object|null $payment     Payment row for the application, if any.
+	 * @return string Failure reason, or empty string.
+	 */
+	public static function unresolved_billing_error( $application, $payment ) {
+		if ( ! $application || 'accepted' !== $application->status || empty( $application->billing_error ) ) {
+			return '';
+		}
+		if ( $payment && ( ! empty( $payment->xero_invoice_id ) || ! empty( $payment->quickbooks_invoice_id ) ) ) {
+			return '';
+		}
+		if ( $payment && 'paid' === $payment->payment_status && floatval( $payment->amount_due ) <= 0.001 ) {
+			return '';
+		}
+		return (string) $application->billing_error;
+	}
+
+	/**
+	 * Clear a recorded invoicing failure once the application is invoiced or needs no invoice.
+	 *
+	 * @param int $application_id Application ID.
+	 * @return int|false
+	 */
+	public function clear_billing_error( $application_id ) {
+		$application = $this->get( $application_id );
+		if ( ! $application || ( empty( $application->billing_error ) && empty( $application->billing_error_at ) ) ) {
+			return 0;
+		}
+		$result = $this->update(
+			$application_id,
+			array(
+				'billing_error'    => null,
+				'billing_error_at' => null,
+			)
+		);
+		if ( false === $result ) {
+			Remember_Logger::error(
+				'Failed to clear the invoicing failure on the application',
+				array(
+					'application_id' => $application_id,
+					'error'          => $this->wpdb->last_error,
+				)
+			);
+		} else {
+			Remember_Logger::info( 'Cleared invoicing failure on the application', array( 'application_id' => $application_id ) );
+		}
+		return $result;
 	}
 
 	/**

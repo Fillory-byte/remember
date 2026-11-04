@@ -930,22 +930,9 @@ class Remember_Admin {
 			wp_die( __( 'You do not have sufficient permissions to access this page.', 'remember' ), __( 'Access Denied', 'remember' ), array( 'response' => 403 ) );
 		}
 
-		// Refresh payment rows from the active accounting provider.
+		// Refresh payment rows from the active accounting provider, at most once a minute.
 		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-billing-provider.php';
-		if ( Remember_Billing_Provider::is_xero() ) {
-			require_once plugin_dir_path( __FILE__ ) . '../includes/integrations/class-remember-xero-oauth.php';
-			if ( Remember_Xero_OAuth::is_connected() ) {
-				require_once plugin_dir_path( __FILE__ ) . '../includes/integrations/class-remember-xero-sync.php';
-				Remember_Xero_Sync::sync_all_payments();
-			}
-		} elseif ( Remember_Billing_Provider::is_quickbooks() ) {
-			require_once plugin_dir_path( __FILE__ ) . '../includes/integrations/class-remember-quickbooks-oauth.php';
-			$qb_settings = Remember_QuickBooks_OAuth::get_settings();
-			if ( $qb_settings && ! empty( $qb_settings['access_token'] ) && ! empty( $qb_settings['realm_id'] ) ) {
-				require_once plugin_dir_path( __FILE__ ) . '../includes/integrations/class-remember-quickbooks-sync.php';
-				Remember_QuickBooks_Sync::sync_all_payments();
-			}
-		}
+		Remember_Billing_Provider::sync_all_payments();
 
 		require_once plugin_dir_path( __FILE__ ) . '../includes/models/class-payment.php';
 		include_once 'views/billing.php';

@@ -25,6 +25,49 @@ class Remember_Xero_API {
 	const API_BASE = 'https://api.xero.com/api.xro/2.0/';
 
 	/**
+	 * Longest Retry-After (seconds) worth waiting out inside one page load.
+	 */
+	const RATE_LIMIT_MAX_WAIT = 5;
+
+	/**
+	 * Transient holding the Unix time until which Xero has refused further calls.
+	 */
+	const RATE_LIMIT_TRANSIENT = 'remember_xero_rate_limited_until';
+
+	/**
+	 * Invoice IDs per batched GET Invoices call (keeps the URL well under server limits).
+	 */
+	const INVOICE_BATCH_SIZE = 50;
+
+	/**
+	 * Xero calls sent during this PHP request.
+	 *
+	 * @var int
+	 */
+	private static $request_count = 0;
+
+	/**
+	 * Whether this PHP request already logged a call skipped for the rate limit.
+	 *
+	 * @var bool
+	 */
+	private static $rate_limit_skip_logged = false;
+
+	/**
+	 * Sales credit notes already read this PHP request, keyed by lower-case ContactID.
+	 *
+	 * @var array<string,array>
+	 */
+	private static $credit_notes_cache = array();
+
+	/**
+	 * Xero Items already read this PHP request, keyed by ItemID.
+	 *
+	 * @var array<string,array>
+	 */
+	private static $item_cache = array();
+
+	/**
 	 * Ensure a valid access token (refresh if expired / near expiry).
 	 *
 	 * @return array|WP_Error Settings with access_token, or error.
@@ -86,18 +129,43 @@ class Remember_Xero_API {
 	 * @return array|WP_Error Decoded JSON or error.
 	 */
 	private static function request( $method, $path, $body = null, $query = array() ) {
+		$blocked_until = (int) get_transient( self::RATE_LIMIT_TRANSIENT );
+		if ( $blocked_until > time() ) {
+			$context = array(
+				'method'        => strtoupper( (string) $method ),
+				'path'          => $path,
+				'seconds_left'  => $blocked_until - time(),
+			);
+			if ( ! self::$rate_limit_skip_logged ) {
+				self::$rate_limit_skip_logged = true;
+				Remember_Logger::warning( 'Xero call not sent: the organisation is still rate-limited', $context );
+			} else {
+				Remember_Logger::debug( 'Xero call not sent: the organisation is still rate-limited', $context );
+			}
+			return self::rate_limit_error( $blocked_until - time() );
+		}
+
 		$settings = self::ensure_access_token();
 		if ( is_wp_error( $settings ) ) {
+			Remember_Logger::warning(
+				'Xero call not sent: no usable access token',
+				array(
+					'path'  => $path,
+					'error' => $settings->get_error_message(),
+				)
+			);
 			return $settings;
 		}
 		if ( empty( $settings['tenant_id'] ) ) {
+			Remember_Logger::warning( 'Xero call not sent: no organisation (tenant) is connected', array( 'path' => $path ) );
 			return new WP_Error( 'xero_no_tenant', __( 'No Xero organisation (tenant) is connected.', 'remember' ) );
 		}
 
 		$url = self::API_BASE . ltrim( (string) $path, '/' );
 
 		if ( ! empty( $query ) ) {
-			$url = add_query_arg( $query, $url );
+			// add_query_arg() does not encode values; an unencoded "&&" in a where filter would split it.
+			$url = add_query_arg( array_map( 'rawurlencode', array_map( 'strval', $query ) ), $url );
 		}
 
 		$args = array(
@@ -118,24 +186,99 @@ class Remember_Xero_API {
 			$args['body'] = wp_json_encode( $body );
 		}
 
-		$response = wp_remote_request( $url, $args );
-		if ( is_wp_error( $response ) ) {
-			Remember_Logger::error(
-				'Xero API request could not be sent',
-				array(
-					'path'  => $path,
-					'error' => $response->get_error_message(),
-				)
-			);
-			return $response;
+		// Any write can move credit allocations (new invoice, void, allocate, unallocate).
+		if ( 'GET' !== $args['method'] && ! empty( self::$credit_notes_cache ) ) {
+			self::$credit_notes_cache = array();
+			Remember_Logger::debug( 'Cleared cached Xero credit notes after a write', array( 'method' => $args['method'], 'path' => $path ) );
 		}
 
-		$status   = wp_remote_retrieve_response_code( $response );
+		$retried = false;
+		while ( true ) {
+			++self::$request_count;
+			$started  = microtime( true );
+			$response = wp_remote_request( $url, $args );
+			$elapsed  = (int) round( ( microtime( true ) - $started ) * 1000 );
+			if ( is_wp_error( $response ) ) {
+				Remember_Logger::error(
+					'Xero API request could not be sent',
+					array(
+						'method'     => $args['method'],
+						'path'       => $path,
+						'elapsed_ms' => $elapsed,
+						'error'      => $response->get_error_message(),
+					)
+				);
+				return $response;
+			}
+
+			$status = (int) wp_remote_retrieve_response_code( $response );
+			Remember_Logger::debug(
+				'Xero API call',
+				array(
+					'method'     => $args['method'],
+					'path'       => $path,
+					'query'      => array_keys( (array) $query ),
+					'status'     => $status,
+					'elapsed_ms' => $elapsed,
+					'call'       => self::$request_count,
+					'retry'      => $retried,
+				)
+			);
+			if ( 429 !== $status ) {
+				if ( $retried ) {
+					Remember_Logger::info(
+						'Xero accepted the call after the rate-limit wait',
+						array(
+							'method' => $args['method'],
+							'path'   => $path,
+							'status' => $status,
+						)
+					);
+				}
+				break;
+			}
+
+			// Xero rejects a rate-limited call without acting on it, so a retry cannot duplicate anything.
+			$retry_after = absint( wp_remote_retrieve_header( $response, 'retry-after' ) );
+			$problem     = sanitize_text_field( (string) wp_remote_retrieve_header( $response, 'x-rate-limit-problem' ) );
+			if ( ! $retried && $retry_after > 0 && $retry_after <= self::RATE_LIMIT_MAX_WAIT ) {
+				Remember_Logger::info(
+					'Xero rate limit reached; waiting before one retry',
+					array(
+						'path'        => $path,
+						'retry_after' => $retry_after,
+						'problem'     => $problem,
+					)
+				);
+				sleep( $retry_after );
+				$retried = true;
+				continue;
+			}
+
+			$wait = $retry_after > 0 ? $retry_after : MINUTE_IN_SECONDS;
+			set_transient( self::RATE_LIMIT_TRANSIENT, time() + $wait, $wait );
+			Remember_Logger::error(
+				'Xero rate limit reached',
+				array(
+					'method'      => $args['method'],
+					'path'        => $path,
+					'retry_after' => $retry_after,
+					'problem'     => $problem,
+					'calls'       => self::$request_count,
+				)
+			);
+			return self::rate_limit_error( $wait );
+		}
+
 		$raw_body = wp_remote_retrieve_body( $response );
 		$decoded  = json_decode( $raw_body, true );
 
 		if ( $status < 200 || $status >= 300 ) {
-			$message = __( 'Xero API request failed.', 'remember' );
+			$message = sprintf(
+				/* translators: %d: HTTP status code */
+				__( 'Xero API request failed (HTTP %d).', 'remember' ),
+				$status
+			);
 			$details = self::xero_error_details( $decoded );
 			if ( $details ) {
 				$message = implode( ' ', $details );
@@ -157,6 +300,52 @@ class Remember_Xero_API {
 		}
 
 		return is_array( $decoded ) ? $decoded : array();
+	}
+
+	/**
+	 * Error returned while Xero is refusing calls for this organisation.
+	 *
+	 * @param int $wait Seconds until Xero accepts calls again.
+	 * @return WP_Error
+	 */
+	private static function rate_limit_error( $wait ) {
+		$wait = max( 1, (int) $wait );
+		if ( $wait <= 2 * MINUTE_IN_SECONDS ) {
+			$message = __( 'Xero\'s request limit for this organisation was reached. Try again in a minute.', 'remember' );
+		} else {
+			$message = sprintf(
+				/* translators: %s: human-readable time span, e.g. "3 hours" */
+				__( 'Xero\'s daily request limit for this organisation was reached. Xero will accept requests again in about %s.', 'remember' ),
+				human_time_diff( time(), time() + $wait )
+			);
+		}
+		return new WP_Error(
+			'xero_rate_limited',
+			$message,
+			array(
+				'status'      => 429,
+				'retry_after' => $wait,
+			)
+		);
+	}
+
+	/**
+	 * Whether an error means Xero is rate-limiting this organisation.
+	 *
+	 * @param mixed $error Value to test.
+	 * @return bool
+	 */
+	public static function is_rate_limit_error( $error ) {
+		return is_wp_error( $error ) && 'xero_rate_limited' === $error->get_error_code();
+	}
+
+	/**
+	 * Xero calls sent so far during this PHP request.
+	 *
+	 * @return int
+	 */
+	public static function request_count() {
+		return self::$request_count;
 	}
 
 	/**
@@ -456,11 +645,16 @@ class Remember_Xero_API {
 		if ( '' === $item_id ) {
 			return new WP_Error( 'invalid_item_id', __( 'Invalid Xero item ID.', 'remember' ) );
 		}
+		if ( isset( self::$item_cache[ $item_id ] ) ) {
+			Remember_Logger::debug( 'Reused Xero item already read this request', array( 'item_id' => $item_id ) );
+			return self::$item_cache[ $item_id ];
+		}
 		$result = self::request( 'GET', 'Items/' . rawurlencode( $item_id ) );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
 		if ( ! empty( $result['Items'][0] ) && is_array( $result['Items'][0] ) ) {
+			self::$item_cache[ $item_id ] = $result['Items'][0];
 			return $result['Items'][0];
 		}
 		return new WP_Error( 'xero_item_not_found', __( 'Xero item not found.', 'remember' ) );
@@ -742,6 +936,71 @@ class Remember_Xero_API {
 	}
 
 	/**
+	 * Fetch many invoices by InvoiceID, INVOICE_BATCH_SIZE per call.
+	 *
+	 * IDs Xero does not return are simply absent from the result.
+	 *
+	 * @param string[] $invoice_ids InvoiceIDs.
+	 * @return array<string,array>|WP_Error Invoices keyed by lower-case InvoiceID, or the first error.
+	 */
+	public static function get_invoices_by_ids( $invoice_ids ) {
+		$ids = array();
+		foreach ( (array) $invoice_ids as $invoice_id ) {
+			$invoice_id = strtolower( trim( (string) $invoice_id ) );
+			if ( preg_match( '/^[a-f0-9-]{36}$/', $invoice_id ) ) {
+				$ids[ $invoice_id ] = true;
+			}
+		}
+
+		$skipped = count( (array) $invoice_ids ) - count( $ids );
+		if ( $skipped > 0 ) {
+			Remember_Logger::warning( 'Skipped malformed or repeated Xero invoice IDs in a batch fetch', array( 'skipped' => $skipped ) );
+		}
+
+		$out    = array();
+		$chunks = array_chunk( array_keys( $ids ), self::INVOICE_BATCH_SIZE );
+		foreach ( $chunks as $index => $chunk ) {
+			$result = self::request(
+				'GET',
+				'Invoices',
+				null,
+				array(
+					'IDs'  => implode( ',', $chunk ),
+					'page' => 1,
+				)
+			);
+			if ( is_wp_error( $result ) ) {
+				Remember_Logger::warning(
+					'Batched Xero invoice fetch stopped',
+					array(
+						'batch'   => $index + 1,
+						'batches' => count( $chunks ),
+						'error'   => $result->get_error_message(),
+					)
+				);
+				return $result;
+			}
+			$returned = ( ! empty( $result['Invoices'] ) && is_array( $result['Invoices'] ) ) ? $result['Invoices'] : array();
+			foreach ( $returned as $invoice ) {
+				if ( is_array( $invoice ) && ! empty( $invoice['InvoiceID'] ) ) {
+					$out[ strtolower( (string) $invoice['InvoiceID'] ) ] = $invoice;
+				}
+			}
+			Remember_Logger::debug(
+				'Fetched a batch of Xero invoices',
+				array(
+					'batch'     => $index + 1,
+					'batches'   => count( $chunks ),
+					'requested' => count( $chunk ),
+					'returned'  => count( $returned ),
+				)
+			);
+		}
+
+		return $out;
+	}
+
+	/**
 	 * Payment rows applied to a Xero invoice (register-friendly shape).
 	 *
 	 * Keys match QuickBooks lines for UI reuse: amount, txn_date, payment_method, qb_payment_id, sort_ts.
@@ -823,20 +1082,34 @@ class Remember_Xero_API {
 			$query['where'] = 'Contact.ContactID=Guid("' . $contact_id . '")&&Type=="ACCRECCREDIT"';
 		}
 
-		$notes = array();
-		$page  = 1;
-		do {
-			$query['page'] = $page;
-			$result        = self::request( 'GET', 'CreditNotes', null, $query );
-			if ( is_wp_error( $result ) ) {
-				return $result;
-			}
-			$batch = ( ! empty( $result['CreditNotes'] ) && is_array( $result['CreditNotes'] ) ) ? $result['CreditNotes'] : array();
-			foreach ( $batch as $note ) {
-				$notes[] = $note;
-			}
-			++$page;
-		} while ( count( $batch ) >= 100 && $page <= 10 );
+		$cache_key = strtolower( $contact_id );
+		if ( isset( self::$credit_notes_cache[ $cache_key ] ) ) {
+			$notes = self::$credit_notes_cache[ $cache_key ];
+			Remember_Logger::debug(
+				'Reused Xero credit notes already read this request',
+				array(
+					'invoice_id' => $invoice_id,
+					'contact_id' => $contact_id,
+					'notes'      => count( $notes ),
+				)
+			);
+		} else {
+			$notes = array();
+			$page  = 1;
+			do {
+				$query['page'] = $page;
+				$result        = self::request( 'GET', 'CreditNotes', null, $query );
+				if ( is_wp_error( $result ) ) {
+					return $result;
+				}
+				$batch = ( ! empty( $result['CreditNotes'] ) && is_array( $result['CreditNotes'] ) ) ? $result['CreditNotes'] : array();
+				foreach ( $batch as $note ) {
+					$notes[] = $note;
+				}
+				++$page;
+			} while ( count( $batch ) >= 100 && $page <= 10 );
+			self::$credit_notes_cache[ $cache_key ] = $notes;
+		}
 
 		$out = array();
 		foreach ( $notes as $note ) {

@@ -125,6 +125,16 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 			$application = $application_model->get( $application_id );
 			if ( ! $application ) {
 				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Application not found.', 'remember' ) . '</p></div>';
+			} elseif ( ! in_array( $application->status, array( 'pending', 'waitlisted' ), true ) ) {
+				// A resubmitted form (phone refresh, double tap) must not invoice or email again.
+				Remember_Logger::info(
+					'Accept ignored: application is no longer pending or waitlisted',
+					array(
+						'application_id' => $application_id,
+						'status'         => (string) $application->status,
+					)
+				);
+				echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__( 'This application is no longer pending or waitlisted, so it was not accepted again.', 'remember' ) . '</p></div>';
 			} elseif ( ! Remember_Member::is_vetted_member( $member_model->get( $application->member_id ) ) ) {
 				Remember_Logger::warning(
 					'Application not accepted: member is not vetted',
@@ -183,25 +193,23 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 
 				require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-billing-provider.php';
 				$invoice_notice_shown = false;
+				$billing_error        = '';
 
-				if ( current_user_can( 'remember_create_billing' ) ) {
-				if ( Remember_Billing_Provider::is_xero() ) {
+				if ( ( Remember_Billing_Provider::is_xero() || Remember_Billing_Provider::is_quickbooks() ) && ! current_user_can( 'remember_create_billing' ) ) {
+					$billing_error = __( 'No invoice was created because the account that accepted this application cannot create invoices. Someone with billing access can use Reprocess billing on this application.', 'remember' );
+				} elseif ( Remember_Billing_Provider::is_xero() ) {
 					require_once plugin_dir_path( __FILE__ ) . '../../includes/integrations/class-remember-xero-oauth.php';
 					if ( Remember_Xero_OAuth::is_connected() ) {
 						require_once plugin_dir_path( __FILE__ ) . '../../includes/integrations/class-remember-xero-sync.php';
 						$invoice_result = Remember_Xero_Sync::create_invoice_for_application( $application_id );
 						if ( is_wp_error( $invoice_result ) ) {
-							Remember_Logger::warning(
-								'Failed to create Xero invoice for accepted application',
-								array(
-									'application_id' => $application_id,
-									'error'          => $invoice_result->get_error_message(),
-								)
-							);
+							$billing_error = $invoice_result->get_error_message();
 							echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__( 'Application accepted, but Xero invoice creation failed: ', 'remember' ) . esc_html( $invoice_result->get_error_message() ) . '</p></div>';
 						} elseif ( Remember_Xero_Sync::is_zero_charge_result( $invoice_result ) ) {
+							$application_model->clear_billing_error( $application_id );
 							echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Application accepted. The charge is $0.00, so no invoice was sent and the application is marked paid.', 'remember' ) . '</p></div>';
 						} else {
+							$application_model->clear_billing_error( $application_id );
 							echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Application accepted and Xero invoice created successfully.', 'remember' ) . '</p></div>';
 							echo Remember_Xero_Sync::credit_apply_admin_notices(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- notices are escaped in the helper.
 							$email_invoice = Remember_Xero_Sync::invoice_email_held() ? null : Remember_Billing_Provider::email_invoice_for_application( $application_id );
@@ -219,6 +227,8 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 							}
 						}
 						$invoice_notice_shown = true;
+					} else {
+						$billing_error = __( 'No invoice was created because Xero is not connected. Reconnect Xero under Settings, then use Reprocess billing on this application.', 'remember' );
 					}
 				} elseif ( Remember_Billing_Provider::is_quickbooks() ) {
 					require_once plugin_dir_path( __FILE__ ) . '../../includes/integrations/class-remember-quickbooks-oauth.php';
@@ -227,15 +237,10 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 						require_once plugin_dir_path( __FILE__ ) . '../../includes/integrations/class-remember-quickbooks-sync.php';
 						$invoice_result = Remember_QuickBooks_Sync::create_invoice_for_application( $application_id );
 						if ( is_wp_error( $invoice_result ) ) {
-							Remember_Logger::warning(
-								'Failed to create QuickBooks invoice for accepted application',
-								array(
-									'application_id' => $application_id,
-									'error'          => $invoice_result->get_error_message(),
-								)
-							);
+							$billing_error = $invoice_result->get_error_message();
 							echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__( 'Application accepted, but QuickBooks invoice creation failed: ', 'remember' ) . esc_html( $invoice_result->get_error_message() ) . '</p></div>';
 						} else {
+							$application_model->clear_billing_error( $application_id );
 							echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Application accepted and QuickBooks invoice created successfully.', 'remember' ) . '</p></div>';
 							$email_invoice = Remember_Billing_Provider::email_invoice_for_application( $application_id );
 							if ( is_wp_error( $email_invoice ) ) {
@@ -252,11 +257,24 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 							}
 						}
 						$invoice_notice_shown = true;
+					} else {
+						$billing_error = __( 'No invoice was created because QuickBooks is not connected. Reconnect QuickBooks under Settings, then use Reprocess billing on this application.', 'remember' );
 					}
 				}
-				} // end remember_create_billing gate
 
-				if ( ! $invoice_notice_shown ) {
+				if ( '' !== $billing_error ) {
+					$application_model->set_billing_error( $application_id, $billing_error );
+					Remember_Logger::error(
+						'Accepted application was not invoiced',
+						array(
+							'application_id' => $application_id,
+							'error'          => $billing_error,
+						)
+					);
+					if ( ! $invoice_notice_shown ) {
+						echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__( 'Application accepted.', 'remember' ) . ' ' . esc_html( $billing_error ) . '</p></div>';
+					}
+				} elseif ( ! $invoice_notice_shown ) {
 					echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Application accepted successfully.', 'remember' ) . '</p></div>';
 				}
 
@@ -441,8 +459,16 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 
 			$application = $application_model->get( $application_id );
 			if ( ! $application || 'accepted' !== $application->status ) {
+				Remember_Logger::warning(
+					'Billing reprocess refused: application is not accepted',
+					array(
+						'application_id' => $application_id,
+						'status'         => $application ? (string) $application->status : '',
+					)
+				);
 				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Only accepted applications can be reprocessed for billing.', 'remember' ) . '</p></div>';
 			} else {
+				Remember_Logger::info( 'Billing reprocess requested', array( 'application_id' => $application_id ) );
 				require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-billing-provider.php';
 
 				if ( Remember_Billing_Provider::is_xero() ) {
@@ -451,10 +477,24 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 						require_once plugin_dir_path( __FILE__ ) . '../../includes/integrations/class-remember-xero-sync.php';
 						$invoice_result = Remember_Xero_Sync::create_invoice_for_application( $application_id );
 						if ( is_wp_error( $invoice_result ) ) {
+							if ( 'invoice_exists' === $invoice_result->get_error_code() ) {
+								$application_model->clear_billing_error( $application_id );
+							} else {
+								$application_model->set_billing_error( $application_id, $invoice_result->get_error_message() );
+								Remember_Logger::error(
+									'Billing reprocess failed',
+									array(
+										'application_id' => $application_id,
+										'error'          => $invoice_result->get_error_message(),
+									)
+								);
+							}
 							echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__( 'Billing reprocess failed: ', 'remember' ) . esc_html( $invoice_result->get_error_message() ) . '</p></div>';
 						} elseif ( Remember_Xero_Sync::is_zero_charge_result( $invoice_result ) ) {
+							$application_model->clear_billing_error( $application_id );
 							echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Billing reprocess succeeded. The charge is $0.00, so no invoice was sent and the application is marked paid.', 'remember' ) . '</p></div>';
 						} else {
+							$application_model->clear_billing_error( $application_id );
 							echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Billing reprocess succeeded. Xero invoice created.', 'remember' ) . '</p></div>';
 							echo Remember_Xero_Sync::credit_apply_admin_notices(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- notices are escaped in the helper.
 							$email_invoice = Remember_Xero_Sync::invoice_email_held() ? null : Remember_Billing_Provider::email_invoice_for_application( $application_id );
@@ -474,8 +514,21 @@ if ( isset( $_POST['remember_application_action'] ) && check_admin_referer( 'rem
 						require_once plugin_dir_path( __FILE__ ) . '../../includes/integrations/class-remember-quickbooks-sync.php';
 						$invoice_result = Remember_QuickBooks_Sync::create_invoice_for_application( $application_id );
 						if ( is_wp_error( $invoice_result ) ) {
+							if ( 'invoice_exists' === $invoice_result->get_error_code() ) {
+								$application_model->clear_billing_error( $application_id );
+							} else {
+								$application_model->set_billing_error( $application_id, $invoice_result->get_error_message() );
+								Remember_Logger::error(
+									'Billing reprocess failed',
+									array(
+										'application_id' => $application_id,
+										'error'          => $invoice_result->get_error_message(),
+									)
+								);
+							}
 							echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__( 'Billing reprocess failed: ', 'remember' ) . esc_html( $invoice_result->get_error_message() ) . '</p></div>';
 						} else {
+							$application_model->clear_billing_error( $application_id );
 							echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Billing reprocess succeeded. QuickBooks invoice created.', 'remember' ) . '</p></div>';
 							$email_invoice = Remember_Billing_Provider::email_invoice_for_application( $application_id );
 							if ( is_wp_error( $email_invoice ) ) {
@@ -628,6 +681,11 @@ if ( isset( $_GET['view'] ) ) {
 		$viewing_billing_label = __( 'Not invoiced yet', 'remember' );
 		$viewing_billing_html  = '';
 		$viewing_billing_tone  = 'muted';
+		$viewing_billing_error = Remember_Application::unresolved_billing_error( $viewing_application, $viewing_payment );
+		if ( '' !== $viewing_billing_error ) {
+			$viewing_billing_label = __( 'Invoice failed', 'remember' );
+			$viewing_billing_tone  = 'error';
+		}
 		if ( $viewing_payment && 'paid' === $viewing_payment->payment_status && floatval( $viewing_payment->amount_due ) <= 0.001 && empty( $viewing_payment->xero_invoice_id ) && empty( $viewing_payment->quickbooks_invoice_id ) ) {
 			$viewing_billing_label = __( 'Paid', 'remember' );
 			$viewing_billing_tone  = 'success';
@@ -907,7 +965,11 @@ $status_tones = array(
 					$application_payment = $payment_model->get_by_application( $application->application_id );
 					$billing_label = __( 'Not invoiced', 'remember' );
 					$billing_tone  = 'muted';
-					if ( $application_payment && ( ! empty( $application_payment->xero_invoice_id ) || ! empty( $application_payment->quickbooks_invoice_id ) ) ) {
+					$billing_error = Remember_Application::unresolved_billing_error( $application, $application_payment );
+					if ( '' !== $billing_error ) {
+						$billing_label = __( 'Invoice failed', 'remember' );
+						$billing_tone  = 'error';
+					} elseif ( $application_payment && ( ! empty( $application_payment->xero_invoice_id ) || ! empty( $application_payment->quickbooks_invoice_id ) ) ) {
 						$billing_label = __( 'Invoiced', 'remember' );
 						$billing_tone  = 'success';
 					} elseif ( $application_payment && 'paid' === $application_payment->payment_status && floatval( $application_payment->amount_due ) <= 0.001 ) {
@@ -946,6 +1008,9 @@ $status_tones = array(
 							<span class="remember-tone-<?php echo esc_attr( $billing_tone ); ?>" style="font-weight: bold;">
 								<?php echo esc_html( $billing_label ); ?>
 							</span>
+							<?php if ( '' !== $billing_error ) : ?>
+								<br class="remember-list-break"><span class="description remember-billing-error-reason"><?php echo esc_html( wp_trim_words( $billing_error, 14 ) ); ?></span>
+							<?php endif; ?>
 						</td>
 						<?php endif; ?>
 						<td class="column-date" data-label="<?php echo esc_attr__( 'Applied', 'remember' ); ?>">
