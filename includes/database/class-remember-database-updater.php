@@ -1933,6 +1933,40 @@ class Remember_Database_Updater {
 			}
 		}
 
+		// Update to 2.4.7 (event administration flag on roles; vetters cannot award these roles).
+		if ( version_compare( get_option( 'remember_db_version', '0.0.0' ), '2.4.7', '<' ) ) {
+			Remember_Logger::info( 'Updating database schema', array( 'from' => get_option( 'remember_db_version', '0.0.0' ), 'to' => '2.4.7' ) );
+			$roles_table = $wpdb->prefix . 'remember_roles';
+			$schema_ok   = true;
+			$found       = $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$roles_table} LIKE %s", 'is_event_admin' ) );
+			if ( 'is_event_admin' !== $found ) {
+				$added = $wpdb->query( "ALTER TABLE {$roles_table} ADD COLUMN is_event_admin TINYINT(1) NOT NULL DEFAULT 0 AFTER show_in_frontend" );
+				if ( false === $added ) {
+					$schema_ok = false;
+					Remember_Logger::error( 'Failed to add column', array( 'table' => $roles_table, 'column' => 'is_event_admin', 'error' => $wpdb->last_error ) );
+				}
+			}
+			if ( $schema_ok ) {
+				require_once plugin_dir_path( __FILE__ ) . '../utilities/class-remember-capabilities.php';
+				$flagged = Remember_Capabilities::flag_default_event_admin_role();
+				if ( false === $flagged ) {
+					$schema_ok = false;
+					Remember_Logger::error( 'Failed to mark Event Administrator as an event administration role', array( 'error' => $wpdb->last_error ) );
+				} elseif ( 0 === (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$roles_table} WHERE is_event_admin = 1" ) ) {
+					// A new install seeds its roles after this update, already marked.
+					if ( (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$roles_table}" ) > 0 ) {
+						Remember_Logger::warning( 'No role named Event Administrator was found to mark as event administration; tick "Event administration role" on the Roles screen for the right role' );
+					}
+				} else {
+					Remember_Logger::info( 'Marked Event Administrator as an event administration role' );
+				}
+			}
+			if ( $schema_ok ) {
+				update_option( 'remember_db_version', '2.4.7' );
+				Remember_Logger::info( 'Database schema updated successfully', array( 'version' => '2.4.7' ) );
+			}
+		}
+
 		// Always re-ensure health catalogs (idempotent). Catches sites that stalled mid-migration
 		// or activated before catalog seed rows were added.
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-seeder.php';

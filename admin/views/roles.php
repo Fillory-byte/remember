@@ -67,8 +67,18 @@ if ( isset( $_POST['remember_role_action'] ) && check_admin_referer( 'remember_r
 			'is_event_role' => ( 'event' === $_POST['role_type'] ) ? 1 : 0,
 			'description'   => isset( $_POST['description'] ) ? sanitize_textarea_field( wp_unslash( $_POST['description'] ) ) : '',
 		);
+		if ( ! empty( $_POST['is_event_admin'] ) ) {
+			if ( Remember_Capabilities::current_user_can_flag_event_admin_roles() ) {
+				$data['is_event_admin'] = 1;
+			} else {
+				Remember_Logger::warning( 'Event administration flag ignored on a new role: user may not set it', array( 'user_id' => get_current_user_id() ) );
+			}
+		}
 		$role_id = $role_model->create( $data );
 		if ( $role_id ) {
+			if ( ! empty( $data['is_event_admin'] ) ) {
+				Remember_Logger::info( 'Role marked as event administration', array( 'role_id' => $role_id, 'user_id' => get_current_user_id() ) );
+			}
 			// Set capabilities if provided — only caps the actor can grant.
 			if ( isset( $_POST['capabilities'] ) && is_array( $_POST['capabilities'] ) ) {
 				$capabilities = Remember_Capabilities::filter_grantable_capabilities( $_POST['capabilities'] );
@@ -107,6 +117,28 @@ if ( isset( $_POST['remember_role_action'] ) && check_admin_referer( 'remember_r
 				'show_in_frontend' => isset( $_POST['show_in_frontend'] ) && $_POST['show_in_frontend'] ? 1 : 0,
 				'description'      => isset( $_POST['description'] ) ? sanitize_textarea_field( wp_unslash( $_POST['description'] ) ) : '',
 			);
+			$was_event_admin  = ! empty( $existing_role->is_event_admin );
+			$want_event_admin = ! empty( $_POST['is_event_admin'] );
+			if ( isset( $_POST['is_event_admin_shown'] ) && $want_event_admin !== $was_event_admin ) {
+				if ( Remember_Capabilities::current_user_can_flag_event_admin_roles() ) {
+					$data['is_event_admin'] = $want_event_admin ? 1 : 0;
+					Remember_Logger::info(
+						$want_event_admin ? 'Role marked as event administration' : 'Role no longer marked as event administration',
+						array(
+							'role_id' => $role_id,
+							'user_id' => get_current_user_id(),
+						)
+					);
+				} else {
+					Remember_Logger::warning(
+						'Event administration flag change ignored: user may not change it',
+						array(
+							'role_id' => $role_id,
+							'user_id' => get_current_user_id(),
+						)
+					);
+				}
+			}
 			$update_result = $role_model->update( $role_id, $data );
 			
 			// Update capabilities — preserve caps the actor cannot grant.
@@ -318,6 +350,18 @@ if ( $editing_role ) {
 							<p class="description"><?php esc_html_e( 'If unchecked, this role will not appear as an option when members apply for events on the front end. It can still be assigned manually in the admin.', 'remember' ); ?></p>
 						</td>
 					</tr>
+					<?php if ( Remember_Capabilities::current_user_can_flag_event_admin_roles() ) : ?>
+					<tr>
+						<th><label for="is_event_admin"><?php esc_html_e( 'Event Administration', 'remember' ); ?></label></th>
+						<td>
+							<label>
+								<input type="checkbox" id="is_event_admin" name="is_event_admin" value="1">
+								<?php esc_html_e( 'This is an event administration role', 'remember' ); ?>
+							</label>
+							<p class="description"><?php esc_html_e( 'Vetters cannot award event administration roles. Only WordPress administrators, System Administrators and members who hold an event administration role can give one to a member. Its holders also receive event staff notices such as new applications and waitlist openings.', 'remember' ); ?></p>
+						</td>
+					</tr>
+					<?php endif; ?>
 					<tr>
 						<th><label><?php esc_html_e( 'Capabilities', 'remember' ); ?></label></th>
 						<td>
@@ -359,7 +403,12 @@ if ( $editing_role ) {
 						) );
 					?>
 						<tr>
-							<td class="column-name"><strong><?php echo esc_html( $role->role_name ); ?></strong></td>
+							<td class="column-name">
+								<strong><?php echo esc_html( $role->role_name ); ?></strong>
+								<?php if ( ! empty( $role->is_event_admin ) ) : ?>
+									<br><span class="description"><?php esc_html_e( 'Event administration', 'remember' ); ?></span>
+								<?php endif; ?>
+							</td>
 							<td class="column-description"><?php echo esc_html( $role->description ); ?></td>
 							<td class="column-capabilities">
 								<?php if ( ! empty( $role_capabilities ) ) : 
@@ -425,7 +474,12 @@ if ( $editing_role ) {
 							&& ( ! $is_protected || current_user_can( 'manage_options' ) );
 					?>
 						<tr>
-							<td class="column-name"><strong><?php echo esc_html( $role->role_name ); ?></strong></td>
+							<td class="column-name">
+								<strong><?php echo esc_html( $role->role_name ); ?></strong>
+								<?php if ( ! empty( $role->is_event_admin ) ) : ?>
+									<br><span class="description"><?php esc_html_e( 'Event administration', 'remember' ); ?></span>
+								<?php endif; ?>
+							</td>
 							<td class="column-description"><?php echo esc_html( $role->description ); ?></td>
 							<td class="column-capabilities">
 								<?php if ( ! empty( $role_capabilities ) ) : 
@@ -507,6 +561,22 @@ if ( $editing_role ) {
 								<?php esc_html_e( 'Show this role in the front-end application form', 'remember' ); ?>
 							</label>
 							<p class="description"><?php esc_html_e( 'If unchecked, this role will not appear as an option when members apply for events on the front end. It can still be assigned manually in the admin.', 'remember' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="is_event_admin_edit"><?php esc_html_e( 'Event Administration', 'remember' ); ?></label></th>
+						<td>
+							<?php if ( Remember_Capabilities::current_user_can_flag_event_admin_roles() ) : ?>
+								<input type="hidden" name="is_event_admin_shown" value="1">
+								<label>
+									<input type="checkbox" id="is_event_admin_edit" name="is_event_admin" value="1" <?php checked( ! empty( $editing_role->is_event_admin ) ); ?>>
+									<?php esc_html_e( 'This is an event administration role', 'remember' ); ?>
+								</label>
+								<p class="description"><?php esc_html_e( 'Vetters cannot award event administration roles. Only WordPress administrators, System Administrators and members who hold an event administration role can give one to a member. Its holders also receive event staff notices such as new applications and waitlist openings.', 'remember' ); ?></p>
+							<?php else : ?>
+								<p><?php echo ! empty( $editing_role->is_event_admin ) ? esc_html__( 'Yes, this is an event administration role.', 'remember' ) : esc_html__( 'No.', 'remember' ); ?></p>
+								<p class="description"><?php esc_html_e( 'Only WordPress administrators and System Administrators can change this.', 'remember' ); ?></p>
+							<?php endif; ?>
 						</td>
 					</tr>
 					<tr>

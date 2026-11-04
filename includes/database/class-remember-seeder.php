@@ -182,6 +182,7 @@ class Remember_Seeder {
 					'role_name'    => 'Event Administrator',
 					'role_type'    => 'event',
 					'is_event_role' => 1,
+					'is_event_admin' => 1,
 					'description'  => __( 'Event Administrator role - assigned to members for specific events', 'remember' ),
 					'created_at'   => current_time( 'mysql' ),
 				)

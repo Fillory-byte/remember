@@ -267,6 +267,174 @@ class Remember_Vetting_Workflow {
 	}
 
 	/**
+	 * Event roles a vetter may award when accepting a member.
+	 *
+	 * System roles and event administration roles are never offered, whatever the vetter holds.
+	 *
+	 * @return object[] Rows with role_id and role_name, ordered by name.
+	 */
+	public static function awardable_event_roles() {
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-capabilities.php';
+		global $wpdb;
+		$roles = $wpdb->get_results(
+			"SELECT role_id, role_name FROM {$wpdb->prefix}remember_roles WHERE is_event_role = 1 ORDER BY role_name ASC" // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		);
+		$excluded = Remember_Capabilities::event_admin_role_ids();
+		return array_values(
+			array_filter(
+				(array) $roles,
+				static function ( $role ) use ( $excluded ) {
+					return ! in_array( (int) $role->role_id, $excluded, true );
+				}
+			)
+		);
+	}
+
+	/**
+	 * Role IDs a member holds.
+	 *
+	 * @param int $member_id Member ID (WordPress user ID).
+	 * @return int[]
+	 */
+	public static function member_role_ids( $member_id ) {
+		global $wpdb;
+		return array_map(
+			'intval',
+			(array) $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT role_id FROM {$wpdb->prefix}remember_member_roles WHERE member_id = %d",
+					absint( $member_id )
+				)
+			)
+		);
+	}
+
+	/**
+	 * Give a member accepted in vetting the event roles the vetter chose.
+	 *
+	 * Only adds roles. Anything not in awardable_event_roles() is refused.
+	 *
+	 * @param int   $vetting_id Vetting case ID.
+	 * @param int   $member_id  Member ID (WordPress user ID).
+	 * @param int[] $role_ids   Role IDs ticked on the completion form.
+	 * @param int   $actor_id   User completing the case.
+	 * @return array{awarded: string[], already_held: string[], refused: int[], failed: string[]} Role names, except refused IDs.
+	 */
+	public static function award_event_roles( $vetting_id, $member_id, $role_ids, $actor_id ) {
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-capabilities.php';
+		global $wpdb;
+		$result = array(
+			'awarded'      => array(),
+			'already_held' => array(),
+			'refused'      => array(),
+			'failed'       => array(),
+		);
+		$member_id  = absint( $member_id );
+		$role_ids   = array_values( array_unique( array_filter( array_map( 'absint', (array) $role_ids ) ) ) );
+		$awardable  = array();
+		foreach ( self::awardable_event_roles() as $role ) {
+			$awardable[ (int) $role->role_id ] = $role->role_name;
+		}
+		$held = self::member_role_ids( $member_id );
+
+		foreach ( $awardable as $role_id => $role_name ) {
+			if ( in_array( $role_id, $held, true ) ) {
+				$result['already_held'][] = $role_name;
+			}
+		}
+
+		foreach ( $role_ids as $role_id ) {
+			if ( ! isset( $awardable[ $role_id ] ) ) {
+				$result['refused'][] = $role_id;
+				continue;
+			}
+			if ( in_array( $role_id, $held, true ) ) {
+				continue;
+			}
+			$inserted = $wpdb->insert(
+				$wpdb->prefix . 'remember_member_roles',
+				array(
+					'member_id'   => $member_id,
+					'role_id'     => $role_id,
+					'approved_at' => current_time( 'mysql' ),
+					'approved_by' => absint( $actor_id ),
+					'created_at'  => current_time( 'mysql' ),
+				),
+				array( '%d', '%d', '%s', '%d', '%s' )
+			);
+			if ( false === $inserted ) {
+				$result['failed'][] = $awardable[ $role_id ];
+				Remember_Logger::error(
+					'Failed to award event role from vetting',
+					array(
+						'vetting_id' => absint( $vetting_id ),
+						'member_id'  => $member_id,
+						'role_id'    => $role_id,
+						'error'      => $wpdb->last_error,
+					)
+				);
+				continue;
+			}
+			$result['awarded'][] = $awardable[ $role_id ];
+		}
+
+		if ( ! empty( $result['refused'] ) ) {
+			Remember_Logger::warning(
+				'Vetting completion refused roles that vetters cannot award',
+				array(
+					'vetting_id' => absint( $vetting_id ),
+					'member_id'  => $member_id,
+					'role_ids'   => $result['refused'],
+					'user_id'    => absint( $actor_id ),
+				)
+			);
+		}
+		if ( ! empty( $result['awarded'] ) ) {
+			Remember_Capabilities::sync_user_capabilities_from_roles( $member_id );
+			Remember_Logger::info(
+				'Event roles awarded from vetting',
+				array(
+					'vetting_id' => absint( $vetting_id ),
+					'member_id'  => $member_id,
+					'roles'      => $result['awarded'],
+					'user_id'    => absint( $actor_id ),
+				)
+			);
+		} else {
+			Remember_Logger::debug(
+				'Vetting completion awarded no new event roles',
+				array(
+					'vetting_id'   => absint( $vetting_id ),
+					'member_id'    => $member_id,
+					'already_held' => $result['already_held'],
+				)
+			);
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Member-visible note recording the roles a vetting acceptance awarded.
+	 *
+	 * @param array $award Result of award_event_roles().
+	 * @return string
+	 */
+	public static function award_note( $award ) {
+		if ( empty( $award['awarded'] ) ) {
+			$note = __( 'Vetting accepted. No new event roles were awarded.', 'remember' );
+		} else {
+			/* translators: %s: comma-separated role names */
+			$note = sprintf( __( 'Vetting accepted. Event roles awarded: %s.', 'remember' ), implode( ', ', $award['awarded'] ) );
+		}
+		if ( ! empty( $award['already_held'] ) ) {
+			/* translators: %s: comma-separated role names */
+			$note .= ' ' . sprintf( __( 'Event roles already held: %s.', 'remember' ), implode( ', ', $award['already_held'] ) );
+		}
+		return $note;
+	}
+
+	/**
 	 * Message shown when this member cannot submit an application.
 	 *
 	 * @param object|null $member Row from Remember_Member::get().

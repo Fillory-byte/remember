@@ -423,19 +423,23 @@ class Remember_Notifications {
 	}
 
 	/**
-	 * Role checked on a template whose recipient list has never been saved.
+	 * Roles checked on a template whose recipient list has never been saved.
 	 *
 	 * @param string $type Notification type.
-	 * @return int
+	 * @return int[]
 	 */
-	private static function unsaved_default_role_id( $type ) {
+	private static function unsaved_default_role_ids( $type ) {
 		if ( in_array( $type, array( 'vetting_assigned', 'vetting_case_waiting', 'vetting_scheduled', 'vetting_completed', 'vetting_collaborator_invited' ), true ) ) {
-			return self::role_id_by_name( 'Vetting' );
+			$ids = array( self::role_id_by_name( 'Vetting' ) );
+		} elseif ( 'waitlist_spot_opened' === $type ) {
+			require_once plugin_dir_path( __FILE__ ) . 'class-remember-capabilities.php';
+			$ids = Remember_Capabilities::event_admin_role_ids();
+		} else {
+			$ids = array( self::system_administrator_role_id() );
 		}
-		if ( 'waitlist_spot_opened' === $type ) {
-			return self::role_id_by_name( 'Event Administrator' );
-		}
-		return self::system_administrator_role_id();
+		$ids = array_values( array_filter( array_map( 'intval', $ids ) ) );
+		sort( $ids );
+		return $ids;
 	}
 
 	/**
@@ -509,9 +513,14 @@ class Remember_Notifications {
 		if ( ! in_array( $type, self::legacy_recipient_types(), true ) ) {
 			return true;
 		}
-		$default_id = self::unsaved_default_role_id( $type );
-		$expected   = $default_id > 0 ? array( 'rm:' . $default_id ) : array();
-		return array_values( (array) $clean_roles ) !== $expected;
+		$expected = array();
+		foreach ( self::unsaved_default_role_ids( $type ) as $default_id ) {
+			$expected[] = 'rm:' . $default_id;
+		}
+		$posted = array_values( (array) $clean_roles );
+		sort( $expected );
+		sort( $posted );
+		return $posted !== $expected;
 	}
 
 	/**
@@ -623,6 +632,10 @@ class Remember_Notifications {
 				return true;
 			}
 		}
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-capabilities.php';
+		if ( Remember_Capabilities::user_holds_event_admin_role( $user_id ) ) {
+			return true;
+		}
 		global $wpdb;
 		$count = $wpdb->get_var(
 			$wpdb->prepare(
@@ -630,9 +643,8 @@ class Remember_Notifications {
 				FROM {$wpdb->prefix}remember_member_roles mr
 				INNER JOIN {$wpdb->prefix}remember_roles r ON r.role_id = mr.role_id
 				WHERE mr.member_id = %d
-				AND (r.is_event_role = 0 OR r.role_name = %s)",
-				$user_id,
-				'Event Administrator'
+				AND r.is_event_role = 0",
+				$user_id
 			)
 		);
 		return (int) $count > 0;
@@ -671,12 +683,12 @@ class Remember_Notifications {
 	 *
 	 * @param string   $input_name      Checkbox name. Use a trailing [] for a list.
 	 * @param string[] $selected        Saved tokens.
-	 * @param int      $default_role_id reMember role checked when nothing is saved yet.
+	 * @param int|int[] $default_role_id reMember role or roles checked when nothing is saved yet.
 	 * @return void
 	 */
 	public static function render_role_choices( $input_name, $selected, $default_role_id = 0 ) {
-		$selected        = is_array( $selected ) ? $selected : array();
-		$default_role_id = absint( $default_role_id );
+		$selected         = is_array( $selected ) ? $selected : array();
+		$default_role_ids = array_values( array_filter( array_map( 'absint', (array) $default_role_id ) ) );
 		?>
 		<div class="remember-notify-roles__groups">
 			<div>
@@ -709,7 +721,7 @@ class Remember_Notifications {
 							continue;
 						}
 						$token   = 'rm:' . $role_id;
-						$checked = in_array( $token, $selected, true ) || ( $default_role_id > 0 && $role_id === $default_role_id );
+						$checked = in_array( $token, $selected, true ) || in_array( $role_id, $default_role_ids, true );
 						$label   = isset( $role_row->role_name ) ? (string) $role_row->role_name : $token;
 						if ( ! empty( $role_row->is_event_role ) ) {
 							$label .= ' ' . __( '(event)', 'remember' );
@@ -738,7 +750,7 @@ class Remember_Notifications {
 		$saved          = self::configured_admin_notify_roles( $type );
 		$selected       = is_array( $saved ) ? $saved : array();
 		$keeps_legacy   = ( null === $saved && in_array( $type, self::legacy_recipient_types(), true ) );
-		$default        = ( null === $saved ) ? self::unsaved_default_role_id( $type ) : 0;
+		$default        = ( null === $saved ) ? self::unsaved_default_role_ids( $type ) : array();
 		$fieldset_class = 'remember-notify-roles' . ( $keeps_legacy ? ' remember-notify-roles--keep' : '' );
 		?>
 		<input type="hidden" name="admin_notify_roles_set[<?php echo esc_attr( $type ); ?>]" value="1">
@@ -765,7 +777,7 @@ class Remember_Notifications {
 			return __( 'Checked roles receive this email. None checked turns it off.', 'remember' );
 		}
 		if ( 'waitlist_spot_opened' === $type ) {
-			return __( 'Until you change these, this still goes to Event Administrators accepted to that event. After you change them and save, only the checked roles receive it. None checked turns it off.', 'remember' );
+			return __( 'Until you change these, this still goes to members accepted to that event in an event administration role. After you change them and save, only the checked roles receive it. None checked turns it off.', 'remember' );
 		}
 		if ( 'vetting_case_waiting' === $type ) {
 			return __( 'Until you change these, this still goes to everyone with the Vetting role. After you change them and save, only the checked roles receive it. None checked turns it off.', 'remember' );

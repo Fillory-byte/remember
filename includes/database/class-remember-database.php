@@ -429,6 +429,7 @@ class Remember_Database {
 			role_type ENUM('event', 'system') DEFAULT 'event',
 			is_event_role BOOLEAN DEFAULT 1,
 			show_in_frontend BOOLEAN DEFAULT 1,
+			is_event_admin TINYINT(1) NOT NULL DEFAULT 0,
 			description TEXT DEFAULT NULL,
 			created_at DATETIME NOT NULL,
 			PRIMARY KEY (role_id),

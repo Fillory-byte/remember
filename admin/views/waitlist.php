@@ -27,25 +27,11 @@ if ( ! function_exists( 'remember_notify_event_admins' ) ) {
 	 * @return void
 	 */
 	function remember_notify_event_admins( $event_id, $subject, $message ) {
-		global $wpdb;
-		$emails = $wpdb->get_col(
-			$wpdb->prepare(
-				"SELECT DISTINCT u.user_email
-				FROM {$wpdb->prefix}remember_event_applications a
-				JOIN {$wpdb->prefix}remember_event_roles er ON a.event_role_id = er.event_role_id
-				JOIN {$wpdb->prefix}remember_roles r ON er.role_id = r.role_id
-				JOIN {$wpdb->users} u ON a.member_id = u.ID
-				WHERE a.event_id = %d
-				AND a.status = 'accepted'
-				AND r.role_name = %s
-				AND u.user_email IS NOT NULL
-				AND u.user_email != ''",
-				$event_id,
-				'Event Administrator'
-			)
-		);
+		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-waitlist.php';
+		$emails = Remember_Waitlist::accepted_event_administrator_emails( $event_id );
 
 		if ( empty( $emails ) ) {
+			Remember_Logger::debug( 'No accepted event administrators to notify', array( 'event_id' => absint( $event_id ) ) );
 			return;
 		}
 

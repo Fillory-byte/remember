@@ -368,7 +368,7 @@ if ( $photo_max_bytes < 1 ) {
 			<tr>
 				<th><?php esc_html_e( 'Assigned Roles', 'remember' ); ?></th>
 				<td>
-					<p class="description"><?php esc_html_e( 'Select the roles this member should have. You can only assign roles whose capabilities you already hold.', 'remember' ); ?></p>
+					<p class="description"><?php esc_html_e( 'Select the roles this member should have. You can only assign roles whose capabilities you already hold. Event administration roles can be given only by System Administrators and members who hold an event administration role.', 'remember' ); ?></p>
 					<fieldset style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 3px; margin-top: 10px;">
 						<?php if ( ! empty( $all_roles ) ) : ?>
 							<?php 
@@ -416,6 +416,9 @@ if ( $photo_max_bytes < 1 ) {
 									<label style="display: block; margin: 5px 0;">
 										<input type="checkbox" name="member_roles[]" value="<?php echo esc_attr( $role->role_id ); ?>" <?php checked( $is_assigned ); ?> <?php disabled( ! $can_assign ); ?>>
 										<?php echo esc_html( $role->role_name ); ?>
+										<?php if ( ! empty( $role->is_event_admin ) ) : ?>
+											<span class="description"><?php esc_html_e( '(event administration)', 'remember' ); ?></span>
+										<?php endif; ?>
 										<?php if ( ! empty( $role->description ) ) : ?>
 											<span class="description" style="margin-left: 5px;">- <?php echo esc_html( $role->description ); ?></span>
 										<?php endif; ?>

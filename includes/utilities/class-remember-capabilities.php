@@ -279,11 +279,132 @@ class Remember_Capabilities {
 	}
 
 	/**
+	 * Whether the roles table has the event administration flag yet.
+	 *
+	 * @return bool
+	 */
+	private static function has_event_admin_column() {
+		static $has = null;
+		if ( true !== $has ) {
+			global $wpdb;
+			$has = (bool) $wpdb->get_var( "SHOW COLUMNS FROM {$wpdb->prefix}remember_roles LIKE 'is_event_admin'" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		}
+		return $has;
+	}
+
+	/**
+	 * IDs of event administration roles.
+	 *
+	 * Until the database update adds the flag, the role named Event Administrator counts.
+	 *
+	 * @return int[]
+	 */
+	public static function event_admin_role_ids() {
+		global $wpdb;
+		if ( self::has_event_admin_column() ) {
+			$ids = $wpdb->get_col( "SELECT role_id FROM {$wpdb->prefix}remember_roles WHERE is_event_admin = 1" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		} else {
+			$ids = $wpdb->get_col( $wpdb->prepare( "SELECT role_id FROM {$wpdb->prefix}remember_roles WHERE role_name = %s", 'Event Administrator' ) );
+		}
+		return array_values( array_filter( array_map( 'intval', (array) $ids ) ) );
+	}
+
+	/**
+	 * Whether a role is an event administration role.
+	 *
+	 * @param int $role_id Role ID.
+	 * @return bool
+	 */
+	public static function is_event_admin_role( $role_id ) {
+		return in_array( absint( $role_id ), self::event_admin_role_ids(), true );
+	}
+
+	/**
+	 * Whether a user holds any event administration role.
+	 *
+	 * @param int $user_id User ID.
+	 * @return bool
+	 */
+	public static function user_holds_event_admin_role( $user_id ) {
+		$ids = self::event_admin_role_ids();
+		if ( empty( $ids ) || absint( $user_id ) < 1 ) {
+			return false;
+		}
+		global $wpdb;
+		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		return (bool) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT 1 FROM {$wpdb->prefix}remember_member_roles WHERE member_id = %d AND role_id IN ({$placeholders}) LIMIT 1", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				array_merge( array( absint( $user_id ) ), $ids )
+			)
+		);
+	}
+
+	/**
+	 * Whether a user holds the reMember System Administrator role.
+	 *
+	 * @param int $user_id User ID.
+	 * @return bool
+	 */
+	public static function user_holds_system_administrator_role( $user_id ) {
+		if ( absint( $user_id ) < 1 ) {
+			return false;
+		}
+		global $wpdb;
+		return (bool) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT 1 FROM {$wpdb->prefix}remember_member_roles mr INNER JOIN {$wpdb->prefix}remember_roles r ON r.role_id = mr.role_id WHERE mr.member_id = %d AND r.role_name = %s LIMIT 1",
+				absint( $user_id ),
+				'System Administrator'
+			)
+		);
+	}
+
+	/**
+	 * Whether the current user may give members an event administration role.
+	 *
+	 * WordPress administrators, System Administrators, and holders of an event administration role.
+	 *
+	 * @return bool
+	 */
+	public static function current_user_can_grant_event_admin_roles() {
+		$user_id = get_current_user_id();
+		return current_user_can( 'manage_options' )
+			|| self::user_holds_system_administrator_role( $user_id )
+			|| self::user_holds_event_admin_role( $user_id );
+	}
+
+	/**
+	 * Whether the current user may mark or unmark a role as event administration.
+	 *
+	 * @return bool
+	 */
+	public static function current_user_can_flag_event_admin_roles() {
+		return current_user_can( 'manage_options' ) || self::user_holds_system_administrator_role( get_current_user_id() );
+	}
+
+	/**
+	 * Mark the built-in Event Administrator role as event administration.
+	 *
+	 * @return int|false Rows changed, or false on a database error.
+	 */
+	public static function flag_default_event_admin_role() {
+		global $wpdb;
+		return $wpdb->query(
+			$wpdb->prepare(
+				"UPDATE {$wpdb->prefix}remember_roles SET is_event_admin = 1 WHERE role_name = %s",
+				'Event Administrator'
+			)
+		);
+	}
+
+	/**
 	 * Whether the current user may assign a given reMember role to a member.
 	 *
 	 * Event roles with no capabilities are always assignable (when the caller
 	 * already holds remember_update_members). System roles are assignable only
 	 * when every capability on the role is grantable by the current user.
+	 * Event administration roles also need current_user_can_grant_event_admin_roles().
 	 *
 	 * @param int $role_id Role ID.
 	 * @return bool
@@ -301,6 +422,10 @@ class Remember_Capabilities {
 		$role_model = new Remember_Role();
 		$role       = $role_model->get( $role_id );
 		if ( ! $role ) {
+			return false;
+		}
+
+		if ( self::is_event_admin_role( $role_id ) && ! self::current_user_can_grant_event_admin_roles() ) {
 			return false;
 		}
 

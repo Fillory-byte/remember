@@ -517,6 +517,22 @@
 		});
 	});
 
+	// Vetting completion: the role picker applies only to an Accepted decision.
+	$(document).ready(function() {
+		$('[data-remember-vetting-decision]').each(function() {
+			var $select = $(this);
+			var $roles = $select.closest('form').find('[data-remember-vetting-award-roles]');
+			if (!$roles.length) {
+				return;
+			}
+			function sync() {
+				$roles.prop('hidden', $select.val() !== 'accepted');
+			}
+			$select.on('change', sync);
+			sync();
+		});
+	});
+
 	// Add New panels: the trigger stays visible and reports its state, focus moves into the
 	// panel on open and back to its own trigger on close. Panels sharing data-remember-panel-group
 	// are mutually exclusive.
