@@ -340,6 +340,29 @@ class Remember_Xero_API {
 	}
 
 	/**
+	 * Whether an error definitely means the Xero contact no longer exists.
+	 *
+	 * Rate limits, 5xx responses, timeouts and validation errors are not a
+	 * not-found, so callers must keep the stored contact link for those.
+	 *
+	 * @param mixed $error Value to test.
+	 * @return bool
+	 */
+	public static function is_contact_not_found_error( $error ) {
+		if ( ! is_wp_error( $error ) ) {
+			return false;
+		}
+		if ( 'xero_contact_not_found' === $error->get_error_code() ) {
+			return true;
+		}
+		$data = $error->get_error_data();
+		return 'xero_api_error' === $error->get_error_code()
+			&& is_array( $data )
+			&& isset( $data['status'] )
+			&& 404 === (int) $data['status'];
+	}
+
+	/**
 	 * Xero calls sent so far during this PHP request.
 	 *
 	 * @return int
@@ -671,10 +694,11 @@ class Remember_Xero_API {
 	/**
 	 * Find first Contact whose EmailAddress matches.
 	 *
-	 * @param string $email Email address.
-	 * @return array|null Contact or null.
+	 * @param string $email         Email address.
+	 * @param bool   $return_errors Return the WP_Error when the request fails instead of null.
+	 * @return array|WP_Error|null Contact, null, or the request error when $return_errors is true.
 	 */
-	public static function find_contact_by_email( $email ) {
+	public static function find_contact_by_email( $email, $return_errors = false ) {
 		$email = trim( (string) $email );
 		if ( '' === $email || ! is_email( $email ) ) {
 			return null;
@@ -683,7 +707,10 @@ class Remember_Xero_API {
 		$escaped = str_replace( '"', '""', $email );
 		$where   = 'EmailAddress!=null&&EmailAddress=="' . $escaped . '"';
 		$result  = self::request( 'GET', 'Contacts', null, array( 'where' => $where ) );
-		if ( is_wp_error( $result ) || empty( $result['Contacts'] ) || ! is_array( $result['Contacts'] ) ) {
+		if ( is_wp_error( $result ) ) {
+			return $return_errors ? $result : null;
+		}
+		if ( empty( $result['Contacts'] ) || ! is_array( $result['Contacts'] ) ) {
 			return null;
 		}
 

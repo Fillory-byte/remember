@@ -122,6 +122,18 @@ class Remember_Xero_Sync {
 		if ( $xero_contact_id ) {
 			$existing = Remember_Xero_API::get_contact( $xero_contact_id );
 			if ( is_wp_error( $existing ) ) {
+				if ( ! Remember_Xero_API::is_contact_not_found_error( $existing ) ) {
+					// Rate limit, 5xx, timeout or validation error: the contact may still exist, so keep the link.
+					Remember_Logger::warning(
+						'Xero contact read failed; keeping contact link',
+						array(
+							'member_id'       => $member_id,
+							'xero_contact_id' => $xero_contact_id,
+							'error'           => $existing->get_error_message(),
+						)
+					);
+					return $existing;
+				}
 				Remember_Logger::warning(
 					'Clearing Xero contact link (contact missing)',
 					array(
@@ -154,7 +166,17 @@ class Remember_Xero_Sync {
 		}
 
 		if ( ! $xero_contact_id ) {
-			$by_email = Remember_Xero_API::find_contact_by_email( $user->user_email );
+			$by_email = Remember_Xero_API::find_contact_by_email( $user->user_email, true );
+			if ( is_wp_error( $by_email ) ) {
+				Remember_Logger::warning(
+					'Xero contact email lookup failed; not creating a contact',
+					array(
+						'member_id' => $member_id,
+						'error'     => $by_email->get_error_message(),
+					)
+				);
+				return $by_email;
+			}
 			if ( is_array( $by_email ) && ! empty( $by_email['ContactID'] ) && self::contact_email_matches( $by_email, $user->user_email ) ) {
 				$xero_contact_id = $by_email['ContactID'];
 				update_user_meta( $member_id, 'remember_xero_contact_id', $xero_contact_id );
@@ -173,12 +195,24 @@ class Remember_Xero_Sync {
 			$result               = Remember_Xero_API::create_or_update_contact( $contact_data );
 		}
 
-		// Stale ContactID: clear and retry once (match-by-email or create).
-		if ( is_wp_error( $result ) && $xero_contact_id ) {
-			delete_user_meta( $member_id, 'remember_xero_contact_id' );
+		// Stale ContactID (definite not-found only): clear and retry once (match-by-email or create).
+		// Any other error keeps the link and falls through to be returned below.
+		if ( is_wp_error( $result ) && $xero_contact_id && Remember_Xero_API::is_contact_not_found_error( $result ) ) {
 			unset( $contact_data['contact_id'] );
 
-			$by_email = Remember_Xero_API::find_contact_by_email( $user->user_email );
+			// Look up first: if the lookup fails, return with the link untouched. A dead link heals on the next sync's read.
+			$by_email = Remember_Xero_API::find_contact_by_email( $user->user_email, true );
+			if ( is_wp_error( $by_email ) ) {
+				Remember_Logger::warning(
+					'Xero contact email lookup failed; not creating a contact',
+					array(
+						'member_id' => $member_id,
+						'error'     => $by_email->get_error_message(),
+					)
+				);
+				return $by_email;
+			}
+			delete_user_meta( $member_id, 'remember_xero_contact_id' );
 			if ( is_array( $by_email ) && ! empty( $by_email['ContactID'] ) && self::contact_email_matches( $by_email, $user->user_email ) ) {
 				$contact_data['contact_id'] = $by_email['ContactID'];
 				update_user_meta( $member_id, 'remember_xero_contact_id', $by_email['ContactID'] );
