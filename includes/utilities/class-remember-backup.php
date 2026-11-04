@@ -472,8 +472,15 @@ class Remember_Backup {
 
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-access-log.php';
-		Remember_Logger::info( 'Full plugin backup downloaded', array( 'user_id' => get_current_user_id() ) );
-		Remember_Access_Log::record( 0, 'backup', __( 'Full backup', 'remember' ) );
+		$member_count = self::member_count();
+		Remember_Logger::info(
+			'Full plugin backup downloaded',
+			array(
+				'user_id' => get_current_user_id(),
+				'members' => $member_count,
+			)
+		);
+		Remember_Access_Log::record( 0, 'backup', __( 'Full backup', 'remember' ), $member_count );
 
 		$filename = 'remember-backup-' . gmdate( 'Y-m-d-H-i-s' ) . '.json';
 		nocache_headers();
@@ -510,16 +517,43 @@ class Remember_Backup {
 		if ( ! is_resource( $out ) ) {
 			return new WP_Error( 'file', __( 'Could not write that backup file.', 'remember' ) );
 		}
-		$ok = self::stream_document( $out );
+		$member_count = self::member_count();
+		$ok           = self::stream_document( $out );
 		fclose( $out );
 		if ( ! $ok ) {
 			wp_delete_file( $path );
 			return new WP_Error( 'file', __( 'Could not write that backup file.', 'remember' ) );
 		}
 
-		Remember_Logger::info( 'Full plugin backup downloaded', array( 'user_id' => get_current_user_id() ) );
-		Remember_Access_Log::record( 0, 'backup', __( 'Full backup', 'remember' ) );
+		Remember_Logger::info(
+			'Full plugin backup downloaded',
+			array(
+				'user_id' => get_current_user_id(),
+				'members' => $member_count,
+			)
+		);
+		Remember_Access_Log::record( 0, 'backup', __( 'Full backup', 'remember' ), $member_count );
 		return true;
+	}
+
+	/**
+	 * Members a backup includes, for the sensitive access log.
+	 *
+	 * @return int
+	 */
+	private static function member_count() {
+		global $wpdb;
+		$table = self::table_prefix() . 'members';
+		if ( ! in_array( $table, self::table_names(), true ) ) {
+			Remember_Logger::warning( 'Backup member count unavailable: members table not found', array( 'table' => $table ) );
+			return 0;
+		}
+		$count = $wpdb->get_var( "SELECT COUNT(*) FROM `{$table}`" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- prefixed table name.
+		if ( null === $count ) {
+			Remember_Logger::warning( 'Backup member count unavailable', array( 'error' => $wpdb->last_error ) );
+			return 0;
+		}
+		return (int) $count;
 	}
 
 	/**

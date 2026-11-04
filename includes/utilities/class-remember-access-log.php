@@ -89,7 +89,7 @@ class Remember_Access_Log {
 	 * @param int    $member_id Member ID, or 0 for a bulk export.
 	 * @param string $what      health|emergency|both|backup.
 	 * @param string $context   Screen or export name.
-	 * @param int    $row_count Rows in a bulk export. 0 when this is one member.
+	 * @param int    $row_count Rows in a bulk export, or members in a full backup. 0 when this is one member.
 	 * @return void
 	 */
 	public static function record( $member_id, $what, $context, $row_count = 0 ) {

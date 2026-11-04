@@ -2,6 +2,10 @@
 
 All notable changes to reMember are listed here. The current plugin version is in `remember.php` (`REMEMBER_VERSION`) and [GitHub Releases](https://github.com/ctucker1984/remember/releases).
 
+## 2.2.13
+
+- **Fix:** On the Sensitive access log, a full backup now reads "Full backup (47 members)", giving the number of members it contained, instead of "Bulk export (0 rows)", which made a complete backup look empty. Backups taken before this update read "Full backup", since their size wasn't recorded. The count is also in the backup's Info log line. [#193](https://github.com/ctucker1984/remember/issues/193)
+
 ## 2.2.12
 
 - **Fix:** When an accepted application can't be invoiced, staff now see the real reason, for example "Xero's request limit for this organisation was reached. Try again in a minute.", instead of "Xero API request failed". The application shows "Invoice failed" with the reason on the Applications list, and its page explains that no invoice was created, when the last attempt was, and to use Reprocess Billing once the cause is fixed. The warning clears when an invoice exists. This works for QuickBooks and Xero. An application that is no longer pending or waitlisted can't be accepted again, so a double click or a stale page can't attempt a second invoice. [#189](https://github.com/ctucker1984/remember/issues/189)

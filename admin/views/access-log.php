@@ -64,6 +64,14 @@ $base_args     = array(
 					if ( (int) $row->member_id > 0 ) {
 						$member = get_userdata( (int) $row->member_id );
 						$member_name = $member ? $member->display_name : sprintf( /* translators: %d: member ID */ __( 'Member %d', 'remember' ), (int) $row->member_id );
+					} elseif ( 'backup' === $row->access_what ) {
+						$member_name = (int) $row->row_count > 0
+							? sprintf(
+								/* translators: %d: number of members in the backup */
+								_n( 'Full backup (%d member)', 'Full backup (%d members)', (int) $row->row_count, 'remember' ),
+								(int) $row->row_count
+							)
+							: __( 'Full backup', 'remember' );
 					} else {
 						$member_name = sprintf(
 							/* translators: %d: number of rows exported */
