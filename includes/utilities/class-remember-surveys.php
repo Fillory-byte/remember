@@ -550,6 +550,17 @@ class Remember_Surveys {
 		if ( ! self::member_is_accepted( $survey->event_id, $member_id ) ) {
 			return '<p class="remember-notice remember-error">' . esc_html__( 'This survey is for accepted participants of the event.', 'remember' ) . '</p>';
 		}
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-event-invites.php';
+		if ( Remember_Event_Invites::member_is_barred( $member_id ) ) {
+			Remember_Logger::info(
+				'Follow-up survey withheld from a member barred by rejection',
+				array(
+					'survey_id' => (int) $survey->survey_id,
+					'member_id' => (int) $member_id,
+				)
+			);
+			return '<p class="remember-notice remember-error">' . esc_html__( 'This survey is no longer open to you.', 'remember' ) . '</p>';
+		}
 		$questions = self::followup_questions_for_member( $survey, $member_id );
 		if ( empty( $questions ) ) {
 			return '<p class="remember-notice remember-error">' . esc_html__( 'This survey has no questions for your role.', 'remember' ) . '</p>';
@@ -745,9 +756,22 @@ class Remember_Surveys {
 		$event_name = $wpdb->get_var( $wpdb->prepare( "SELECT event_name FROM {$wpdb->prefix}remember_events WHERE event_id = %d", (int) $survey->event_id ) );
 		$url        = self::response_url( $survey->survey_id );
 		$sent       = 0;
+		$barred     = 0;
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-event-invites.php';
 		foreach ( $member_ids as $member_id ) {
 			$user = get_user_by( 'ID', absint( $member_id ) );
 			if ( ! $user || ! is_email( $user->user_email ) ) {
+				continue;
+			}
+			if ( Remember_Event_Invites::member_is_barred( (int) $member_id ) ) {
+				++$barred;
+				Remember_Logger::debug(
+					'Survey email skipped: member barred by rejection',
+					array(
+						'survey_id' => (int) $survey->survey_id,
+						'member_id' => (int) $member_id,
+					)
+				);
 				continue;
 			}
 			$result = Remember_Notifications::send(
@@ -780,6 +804,7 @@ class Remember_Surveys {
 				'event_id'       => (int) $survey->event_id,
 				'event_role_ids' => $role_ids,
 				'recipients'     => $sent,
+				'skipped_barred' => $barred,
 			)
 		);
 		return true;

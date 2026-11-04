@@ -666,6 +666,17 @@ class Remember_Public {
 	 * @return string
 	 */
 	public function shortcode_events( $atts ) {
+		if ( ! is_user_logged_in() ) {
+			$login_url = wp_login_url( get_permalink() );
+			return '<p class="remember-notice remember-error">' .
+				sprintf(
+					/* translators: %s: login link */
+					__( 'Please %s to view events.', 'remember' ),
+					'<a href="' . esc_url( $login_url ) . '">' . esc_html__( 'log in', 'remember' ) . '</a>'
+				) .
+				'</p>';
+		}
+
 		$atts = shortcode_atts( array(
 			'status' => 'open', // open, all, upcoming
 			'limit'  => 0,
@@ -683,7 +694,17 @@ class Remember_Public {
 		}
 
 		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-event-invites.php';
+		require_once plugin_dir_path( __FILE__ ) . '../includes/utilities/class-remember-logger.php';
+		$listed = count( $events );
 		$events = Remember_Event_Invites::visible_events( $events, get_current_user_id() );
+		Remember_Logger::debug(
+			'Events list filtered for the viewer',
+			array(
+				'user_id' => get_current_user_id(),
+				'listed'  => $listed,
+				'visible' => count( $events ),
+			)
+		);
 
 		if ( $atts['limit'] > 0 ) {
 			$events = array_slice( $events, 0, $atts['limit'] );

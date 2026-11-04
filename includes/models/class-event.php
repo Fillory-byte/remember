@@ -554,6 +554,21 @@ class Remember_Event extends Remember_Base_Model {
 	}
 
 	/**
+	 * Whether the event's last day is before today in the site timezone.
+	 *
+	 * An event in progress has not ended.
+	 *
+	 * @param object $event Event row.
+	 * @return bool
+	 */
+	public static function has_ended( $event ) {
+		if ( ! is_object( $event ) || empty( $event->end_date ) ) {
+			return false;
+		}
+		return substr( (string) $event->end_date, 0, 10 ) < current_time( 'Y-m-d' );
+	}
+
+	/**
 	 * Where now falls against the optional registration window, ignoring event status.
 	 *
 	 * Blank open or close means that side is unlimited.

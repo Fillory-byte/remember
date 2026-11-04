@@ -277,7 +277,7 @@ class Remember_Vetting_Workflow {
 			return '';
 		}
 		if ( self::is_barred_by_rejection( $member ) ) {
-			return __( 'Your latest vetting decision was not accepted. You can still view events you were already accepted to. You cannot apply to any others until a new vetting case is opened by hand and accepted.', 'remember' );
+			return __( 'Your latest vetting decision was not accepted. You can still view past events you attended, but not current or upcoming events, and you cannot apply to events or change your applications until a new vetting case is opened by hand and accepted.', 'remember' );
 		}
 		return __( 'Member is not yet vetted.', 'remember' );
 	}

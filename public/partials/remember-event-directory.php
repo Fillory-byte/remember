@@ -38,6 +38,20 @@ if ( ! $current_member ) {
 	return;
 }
 
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-vetting-workflow.php';
+if ( Remember_Vetting_Workflow::is_barred_by_rejection( $current_member ) ) {
+	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-logger.php';
+	Remember_Logger::info(
+		'Attendee directory withheld from a member barred by rejection',
+		array(
+			'event_id'  => $event_id,
+			'member_id' => $current_user_id,
+		)
+	);
+	echo '<p class="remember-notice remember-warning">' . esc_html__( 'The attendee list is not available to you.', 'remember' ) . '</p>';
+	return;
+}
+
 if ( ! Remember_Member::is_vetted_member( $current_member ) ) {
 	echo '<p class="remember-notice remember-warning">' . esc_html__( 'Member is not yet vetted.', 'remember' ) . '</p>';
 	return;

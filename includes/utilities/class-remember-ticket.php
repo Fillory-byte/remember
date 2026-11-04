@@ -84,8 +84,28 @@ class Remember_Ticket {
 		if ( ! $application || ! self::is_eligible( $application ) ) {
 			return false;
 		}
+		if ( absint( $application->member_id ) !== $user_id ) {
+			return false;
+		}
 
-		return absint( $application->member_id ) === $user_id;
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-event-invites.php';
+		if ( Remember_Event_Invites::member_is_barred( $user_id ) ) {
+			require_once plugin_dir_path( __FILE__ ) . '../models/class-event.php';
+			$event = ( new Remember_Event() )->get( absint( $application->event_id ) );
+			if ( ! Remember_Event::has_ended( $event ) ) {
+				require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
+				Remember_Logger::info(
+					'Ticket withheld: member barred by rejection and the event has not ended',
+					array(
+						'application_id' => $application_id,
+						'member_id'      => $user_id,
+					)
+				);
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	/**
