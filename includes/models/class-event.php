@@ -485,6 +485,13 @@ class Remember_Event extends Remember_Base_Model {
 	public static function registration_window_summary( $event ) {
 		$opens  = self::format_registration_datetime( isset( $event->registration_opens_at ) ? $event->registration_opens_at : '' );
 		$closes = self::format_registration_datetime( isset( $event->registration_closes_at ) ? $event->registration_closes_at : '' );
+		if ( $closes && 'closed' === self::registration_window_state( $event ) ) {
+			return sprintf(
+				/* translators: %s: registration close datetime */
+				__( 'Registration closed %s.', 'remember' ),
+				$closes
+			);
+		}
 		if ( $opens && $closes ) {
 			return sprintf(
 				/* translators: 1: registration open datetime, 2: registration close datetime */
@@ -527,25 +534,49 @@ class Remember_Event extends Remember_Base_Model {
 			return __( 'This event is not open for applications.', 'remember' );
 		}
 
+		$state = self::registration_window_state( $event );
+		if ( 'not_open' === $state ) {
+			return sprintf(
+				/* translators: %s: registration open datetime */
+				__( 'Registration opens %s.', 'remember' ),
+				self::format_registration_datetime( $event->registration_opens_at )
+			);
+		}
+		if ( 'closed' === $state ) {
+			return sprintf(
+				/* translators: %s: registration close datetime */
+				__( 'Registration closed %s.', 'remember' ),
+				self::format_registration_datetime( $event->registration_closes_at )
+			);
+		}
+
+		return '';
+	}
+
+	/**
+	 * Where now falls against the optional registration window, ignoring event status.
+	 *
+	 * Blank open or close means that side is unlimited.
+	 *
+	 * @param object $event Event row.
+	 * @return string not_open|open|closed
+	 */
+	public static function registration_window_state( $event ) {
+		if ( ! is_object( $event ) ) {
+			return 'open';
+		}
+
 		$now    = current_time( 'mysql' );
 		$opens  = isset( $event->registration_opens_at ) ? $event->registration_opens_at : '';
 		$closes = isset( $event->registration_closes_at ) ? $event->registration_closes_at : '';
 
 		if ( ! self::is_blank_registration_datetime( $opens ) && $now < $opens ) {
-			return sprintf(
-				/* translators: %s: registration open datetime */
-				__( 'Registration opens %s.', 'remember' ),
-				self::format_registration_datetime( $opens )
-			);
+			return 'not_open';
 		}
 		if ( ! self::is_blank_registration_datetime( $closes ) && $now > $closes ) {
-			return sprintf(
-				/* translators: %s: registration close datetime */
-				__( 'Registration closed %s.', 'remember' ),
-				self::format_registration_datetime( $closes )
-			);
+			return 'closed';
 		}
 
-		return '';
+		return 'open';
 	}
 }

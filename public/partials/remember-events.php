@@ -54,6 +54,18 @@ $status_tones = array(
 	'cancelled' => 'error',
 	'completed' => 'muted',
 );
+
+// An Open event outside its registration dates gets a badge that matches the window.
+$registration_badges = array(
+	'not_open' => array(
+		'label' => __( 'Registration Not Yet Open', 'remember' ),
+		'tone'  => 'muted',
+	),
+	'closed'   => array(
+		'label' => __( 'Registration Closed', 'remember' ),
+		'tone'  => 'error',
+	),
+);
 ?>
 
 <?php if ( empty( $events ) ) : ?>
@@ -69,6 +81,20 @@ $status_tones = array(
 			$is_multi_day = $event->start_date !== $event->end_date;
 			$start_date = date_i18n( get_option( 'date_format' ), strtotime( $event->start_date ) );
 			$end_date = $is_multi_day ? date_i18n( get_option( 'date_format' ), strtotime( $event->end_date ) ) : '';
+
+			$badge_class = $event->status;
+			$badge_label = $status_labels[ $event->status ];
+			$badge_tone  = $status_tones[ $event->status ];
+			$registration_block = '';
+			if ( 'open' === $event->status ) {
+				$window_state       = Remember_Event::registration_window_state( $event );
+				$registration_block = Remember_Event::registration_block_reason( $event );
+				if ( isset( $registration_badges[ $window_state ] ) ) {
+					$badge_class = 'registration-' . str_replace( '_', '-', $window_state );
+					$badge_label = $registration_badges[ $window_state ]['label'];
+					$badge_tone  = $registration_badges[ $window_state ]['tone'];
+				}
+			}
 		?>
 			<article class="remember-event-card">
 				<header class="remember-event-header">
@@ -80,8 +106,8 @@ $status_tones = array(
 							</span>
 						<?php endif; ?>
 					</h3>
-					<span class="remember-event-status remember-status-<?php echo esc_attr( $event->status ); ?> remember-tone-<?php echo esc_attr( $status_tones[ $event->status ] ); ?>">
-						<?php echo esc_html( $status_labels[ $event->status ] ); ?>
+					<span class="remember-event-status remember-status-<?php echo esc_attr( $badge_class ); ?> remember-tone-<?php echo esc_attr( $badge_tone ); ?>">
+						<?php echo esc_html( $badge_label ); ?>
 					</span>
 				</header>
 
@@ -163,8 +189,8 @@ $status_tones = array(
 								<span class="remember-status-badge" style="background-color: <?php echo esc_attr( $status_color ); ?>; padding: 8px 16px; border-radius: 3px; display: inline-block;">
 									<strong><?php esc_html_e( 'Application Status:', 'remember' ); ?></strong> <?php echo esc_html( $status_label ); ?>
 								</span>
-							<?php elseif ( 'open' === $event->status && Remember_Vetting_Workflow::member_can_apply( $current_member ) && Remember_Event::registration_block_reason( $event ) ) : ?>
-								<p class="remember-notice remember-warning" style="margin:0;display:inline-block;"><?php echo esc_html( Remember_Event::registration_block_reason( $event ) ); ?></p>
+							<?php elseif ( '' !== $registration_block ) : ?>
+								<p class="remember-notice remember-warning" style="margin:0;display:inline-block;"><?php echo esc_html( $registration_block ); ?></p>
 							<?php elseif ( 'open' === $event->status && Remember_Vetting_Workflow::member_can_apply( $current_member ) ) : ?>
 								<?php
 								require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-audit.php';
