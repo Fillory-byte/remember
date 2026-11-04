@@ -180,11 +180,14 @@ class Remember_Event_Invites {
 	/**
 	 * Whether the member may see this event on the public list or detail page.
 	 *
-	 * A draft event is seen only by staff who can read events. A member whose
-	 * latest vetting decision was a rejection sees only events they were
-	 * already accepted to. Otherwise, invitees see a private event, and anyone
-	 * who already applied still sees it so they can follow that application.
-	 * Everyone else does not.
+	 * Guests and logged-in users without a member record see nothing. Staff who
+	 * can read events see every public event and drafts, whatever their own
+	 * vetting state. A member whose latest vetting decision was a rejection
+	 * sees only past events they were accepted to. Vetted members, and members
+	 * not yet vetted who may apply under first-application vetting, see public
+	 * events plus private events they were invited to or applied to. Members
+	 * not yet vetted under member-join vetting, and inactive or merged
+	 * accounts, see nothing.
 	 *
 	 * @param object|null $event     Event row.
 	 * @param int         $member_id Member ID.
@@ -195,28 +198,72 @@ class Remember_Event_Invites {
 			return false;
 		}
 		$member_id = absint( $member_id );
-		$event_id  = absint( $event->event_id );
-		if ( isset( $event->status ) && 'draft' === (string) $event->status && ( $member_id < 1 || ! user_can( $member_id, 'remember_read_events' ) ) ) {
+		if ( $member_id < 1 ) {
 			return false;
 		}
-		if ( $member_id > 0 ) {
+		$event_id = absint( $event->event_id );
+		$is_staff = user_can( $member_id, 'remember_read_events' );
+		if ( isset( $event->status ) && 'draft' === (string) $event->status && ! $is_staff ) {
+			return false;
+		}
+
+		if ( ! $is_staff ) {
 			require_once plugin_dir_path( __FILE__ ) . 'class-remember-vetting-workflow.php';
 			require_once plugin_dir_path( __FILE__ ) . '../models/class-member.php';
 			$member = ( new Remember_Member() )->get( $member_id );
+			if ( ! $member ) {
+				return false;
+			}
 			if ( Remember_Vetting_Workflow::is_barred_by_rejection( $member ) ) {
-				return Remember_Vetting_Workflow::member_was_accepted_to_event( $member_id, $event_id );
+				return self::rejected_member_can_view( $event, $member_id );
+			}
+			if ( ! Remember_Vetting_Workflow::member_can_apply( $member ) ) {
+				return false;
 			}
 		}
+
 		if ( ! self::is_private( $event ) ) {
 			return true;
-		}
-		if ( $member_id < 1 ) {
-			return false;
 		}
 		if ( self::member_is_invited( $event_id, $member_id ) ) {
 			return true;
 		}
 		return self::member_has_application( $event_id, $member_id );
+	}
+
+	/**
+	 * Whether a member barred by a rejection may still view this event read-only.
+	 *
+	 * Only events that have ended and that the member was accepted to.
+	 *
+	 * @param object|null $event     Event row.
+	 * @param int         $member_id Member ID.
+	 * @return bool
+	 */
+	public static function rejected_member_can_view( $event, $member_id ) {
+		if ( ! is_object( $event ) ) {
+			return false;
+		}
+		require_once plugin_dir_path( __FILE__ ) . '../models/class-event.php';
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-vetting-workflow.php';
+		return Remember_Event::has_ended( $event )
+			&& Remember_Vetting_Workflow::member_was_accepted_to_event( absint( $member_id ), absint( $event->event_id ) );
+	}
+
+	/**
+	 * Whether the member is barred by a rejection.
+	 *
+	 * @param int $member_id Member ID.
+	 * @return bool
+	 */
+	public static function member_is_barred( $member_id ) {
+		$member_id = absint( $member_id );
+		if ( $member_id < 1 ) {
+			return false;
+		}
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-vetting-workflow.php';
+		require_once plugin_dir_path( __FILE__ ) . '../models/class-member.php';
+		return Remember_Vetting_Workflow::is_barred_by_rejection( ( new Remember_Member() )->get( $member_id ) );
 	}
 
 	/**

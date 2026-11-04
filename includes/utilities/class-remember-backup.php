@@ -168,6 +168,16 @@ class Remember_Backup {
 		self::restore_options( $options );
 		self::restore_billing_customer_ids( $users, $map['ids'] );
 
+		$backup_db = self::normalize_version( isset( $data['db_version'] ) ? $data['db_version'] : '' );
+		if ( version_compare( $backup_db, '2.4.7', '<' ) ) {
+			$flagged = Remember_Capabilities::flag_default_event_admin_role();
+			if ( false === $flagged ) {
+				Remember_Logger::error( 'Backup restore could not mark Event Administrator as an event administration role', array( 'error' => $wpdb->last_error ) );
+			} else {
+				Remember_Logger::info( 'Backup from before the event administration flag: marked Event Administrator', array( 'backup_db_version' => $backup_db, 'rows' => (int) $flagged ) );
+			}
+		}
+
 		if ( is_array( $privilege_guard ) ) {
 			self::apply_privilege_guard( $privilege_guard );
 		}
@@ -262,9 +272,19 @@ class Remember_Backup {
 			}
 		}
 
+		$event_admin_names = array();
+		foreach ( Remember_Capabilities::event_admin_role_ids() as $flagged_id ) {
+			$flagged_name = $wpdb->get_var( $wpdb->prepare( "SELECT role_name FROM `{$roles_table}` WHERE role_id = %d", $flagged_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			if ( null !== $flagged_name ) {
+				$event_admin_names[] = (string) $flagged_name;
+			}
+		}
+
 		return array(
-			'caps_by_name' => $caps_by_name,
-			'held'         => $held,
+			'caps_by_name'      => $caps_by_name,
+			'held'              => $held,
+			'event_admin_names' => $event_admin_names,
+			'can_flag'          => Remember_Capabilities::current_user_can_flag_event_admin_roles(),
 		);
 	}
 
@@ -284,6 +304,24 @@ class Remember_Backup {
 		$join_table  = $wpdb->prefix . 'remember_member_roles';
 		$existing    = isset( $guard['caps_by_name'] ) && is_array( $guard['caps_by_name'] ) ? $guard['caps_by_name'] : array();
 		$held        = isset( $guard['held'] ) && is_array( $guard['held'] ) ? $guard['held'] : array();
+
+		// Event administration flags are settled first so the role checks below use this site's flags.
+		// Roles flagged before the restore stay flagged; only someone who may flag roles keeps new flags.
+		$flag_names = isset( $guard['event_admin_names'] ) && is_array( $guard['event_admin_names'] ) ? $guard['event_admin_names'] : array();
+		if ( empty( $guard['can_flag'] ) ) {
+			$wpdb->query( "UPDATE `{$roles_table}` SET is_event_admin = 0" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		}
+		foreach ( $flag_names as $flag_name ) {
+			$wpdb->update( $roles_table, array( 'is_event_admin' => 1 ), array( 'role_name' => $flag_name ), array( '%d' ), array( '%s' ) );
+		}
+		Remember_Logger::debug(
+			'Backup restore kept this site\'s event administration roles',
+			array(
+				'user_id'        => get_current_user_id(),
+				'roles'          => $flag_names,
+				'new_flags_kept' => ! empty( $guard['can_flag'] ),
+			)
+		);
 
 		$dropped_caps = 0;
 		$roles        = $wpdb->get_results( "SELECT role_id, role_name FROM `{$roles_table}`" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared

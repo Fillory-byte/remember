@@ -202,19 +202,24 @@ class Remember_Waitlist {
 	}
 
 	/**
-	 * Accepted participants whose event role is Event Administrator.
+	 * Accepted participants whose event role is an event administration role.
 	 *
 	 * @param int $event_id Event ID.
 	 * @return string[]
 	 */
 	public static function accepted_event_administrator_emails( $event_id ) {
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-capabilities.php';
+		$admin_role_ids = Remember_Capabilities::event_admin_role_ids();
+		if ( empty( $admin_role_ids ) ) {
+			Remember_Logger::warning( 'No event administration role is set, so event staff notices have no recipients', array( 'event_id' => absint( $event_id ) ) );
+			return array();
+		}
 		global $wpdb;
-		$member_ids = $wpdb->get_col(
+		$placeholders = implode( ',', array_fill( 0, count( $admin_role_ids ), '%d' ) );
+		$member_ids   = $wpdb->get_col(
 			$wpdb->prepare(
-				'SELECT DISTINCT a.member_id FROM ' . $wpdb->prefix . 'remember_event_applications a INNER JOIN ' . $wpdb->prefix . 'remember_event_roles er ON a.event_role_id = er.event_role_id INNER JOIN ' . $wpdb->prefix . 'remember_roles r ON er.role_id = r.role_id WHERE a.event_id = %d AND a.status = %s AND r.role_name = %s',
-				$event_id,
-				'accepted',
-				'Event Administrator'
+				'SELECT DISTINCT a.member_id FROM ' . $wpdb->prefix . 'remember_event_applications a INNER JOIN ' . $wpdb->prefix . 'remember_event_roles er ON a.event_role_id = er.event_role_id WHERE a.event_id = %d AND a.status = %s AND er.role_id IN (' . $placeholders . ')', // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				array_merge( array( absint( $event_id ), 'accepted' ), $admin_role_ids )
 			)
 		);
 		if ( ! is_array( $member_ids ) ) {

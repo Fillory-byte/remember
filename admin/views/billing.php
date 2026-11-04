@@ -27,11 +27,6 @@ $member_model = new Remember_Member();
 $subtotal_disclaimer = Remember_Billing_Messaging::get_subtotal_disclaimer();
 $status_labels       = Remember_Billing_Template::get_payment_status_labels();
 
-// Pull latest paid/due from the active provider before listing.
-if ( current_user_can( 'remember_update_billing' ) ) {
-	Remember_Billing_Provider::sync_all_payments();
-}
-
 // Get filter parameters
 $filter_status = isset( $_GET['filter_status'] ) ? sanitize_text_field( $_GET['filter_status'] ) : '';
 

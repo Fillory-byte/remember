@@ -155,7 +155,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'event_application_accepted'     => __( 'Sent to member when their event application is accepted (includes ticket link).', 'remember' ),
 			'event_application_declined'    => __( 'Sent to member when their event application is declined.', 'remember' ),
 			'event_application_waitlisted'  => __( 'Sent to member when their event application is waitlisted.', 'remember' ),
-			'waitlist_spot_opened'          => __( 'Sent when an accepted spot opens and the event is set to email staff. Until the roles on this template are changed, it goes to Event Administrators accepted to that event.', 'remember' ),
+			'waitlist_spot_opened'          => __( 'Sent when an accepted spot opens and the event is set to email staff. Until the roles on this template are changed, it goes to members accepted to that event in an event administration role.', 'remember' ),
 			'waitlist_promoted'             => __( 'Sent to a member when their waitlisted application is moved to pending because a spot opened.', 'remember' ),
 			'event_ticket_paid'             => __( 'Sent to member when their event ticket is paid in full (includes ticket link).', 'remember' ),
 			'survey_issued'                 => __( 'Sent to accepted participants when a follow-on survey is issued.', 'remember' ),

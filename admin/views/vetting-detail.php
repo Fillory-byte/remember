@@ -200,20 +200,40 @@ if ( ! defined( 'WPINC' ) ) {
 				</div>
 			<?php endif; ?>
 
-			<?php if ( $can_work_case && ( 'pending' === $viewing_vetting->status || 'scheduled' === $viewing_vetting->status || 'in_progress' === $viewing_vetting->status ) ) : ?>
+			<?php if ( $can_work_case && ( 'pending' === $viewing_vetting->status || 'scheduled' === $viewing_vetting->status || 'in_progress' === $viewing_vetting->status ) ) :
+				$awardable_roles = Remember_Vetting_Workflow::awardable_event_roles();
+				$held_role_ids   = Remember_Vetting_Workflow::member_role_ids( $viewing_vetting->member_id );
+			?>
 				<div class="remember-vetting-quick-actions__group">
 					<form method="post" action="">
 						<?php wp_nonce_field( 'remember_vetting_action', 'remember_vetting_nonce' ); ?>
 						<input type="hidden" name="remember_vetting_action" value="complete">
 						<input type="hidden" name="vetting_id" value="<?php echo esc_attr( $viewing_vetting_id ); ?>">
 						<div class="remember-vetting-quick-actions__row">
-							<select name="decision" class="remember-vetting-quick-actions__select" required>
+							<select name="decision" class="remember-vetting-quick-actions__select" data-remember-vetting-decision required>
 								<option value=""><?php esc_html_e( '-- Decision --', 'remember' ); ?></option>
 								<option value="accepted"><?php esc_html_e( 'Accepted', 'remember' ); ?></option>
 								<option value="rejected"><?php esc_html_e( 'Rejected', 'remember' ); ?></option>
 							</select>
 							<input type="submit" class="button button-small button-primary" value="<?php esc_attr_e( 'Complete', 'remember' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to complete this vetting case?', 'remember' ) ); ?>');">
 						</div>
+						<?php if ( ! empty( $awardable_roles ) ) : ?>
+							<fieldset class="remember-vetting-award-roles" data-remember-vetting-award-roles>
+								<legend><?php esc_html_e( 'Event roles this acceptance awards', 'remember' ); ?></legend>
+								<?php foreach ( $awardable_roles as $award_role ) :
+									$is_held = in_array( (int) $award_role->role_id, $held_role_ids, true );
+								?>
+									<label>
+										<input type="checkbox" name="award_roles[]" value="<?php echo esc_attr( $award_role->role_id ); ?>"<?php echo $is_held ? ' checked disabled' : ''; ?>>
+										<?php echo esc_html( $award_role->role_name ); ?>
+										<?php if ( $is_held ) : ?>
+											<span class="description"><?php esc_html_e( '(already held)', 'remember' ); ?></span>
+										<?php endif; ?>
+									</label>
+								<?php endforeach; ?>
+								<p class="description"><?php esc_html_e( 'Used only when the decision is Accepted. Ticked roles are added to the member\'s profile, and the member sees a note on this case listing them. Event administration roles are never offered here.', 'remember' ); ?></p>
+							</fieldset>
+						<?php endif; ?>
 					</form>
 				</div>
 			<?php endif; ?>

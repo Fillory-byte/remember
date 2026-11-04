@@ -36,13 +36,28 @@ $merchandise_model = new Remember_Merchandise();
 $member = $member_model->get( get_current_user_id() );
 $member_id_for_queries = ( $member && ! empty( $member->member_id ) ) ? absint( $member->member_id ) : get_current_user_id();
 
+// A rejection leaves applications on record but read-only, and only past events viewable.
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-vetting-workflow.php';
+$member_barred = Remember_Vetting_Workflow::is_barred_by_rejection( $member );
+
 // Handle member-side application actions (edit pending/waitlisted, withdraw accepted).
 if ( isset( $_POST['remember_member_application_action'] ) && check_admin_referer( 'remember_member_application_action', 'remember_member_application_nonce' ) ) {
 	$member_action = sanitize_text_field( wp_unslash( $_POST['remember_member_application_action'] ) );
 	$application_id = isset( $_POST['application_id'] ) ? absint( $_POST['application_id'] ) : 0;
 	$application = $application_id > 0 ? $application_model->get( $application_id ) : null;
 
-	if ( $application && absint( $application->member_id ) === absint( $member_id_for_queries ) ) {
+	if ( $member_barred ) {
+		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-logger.php';
+		Remember_Logger::warning(
+			'Application change refused: member barred by rejection',
+			array(
+				'application_id' => $application_id,
+				'member_id'      => (int) $member_id_for_queries,
+				'action'         => $member_action,
+			)
+		);
+		echo '<div class="remember-notice remember-error" role="alert"><p>' . esc_html( Remember_Vetting_Workflow::apply_block_message( $member ) ) . '</p></div>';
+	} elseif ( $application && absint( $application->member_id ) === absint( $member_id_for_queries ) ) {
 		if ( 'update_application' === $member_action && in_array( $application->status, array( 'pending', 'waitlisted' ), true ) ) {
 			require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-audit.php';
 			$currency_error = Remember_Profile_Audit::validate_application_confirmation(
@@ -163,6 +178,9 @@ $today = current_time( 'Y-m-d' );
 foreach ( $applications as $app ) {
 	if ( 'accepted' === $app->status ) {
 		$event = $event_model->get( $app->event_id );
+		if ( $event && $member_barred && ! Remember_Event::has_ended( $event ) ) {
+			continue;
+		}
 		if ( $event ) {
 			$accepted_events[] = $event;
 			// Separate into past and upcoming
@@ -299,7 +317,17 @@ foreach ( $selected_application_addons as $selected_addon_row ) {
 			?>
 			<p><strong><?php esc_html_e( 'Subtotal:', 'remember' ); ?></strong> $<?php echo esc_html( number_format( $itemized_subtotal, 2 ) ); ?></p>
 
-			<?php if ( in_array( $selected_application->status, array( 'pending', 'waitlisted' ), true ) ) : ?>
+			<?php if ( $member_barred ) : ?>
+				<?php
+				require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-ticket.php';
+				if ( Remember_Event::has_ended( $selected_event ) && Remember_Ticket::user_can_view( $selected_application->application_id ) ) :
+					?>
+					<p style="margin-top: 15px;">
+						<a class="remember-button remember-button-primary" href="<?php echo esc_url( Remember_Ticket::get_ticket_url( $selected_application->application_id ) ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'View / Print Ticket', 'remember' ); ?></a>
+					</p>
+				<?php endif; ?>
+				<p class="remember-notice remember-warning" style="margin-top: 15px;"><?php echo esc_html( Remember_Vetting_Workflow::apply_block_message( $member ) ); ?></p>
+			<?php elseif ( in_array( $selected_application->status, array( 'pending', 'waitlisted' ), true ) ) : ?>
 				<form method="post" action="" class="remember-form" style="margin-top: 15px;">
 					<?php wp_nonce_field( 'remember_member_application_action', 'remember_member_application_nonce' ); ?>
 					<input type="hidden" name="remember_member_application_action" value="update_application">

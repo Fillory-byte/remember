@@ -113,6 +113,34 @@ $status_tones = array(
 					<span class="description"><?php esc_html_e( 'Hidden', 'remember' ); ?></span>
 					<?php endif; ?>
 				</p>
+				<?php if ( ! empty( $viewing_billing_error ) && current_user_can( 'remember_read_billing' ) ) : ?>
+					<div class="notice notice-error inline remember-billing-error">
+						<p>
+							<strong><?php esc_html_e( 'No invoice was created for this application.', 'remember' ); ?></strong>
+							<?php if ( ! empty( $viewing_application->billing_error_at ) ) : ?>
+								<?php
+								echo esc_html(
+									sprintf(
+										/* translators: %s: date and time of the failed attempt */
+										__( 'Last attempt: %s.', 'remember' ),
+										date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $viewing_application->billing_error_at ) )
+									)
+								);
+								?>
+							<?php endif; ?>
+						</p>
+						<p><?php echo esc_html( $viewing_billing_error ); ?></p>
+						<p>
+							<?php
+							if ( current_user_can( 'remember_create_billing' ) ) {
+								esc_html_e( 'Once the cause is fixed, use Reprocess Billing below to create the invoice.', 'remember' );
+							} else {
+								esc_html_e( 'Someone with billing access can use Reprocess Billing on this application once the cause is fixed.', 'remember' );
+							}
+							?>
+						</p>
+					</div>
+				<?php endif; ?>
 				</div>
 			</div>
 			<?php

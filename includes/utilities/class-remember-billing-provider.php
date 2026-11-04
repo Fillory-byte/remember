@@ -11,6 +11,8 @@ if ( ! defined( 'WPINC' ) ) {
 	die;
 }
 
+require_once plugin_dir_path( __FILE__ ) . 'class-remember-logger.php';
+
 /**
  * Site-wide billing provider: none | quickbooks | xero.
  */
@@ -72,6 +74,13 @@ class Remember_Billing_Provider {
 		if ( $throttle_seconds > 0 ) {
 			$transient_key = 'remember_member_billing_sync_' . $member_id;
 			if ( false !== get_transient( $transient_key ) ) {
+				Remember_Logger::debug(
+					'Member billing re-check skipped: ran recently',
+					array(
+						'member_id'        => $member_id,
+						'throttle_seconds' => $throttle_seconds,
+					)
+				);
 				return $empty;
 			}
 		}
@@ -125,6 +134,7 @@ class Remember_Billing_Provider {
 		$throttle_seconds = absint( $throttle_seconds );
 		if ( $throttle_seconds > 0 ) {
 			if ( false !== get_transient( 'remember_billing_list_sync' ) ) {
+				Remember_Logger::debug( 'Billing re-check skipped: ran within the last minute', array( 'throttle_seconds' => $throttle_seconds ) );
 				return $empty;
 			}
 		}

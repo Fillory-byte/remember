@@ -26,6 +26,15 @@ $member_model = new Remember_Member();
 $event = $event_model->get( $event_id );
 
 if ( ! $event || ! Remember_Event_Invites::member_can_see( $event, get_current_user_id() ) ) {
+	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-logger.php';
+	Remember_Logger::debug(
+		'Event page withheld from the viewer',
+		array(
+			'event_id' => absint( $event_id ),
+			'user_id'  => get_current_user_id(),
+			'exists'   => (bool) $event,
+		)
+	);
 	echo '<p class="remember-notice remember-error">' . esc_html__( 'Event not found.', 'remember' ) . '</p>';
 	return;
 }
@@ -141,9 +150,7 @@ $is_multi_day = ( $event->start_date !== $event->end_date );
 				<?php echo esc_html( Remember_Vetting_Workflow::apply_block_message( $current_member ) ); ?>
 			</p>
 		</div>
-	<?php endif; ?>
-
-	<?php if ( $current_member && ! Remember_Vetting_Workflow::is_barred_by_rejection( $current_member ) && ! Remember_Member::is_vetted_member( $current_member ) ) : ?>
+	<?php elseif ( $current_member && ! Remember_Member::is_vetted_member( $current_member ) ) : ?>
 		<div class="remember-event-notice">
 			<p class="remember-notice remember-warning">
 				<?php esc_html_e( 'Member is not yet vetted.', 'remember' ); ?>

@@ -138,6 +138,14 @@ if ( isset( $_POST['remember_vetting_action'] ) && check_admin_referer( 'remembe
 				if ( $result !== false ) {
 					// Update member status based on most recent completed vetting case
 					$vetting = $vetting_model->get( $vetting_id );
+					$award   = null;
+					if ( $vetting && 'accepted' === $decision ) {
+						$posted_roles = isset( $_POST['award_roles'] ) ? array_map( 'absint', (array) wp_unslash( $_POST['award_roles'] ) ) : array();
+						$award        = Remember_Vetting_Workflow::award_event_roles( $vetting_id, $vetting->member_id, $posted_roles, get_current_user_id() );
+						$vetting_model->add_note( $vetting_id, get_current_user_id(), Remember_Vetting_Workflow::award_note( $award ), false );
+					} elseif ( 'rejected' === $decision && ! empty( $_POST['award_roles'] ) ) {
+						Remember_Logger::debug( 'Roles ticked on a rejected vetting case were ignored', array( 'vetting_id' => $vetting_id ) );
+					}
 					if ( $vetting ) {
 						$latest_case = Remember_Vetting_Workflow::latest_completed_case( $vetting->member_id );
 						if ( $latest_case ) {
@@ -161,7 +169,15 @@ if ( isset( $_POST['remember_vetting_action'] ) && check_admin_referer( 'remembe
 					$vetting_model->add_note( $vetting_id, get_current_user_id(), $system_note, true );
 					
 					Remember_Logger::info( 'Vetting completed', array( 'vetting_id' => $vetting_id, 'decision' => $decision ) );
-					echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Vetting decision recorded successfully.', 'remember' ) . '</p></div>';
+					echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Vetting decision recorded successfully.', 'remember' );
+					if ( $award && ! empty( $award['awarded'] ) ) {
+						/* translators: %s: comma-separated role names */
+						echo ' ' . esc_html( sprintf( __( 'Event roles awarded: %s.', 'remember' ), implode( ', ', $award['awarded'] ) ) );
+					}
+					echo '</p></div>';
+					if ( $award && ( ! empty( $award['failed'] ) || ! empty( $award['refused'] ) ) ) {
+						echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Some event roles could not be awarded. Add them from the member\'s profile, and check the log if this keeps happening.', 'remember' ) . '</p></div>';
+					}
 				}
 			}
 		} elseif ( 'add_note' === $action ) {
