@@ -211,7 +211,7 @@ function remember_waitlist_sort_link( $column_name, $current_orderby, $current_o
 								<?php wp_nonce_field( 'remember_waitlist_action', 'remember_waitlist_nonce' ); ?>
 								<input type="hidden" name="remember_waitlist_action" value="promote_to_pending">
 								<input type="hidden" name="application_id" value="<?php echo esc_attr( $application->application_id ); ?>">
-								<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Move to Pending', 'remember' ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: member name */ __( 'Move waitlisted application from %s to pending', 'remember' ), $row_member_name ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Move this application from waitlist to pending?', 'remember' ) ); ?>');">
+								<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Move to Pending', 'remember' ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: member name */ __( 'Move to Pending: waitlisted application from %s', 'remember' ), $row_member_name ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Move this application from waitlist to pending?', 'remember' ) ); ?>');">
 							</form>
 							<form method="post" action="" style="display:inline;">
 								<?php wp_nonce_field( 'remember_waitlist_action', 'remember_waitlist_nonce' ); ?>

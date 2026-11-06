@@ -1036,12 +1036,12 @@ $status_tones = array(
 								<?php endif; ?>
 							<?php elseif ( current_user_can( 'remember_update_applications' ) ) : ?>
 								<?php if ( 'accepted' === $application->status ) : ?>
-									<a class="button-link-delete" href="<?php echo esc_url( admin_url( 'admin.php?page=remember-applications&view=' . $application->application_id ) ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: member name */ __( 'Open application from %s to decline it', 'remember' ), $row_member_name ) ); ?>"><?php esc_html_e( 'Decline…', 'remember' ); ?></a>
+									<a class="button-link-delete" href="<?php echo esc_url( admin_url( 'admin.php?page=remember-applications&view=' . $application->application_id ) ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: member name */ __( 'Decline… application from %s', 'remember' ), $row_member_name ) ); ?>"><?php esc_html_e( 'Decline…', 'remember' ); ?></a>
 									<form method="post" action="">
 										<?php wp_nonce_field( 'remember_application_action', 'remember_application_nonce' ); ?>
 										<input type="hidden" name="remember_application_action" value="reopen_pending">
 										<input type="hidden" name="application_id" value="<?php echo esc_attr( $application->application_id ); ?>">
-										<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Move to Pending', 'remember' ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: member name */ __( 'Move application from %s back to pending', 'remember' ), $row_member_name ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Move this accepted application back to pending?', 'remember' ) ); ?>');">
+										<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Move to Pending', 'remember' ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: member name */ __( 'Move to Pending: application from %s', 'remember' ), $row_member_name ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Move this accepted application back to pending?', 'remember' ) ); ?>');">
 									</form>
 									<?php if ( current_user_can( 'remember_create_billing' ) ) : ?>
 									<form method="post" action="">
