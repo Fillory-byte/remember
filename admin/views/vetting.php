@@ -175,6 +175,24 @@ if ( isset( $_POST['remember_vetting_action'] ) && check_admin_referer( 'remembe
 						echo ' ' . esc_html( sprintf( __( 'Event roles awarded: %s.', 'remember' ), implode( ', ', $award['awarded'] ) ) );
 					}
 					echo '</p></div>';
+					if ( $vetting && 'accepted' === $decision ) {
+						$clash_notice_shown = true;
+						$clash_member       = get_userdata( (int) $vetting->member_id );
+						foreach ( Remember_Vetting_Workflow::clashing_applications( $vetting->member_id ) as $clash ) {
+							$clash_member_name = $clash_member ? $clash_member->display_name : __( 'The member', 'remember' );
+							Remember_Notifications::notify_event_admins_role_clash( $clash->event_id, $clash->application_id, $clash_member_name, $clash->role_name, $clash->event_name );
+							echo '<div class="notice notice-warning is-dismissible"><p>';
+							echo esc_html(
+								sprintf(
+									/* translators: %s: role name */
+									__( 'This member has an open application for the %s role, which this vetting did not award.', 'remember' ),
+									$clash->role_name
+								)
+							);
+							echo ' <a href="' . esc_url( admin_url( 'admin.php?page=remember-applications&view=' . absint( $clash->application_id ) ) ) . '">' . esc_html__( 'Review the application', 'remember' ) . '</a> ';
+							echo esc_html__( 'Event administration has been emailed.', 'remember' ) . '</p></div>';
+						}
+					}
 					if ( $award && ( ! empty( $award['failed'] ) || ! empty( $award['refused'] ) ) ) {
 						echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Some event roles could not be awarded. Add them from the member\'s profile, and check the log if this keeps happening.', 'remember' ) . '</p></div>';
 					}

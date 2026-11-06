@@ -12,6 +12,25 @@ if ( ! defined( 'WPINC' ) ) {
 }
 ?>
 
+<?php if ( 'completed' === $viewing_vetting->status && 'accepted' === $viewing_vetting->decision && empty( $clash_notice_shown ) ) : ?>
+	<?php foreach ( Remember_Vetting_Workflow::clashing_applications( $viewing_vetting->member_id ) as $clash ) : ?>
+		<div class="notice notice-warning inline">
+			<p>
+				<?php
+				echo esc_html(
+					sprintf(
+						/* translators: %s: role name */
+						__( 'This member has an open application for the %s role, which this vetting did not award.', 'remember' ),
+						$clash->role_name
+					)
+				);
+				?>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-applications&view=' . absint( $clash->application_id ) ) ); ?>"><?php esc_html_e( 'Review the application', 'remember' ); ?></a>
+			</p>
+		</div>
+	<?php endforeach; ?>
+<?php endif; ?>
+
 <div class="remember-vetting-detail">
 	<!-- Case Header -->
 	<div class="remember-member-detail-card">

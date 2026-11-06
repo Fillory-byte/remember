@@ -975,6 +975,54 @@ class Remember_Notifications {
 	}
 
 	/**
+	 * Email event administration about an application for an event role the member does not hold.
+	 *
+	 * Sent to members accepted to the event in an event administration role.
+	 * Plain text; names are stripped of tags and line breaks.
+	 *
+	 * @param int    $event_id       Event ID.
+	 * @param int    $application_id Application ID.
+	 * @param string $member_name    Member display name.
+	 * @param string $role_name      Role applied for.
+	 * @param string $event_name     Event name.
+	 * @return int Number of emails sent.
+	 */
+	public static function notify_event_admins_role_clash( $event_id, $application_id, $member_name, $role_name, $event_name ) {
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-waitlist.php';
+		$emails = Remember_Waitlist::accepted_event_administrator_emails( $event_id );
+		if ( empty( $emails ) ) {
+			Remember_Logger::debug( 'No accepted event administrators to notify of a role clash', array( 'event_id' => absint( $event_id ) ) );
+			return 0;
+		}
+
+		$clean   = static function ( $value ) {
+			return trim( preg_replace( '/\s+/', ' ', wp_strip_all_tags( (string) $value ) ) );
+		};
+		$member_name = $clean( $member_name );
+		$role_name   = $clean( $role_name );
+		$event_name  = $clean( $event_name );
+
+		/* translators: 1: event name */
+		$subject = sprintf( __( 'Role clash on an application for %s', 'remember' ), $event_name );
+		$message = sprintf(
+			/* translators: 1: member name, 2: role name, 3: event name, 4: application URL */
+			__( "%1\$s was accepted in vetting without the %2\$s role, but has an open application for %2\$s at %3\$s.\n\nReview the application: %4\$s", 'remember' ),
+			$member_name,
+			$role_name,
+			$event_name,
+			esc_url_raw( admin_url( 'admin.php?page=remember-applications&view=' . absint( $application_id ) ) )
+		);
+
+		$sent = 0;
+		foreach ( $emails as $email ) {
+			if ( wp_mail( $email, $subject, $message ) ) {
+				++$sent;
+			}
+		}
+		return $sent;
+	}
+
+	/**
 	 * Email staff about a vetting case, using the recipient setting.
 	 *
 	 * A waiting case whose roles have not been changed still goes to the whole vetting team.

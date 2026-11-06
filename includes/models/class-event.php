@@ -160,6 +160,38 @@ class Remember_Event extends Remember_Base_Model {
 		$show_sql             = $has_show_in_frontend ? 'AND COALESCE(r.show_in_frontend, 1) != 0' : '';
 		$show_select          = $has_show_in_frontend ? ', r.show_in_frontend' : '';
 
+		// Vetting on first application: an unvetted member holds no roles yet, so offer every
+		// event role except event administration roles; the vetter awards the real ones.
+		require_once plugin_dir_path( __FILE__ ) . '../utilities/class-remember-vetting-workflow.php';
+		if ( Remember_Vetting_Workflow::should_vet_on_first_application() ) {
+			require_once plugin_dir_path( __FILE__ ) . 'class-member.php';
+			require_once plugin_dir_path( __FILE__ ) . '../utilities/class-remember-capabilities.php';
+			$member_row = ( new Remember_Member() )->get( $member_id );
+			if ( $member_row && isset( $member_row->status ) && in_array( $member_row->status, array( 'unvetted', 'in_vetting' ), true ) ) {
+				$admin_ids = Remember_Capabilities::event_admin_role_ids();
+				$not_admin = '';
+				$args      = array( $event_id );
+				if ( ! empty( $admin_ids ) ) {
+					$not_admin = 'AND r.role_id NOT IN (' . implode( ',', array_fill( 0, count( $admin_ids ), '%d' ) ) . ')';
+					$args      = array_merge( $args, $admin_ids );
+				}
+				$rows = $wpdb->get_results(
+					$wpdb->prepare(
+						"SELECT DISTINCT er.*, r.role_name{$show_select}
+						FROM {$wpdb->prefix}remember_event_roles er
+						JOIN {$wpdb->prefix}remember_roles r ON er.role_id = r.role_id
+						WHERE er.event_id = %d
+						AND r.role_type = 'event'
+						{$show_sql}
+						{$not_admin}
+						ORDER BY r.role_name ASC", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+						$args
+					)
+				);
+				return is_array( $rows ) ? $rows : array();
+			}
+		}
+
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT DISTINCT er.*, r.role_name{$show_select}

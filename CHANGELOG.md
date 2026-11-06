@@ -2,6 +2,10 @@
 
 All notable changes to reMember are listed here. The current plugin version is in `remember.php` (`REMEMBER_VERSION`) and [GitHub Releases](https://github.com/ctucker1984/remember/releases).
 
+## 2.2.12.1
+
+- **Fix:** When vetting starts at the first application, members who are not vetted yet now see every event role except event administration roles on the apply form, instead of an empty list. When a vetter accepts a member who has an open application for a role the vetting did not award, the vetter sees a notice linking to that application, the case page shows the same notice, and event administration is emailed about the clash. [#203](https://github.com/ctucker1984/remember/issues/203)
+
 ## 2.2.12
 
 - **Fix:** When an accepted application can't be invoiced, staff now see the real reason, for example "Xero's request limit for this organisation was reached. Try again in a minute.", instead of "Xero API request failed". The application shows "Invoice failed" with the reason on the Applications list, and its page explains that no invoice was created, when the last attempt was, and to use Reprocess Billing once the cause is fixed. The warning clears when an invoice exists. This works for QuickBooks and Xero. An application that is no longer pending or waitlisted can't be accepted again, so a double click or a stale page can't attempt a second invoice. [#189](https://github.com/ctucker1984/remember/issues/189)

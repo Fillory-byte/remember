@@ -310,6 +310,47 @@ class Remember_Vetting_Workflow {
 	}
 
 	/**
+	 * Open applications for an event role the member does not hold.
+	 *
+	 * Used after a vetting acceptance, when the member applied for a role the
+	 * vetter did not award.
+	 *
+	 * @param int $member_id Member ID (WordPress user ID).
+	 * @return object[] Rows with application_id, event_id, role_id, role_name, event_name.
+	 */
+	public static function clashing_applications( $member_id ) {
+		global $wpdb;
+		$member_id = absint( $member_id );
+		if ( $member_id < 1 ) {
+			return array();
+		}
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT a.application_id, a.event_id, er.role_id, r.role_name, e.event_name
+				FROM {$wpdb->prefix}remember_event_applications a
+				JOIN {$wpdb->prefix}remember_event_roles er ON a.event_role_id = er.event_role_id
+				JOIN {$wpdb->prefix}remember_roles r ON er.role_id = r.role_id
+				LEFT JOIN {$wpdb->prefix}remember_events e ON a.event_id = e.event_id
+				WHERE a.member_id = %d AND a.status IN ('pending', 'waitlisted')
+				ORDER BY a.application_id ASC",
+				$member_id
+			)
+		);
+		if ( ! is_array( $rows ) ) {
+			return array();
+		}
+		$held = self::member_role_ids( $member_id );
+		return array_values(
+			array_filter(
+				$rows,
+				static function ( $row ) use ( $held ) {
+					return ! in_array( (int) $row->role_id, $held, true );
+				}
+			)
+		);
+	}
+
+	/**
 	 * Give a member accepted in vetting the event roles the vetter chose.
 	 *
 	 * Only adds roles. Anything not in awardable_event_roles() is refused.
