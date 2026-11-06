@@ -169,6 +169,10 @@ class Remember_Event extends Remember_Base_Model {
 			$member_row = ( new Remember_Member() )->get( $member_id );
 			if ( $member_row && isset( $member_row->status ) && in_array( $member_row->status, array( 'unvetted', 'in_vetting' ), true ) ) {
 				$admin_ids = Remember_Capabilities::event_admin_role_ids();
+				if ( empty( $admin_ids ) ) {
+					require_once plugin_dir_path( __FILE__ ) . '../utilities/class-remember-logger.php';
+					Remember_Logger::warning( 'No event administration roles are flagged; unvetted members are offered every event role', array( 'event_id' => $event_id ) );
+				}
 				$not_admin = '';
 				$args      = array( $event_id );
 				if ( ! empty( $admin_ids ) ) {

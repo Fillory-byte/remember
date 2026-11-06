@@ -180,7 +180,7 @@ if ( isset( $_POST['remember_vetting_action'] ) && check_admin_referer( 'remembe
 						$clash_member       = get_userdata( (int) $vetting->member_id );
 						foreach ( Remember_Vetting_Workflow::clashing_applications( $vetting->member_id ) as $clash ) {
 							$clash_member_name = $clash_member ? $clash_member->display_name : __( 'The member', 'remember' );
-							Remember_Notifications::notify_event_admins_role_clash( $clash->event_id, $clash->application_id, $clash_member_name, $clash->role_name, $clash->event_name );
+							$clash_emailed = Remember_Notifications::notify_event_admins_role_clash( $clash->event_id, $clash->application_id, $clash_member_name, $clash->role_name, $clash->event_name );
 							echo '<div class="notice notice-warning is-dismissible"><p>';
 							echo esc_html(
 								sprintf(
@@ -190,7 +190,7 @@ if ( isset( $_POST['remember_vetting_action'] ) && check_admin_referer( 'remembe
 								)
 							);
 							echo ' <a href="' . esc_url( admin_url( 'admin.php?page=remember-applications&view=' . absint( $clash->application_id ) ) ) . '">' . esc_html__( 'Review the application', 'remember' ) . '</a> ';
-							echo esc_html__( 'Event administration has been emailed.', 'remember' ) . '</p></div>';
+							echo ( $clash_emailed > 0 ? esc_html__( 'Event administration has been emailed.', 'remember' ) : esc_html__( 'No event administrator could be emailed, so follow up with event administration directly.', 'remember' ) ) . '</p></div>';
 						}
 					}
 					if ( $award && ( ! empty( $award['failed'] ) || ! empty( $award['refused'] ) ) ) {
