@@ -5,6 +5,8 @@ All notable changes to reMember are listed here. The current plugin version is i
 ## 2.2.13
 
 - **Fix:** On the Sensitive access log, a full backup now reads "Full backup (47 members)", giving the number of members it contained, instead of "Bulk export (0 rows)", which made a complete backup look empty. Backups taken before this update read "Full backup", since their size wasn't recorded. The count is also in the backup's Info log line. [#193](https://github.com/ctucker1984/remember/issues/193)
+- **Fix:** On the event form, registration opens, registration closes, invoice due after and invoice due no later than each have a Clear button, so a date set by mistake can be removed on phones and tablets, whose date pickers have no way to blank a field. Saving a blank field stores no date. The invoice due-by date now matches the registration date fields on small screens. [#198](https://github.com/ctucker1984/remember/issues/198) [#199](https://github.com/ctucker1984/remember/issues/199)
+- **Fix:** Screen readers now get a label for the vetting decision menu, which member an Accept, Decline, Waitlist, Move to Pending or Delete button acts on, and what the "Decline…" link on an accepted application does. The "(required)" marker can be translated. The invoice due fields and the Private Event checkbox are tied to their hints and the invitee list. [#197](https://github.com/ctucker1984/remember/issues/197)
 
 ## 2.2.12
 

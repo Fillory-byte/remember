@@ -423,7 +423,7 @@ $decision_labels = array(
 			
 			<table class="form-table">
 				<tr>
-					<th><label for="member_id"><?php esc_html_e( 'Member', 'remember' ); ?> <span class="description">(required)</span></label></th>
+					<th><label for="member_id"><?php esc_html_e( 'Member', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 					<td>
 						<select id="member_id" name="member_id" class="regular-text" required>
 							<option value=""><?php esc_html_e( '-- Select Member --', 'remember' ); ?></option>

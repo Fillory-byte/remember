@@ -320,7 +320,7 @@ if ( $editing_role ) {
 				
 				<table class="form-table">
 					<tr>
-						<th><label for="role_name"><?php esc_html_e( 'Role Name', 'remember' ); ?> <span class="description">(required)</span></label></th>
+						<th><label for="role_name"><?php esc_html_e( 'Role Name', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 						<td><input type="text" id="role_name" name="role_name" class="regular-text" required></td>
 					</tr>
 					<tr>
@@ -436,7 +436,7 @@ if ( $editing_role ) {
 									|
 								<?php endif; ?>
 								<?php if ( current_user_can( 'remember_delete_roles' ) ) : ?>
-									<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-roles&delete=' . $role->role_id ), 'remember_role_action', 'remember_role_nonce' ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this role?', 'remember' ) ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
+									<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-roles&delete=' . $role->role_id ), 'remember_role_action', 'remember_role_nonce' ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this role?', 'remember' ) ); ?>');" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: role name */ __( 'Delete %s', 'remember' ), $role->role_name ) ); ?>"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
 								<?php endif; ?>
 							</td>
 						</tr>
@@ -509,7 +509,7 @@ if ( $editing_role ) {
 								<?php endif; ?>
 								<?php if ( current_user_can( 'remember_delete_roles' ) && ! $is_protected ) : ?>
 									|
-									<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-roles&delete=' . $role->role_id ), 'remember_role_action', 'remember_role_nonce' ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this role?', 'remember' ) ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
+									<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-roles&delete=' . $role->role_id ), 'remember_role_action', 'remember_role_nonce' ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this role?', 'remember' ) ); ?>');" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: role name */ __( 'Delete %s', 'remember' ), $role->role_name ) ); ?>"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
 								<?php endif; ?>
 							</td>
 						</tr>
@@ -531,7 +531,7 @@ if ( $editing_role ) {
 				
 				<table class="form-table">
 					<tr>
-						<th><label for="role_name"><?php esc_html_e( 'Role Name', 'remember' ); ?> <span class="description">(required)</span></label></th>
+						<th><label for="role_name"><?php esc_html_e( 'Role Name', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 						<td>
 							<input type="text" id="role_name" name="role_name" class="regular-text" value="<?php echo esc_attr( $editing_role->role_name ); ?>" required<?php echo Remember_Capabilities::is_protected_system_role( $editing_role ) ? ' readonly' : ''; ?>>
 						</td>

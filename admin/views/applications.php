@@ -785,7 +785,7 @@ $status_tones = array(
 			
 			<table class="form-table">
 				<tr>
-					<th><label for="event_id"><?php esc_html_e( 'Event', 'remember' ); ?> <span class="description">(required)</span></label></th>
+					<th><label for="event_id"><?php esc_html_e( 'Event', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 					<td>
 						<select id="event_id" name="event_id" class="regular-text" required>
 							<option value=""><?php esc_html_e( '-- Select Event --', 'remember' ); ?></option>
@@ -796,7 +796,7 @@ $status_tones = array(
 					</td>
 				</tr>
 				<tr>
-					<th><label for="member_id"><?php esc_html_e( 'Member', 'remember' ); ?> <span class="description">(required)</span></label></th>
+					<th><label for="member_id"><?php esc_html_e( 'Member', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 					<td>
 						<select id="member_id" name="member_id" class="regular-text" required>
 							<option value=""><?php esc_html_e( '-- Select Member --', 'remember' ); ?></option>
@@ -810,7 +810,7 @@ $status_tones = array(
 					</td>
 				</tr>
 				<tr>
-					<th><label for="event_role_id"><?php esc_html_e( 'Event Role', 'remember' ); ?> <span class="description">(required)</span></label></th>
+					<th><label for="event_role_id"><?php esc_html_e( 'Event Role', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 					<td>
 						<select id="event_role_id" name="event_role_id" class="regular-text" required disabled>
 							<option value=""><?php esc_html_e( '-- Select Event First --', 'remember' ); ?></option>
@@ -948,6 +948,7 @@ $status_tones = array(
 					$event      = isset( $app_events[ (int) $application->event_id ] ) ? $app_events[ (int) $application->event_id ] : null;
 					$user       = isset( $app_users[ (int) $application->member_id ] ) ? $app_users[ (int) $application->member_id ] : null;
 					$event_role = isset( $app_roles[ (int) $application->event_role_id ] ) ? $app_roles[ (int) $application->event_role_id ] : null;
+					$row_member_name = $user ? $user->display_name : __( 'Unknown Member', 'remember' );
 					$application_payment = $payment_model->get_by_application( $application->application_id );
 					$billing_label = __( 'Not invoiced', 'remember' );
 					$billing_tone  = 'muted';
@@ -1014,7 +1015,7 @@ $status_tones = array(
 									<?php wp_nonce_field( 'remember_application_action', 'remember_application_nonce' ); ?>
 									<input type="hidden" name="remember_application_action" value="accept">
 									<input type="hidden" name="application_id" value="<?php echo esc_attr( $application->application_id ); ?>">
-									<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Accept', 'remember' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Accept this application?', 'remember' ) ); ?>');">
+									<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Accept', 'remember' ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: member name */ __( 'Accept application from %s', 'remember' ), $row_member_name ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Accept this application?', 'remember' ) ); ?>');">
 								</form>
 								
 								<form method="post" action="">
@@ -1022,7 +1023,7 @@ $status_tones = array(
 									<input type="hidden" name="remember_application_action" value="decline">
 									<input type="hidden" name="application_id" value="<?php echo esc_attr( $application->application_id ); ?>">
 									<input type="hidden" name="billing_action" value="leave">
-									<input type="submit" class="button button-small remember-button-danger" value="<?php esc_attr_e( 'Decline', 'remember' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Decline this application? Invoice will be left unaltered. Open the application detail to void or refund.', 'remember' ) ); ?>');">
+									<input type="submit" class="button button-small remember-button-danger" value="<?php esc_attr_e( 'Decline', 'remember' ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: member name */ __( 'Decline application from %s', 'remember' ), $row_member_name ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Decline this application? Invoice will be left unaltered. Open the application detail to void or refund.', 'remember' ) ); ?>');">
 								</form>
 								
 								<?php if ( 'pending' === $application->status ) : ?>
@@ -1030,17 +1031,17 @@ $status_tones = array(
 										<?php wp_nonce_field( 'remember_application_action', 'remember_application_nonce' ); ?>
 										<input type="hidden" name="remember_application_action" value="waitlist">
 										<input type="hidden" name="application_id" value="<?php echo esc_attr( $application->application_id ); ?>">
-										<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Waitlist', 'remember' ); ?>">
+										<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Waitlist', 'remember' ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: member name */ __( 'Waitlist application from %s', 'remember' ), $row_member_name ) ); ?>">
 									</form>
 								<?php endif; ?>
 							<?php elseif ( current_user_can( 'remember_update_applications' ) ) : ?>
 								<?php if ( 'accepted' === $application->status ) : ?>
-									<a class="button-link-delete" href="<?php echo esc_url( admin_url( 'admin.php?page=remember-applications&view=' . $application->application_id ) ); ?>"><?php esc_html_e( 'Decline…', 'remember' ); ?></a>
+									<a class="button-link-delete" href="<?php echo esc_url( admin_url( 'admin.php?page=remember-applications&view=' . $application->application_id ) ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: member name */ __( 'Open application from %s to decline it', 'remember' ), $row_member_name ) ); ?>"><?php esc_html_e( 'Decline…', 'remember' ); ?></a>
 									<form method="post" action="">
 										<?php wp_nonce_field( 'remember_application_action', 'remember_application_nonce' ); ?>
 										<input type="hidden" name="remember_application_action" value="reopen_pending">
 										<input type="hidden" name="application_id" value="<?php echo esc_attr( $application->application_id ); ?>">
-										<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Move to Pending', 'remember' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Move this accepted application back to pending?', 'remember' ) ); ?>');">
+										<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Move to Pending', 'remember' ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: member name */ __( 'Move application from %s back to pending', 'remember' ), $row_member_name ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Move this accepted application back to pending?', 'remember' ) ); ?>');">
 									</form>
 									<?php if ( current_user_can( 'remember_create_billing' ) ) : ?>
 									<form method="post" action="">

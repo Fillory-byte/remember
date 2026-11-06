@@ -328,7 +328,7 @@ function remember_format_address( $location ) {
 				
 				<table class="form-table">
 					<tr>
-						<th><label for="location_name"><?php esc_html_e( 'Location Name', 'remember' ); ?> <span class="description">(required)</span></label></th>
+						<th><label for="location_name"><?php esc_html_e( 'Location Name', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 						<td><input type="text" id="location_name" name="location_name" class="regular-text" value="<?php echo esc_attr( $editing_location->location_name ); ?>" required></td>
 					</tr>
 					<?php remember_render_location_logo_field( $editing_location->logo_url, $max_image_size ); ?>
@@ -423,7 +423,7 @@ function remember_format_address( $location ) {
 				
 				<table class="form-table">
 					<tr>
-						<th><label for="location_name"><?php esc_html_e( 'Location Name', 'remember' ); ?> <span class="description">(required)</span></label></th>
+						<th><label for="location_name"><?php esc_html_e( 'Location Name', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 						<td><input type="text" id="location_name" name="location_name" class="regular-text" required></td>
 					</tr>
 					<?php remember_render_location_logo_field( '', $max_image_size ); ?>
@@ -515,7 +515,7 @@ function remember_format_address( $location ) {
 								| <a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-locations&edit=' . $location->location_id ) ); ?>"><?php esc_html_e( 'Edit', 'remember' ); ?></a>
 							<?php endif; ?>
 							<?php if ( current_user_can( 'remember_delete_locations' ) ) : ?>
-								| <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-locations&delete=' . $location->location_id ), 'remember_location_action', 'remember_location_nonce' ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this location?', 'remember' ) ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
+								| <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-locations&delete=' . $location->location_id ), 'remember_location_action', 'remember_location_nonce' ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this location?', 'remember' ) ); ?>');" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: location name */ __( 'Delete %s', 'remember' ), $location->location_name ) ); ?>"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
 							<?php endif; ?>
 						</td>
 					</tr>

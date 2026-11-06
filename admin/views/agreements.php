@@ -244,7 +244,7 @@ if ( $editing && ! empty( $revisions ) ) {
 							<td>
 								<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-agreements&edit=' . (int) $a->agreement_id ) ); ?>"><?php esc_html_e( 'Edit', 'remember' ); ?></a>
 								|
-								<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-agreements&delete=' . (int) $a->agreement_id ), 'remember_agreement_delete_' . (int) $a->agreement_id ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Delete this agreement and all unused revisions?', 'remember' ) ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
+								<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-agreements&delete=' . (int) $a->agreement_id ), 'remember_agreement_delete_' . (int) $a->agreement_id ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Delete this agreement and all unused revisions?', 'remember' ) ); ?>');" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: agreement name */ __( 'Delete %s', 'remember' ), $a->title ) ); ?>"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
 							</td>
 						</tr>
 					<?php endforeach; ?>

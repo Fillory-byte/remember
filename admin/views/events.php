@@ -332,8 +332,11 @@ function remember_render_registration_window_fields( $event = null ) {
 	<tr>
 		<th><label for="registration_opens_at"><?php esc_html_e( 'Registration Opens', 'remember' ); ?></label></th>
 		<td>
-			<input type="datetime-local" id="registration_opens_at" name="registration_opens_at" class="regular-text" value="<?php echo esc_attr( $opens ); ?>">
-			<p class="description">
+			<span class="remember-clearable-field">
+				<input type="datetime-local" id="registration_opens_at" name="registration_opens_at" class="regular-text" value="<?php echo esc_attr( $opens ); ?>" aria-describedby="registration_opens_at_hint">
+				<button type="button" class="button button-small remember-clear-field" data-remember-clear-field="registration_opens_at" aria-label="<?php echo esc_attr__( 'Clear registration opens date and time', 'remember' ); ?>"><?php esc_html_e( 'Clear', 'remember' ); ?></button>
+			</span>
+			<p class="description" id="registration_opens_at_hint">
 				<?php
 				echo esc_html(
 					sprintf(
@@ -349,8 +352,11 @@ function remember_render_registration_window_fields( $event = null ) {
 	<tr>
 		<th><label for="registration_closes_at"><?php esc_html_e( 'Registration Closes', 'remember' ); ?></label></th>
 		<td>
-			<input type="datetime-local" id="registration_closes_at" name="registration_closes_at" class="regular-text" value="<?php echo esc_attr( $closes ); ?>">
-			<p class="description"><?php esc_html_e( 'Optional. Leave blank to keep registration open until the event status changes.', 'remember' ); ?></p>
+			<span class="remember-clearable-field">
+				<input type="datetime-local" id="registration_closes_at" name="registration_closes_at" class="regular-text" value="<?php echo esc_attr( $closes ); ?>" aria-describedby="registration_closes_at_hint">
+				<button type="button" class="button button-small remember-clear-field" data-remember-clear-field="registration_closes_at" aria-label="<?php echo esc_attr__( 'Clear registration closes date and time', 'remember' ); ?>"><?php esc_html_e( 'Clear', 'remember' ); ?></button>
+			</span>
+			<p class="description" id="registration_closes_at_hint"><?php esc_html_e( 'Optional. Leave blank to keep registration open until the event status changes.', 'remember' ); ?></p>
 		</td>
 	</tr>
 	<tr>
@@ -410,15 +416,21 @@ function remember_render_invoice_due_fields( $event = null ) {
 	<tr>
 		<th><label for="invoice_due_days"><?php esc_html_e( 'Invoice due after', 'remember' ); ?></label></th>
 		<td>
-			<input type="number" id="invoice_due_days" name="invoice_due_days" class="small-text" min="0" max="<?php echo esc_attr( (string) Remember_Invoice_Due::MAX_DAYS ); ?>" step="1" value="<?php echo esc_attr( $days ); ?>">
-			<?php esc_html_e( 'days from the invoice date', 'remember' ); ?>
+			<span class="remember-clearable-field">
+				<input type="number" id="invoice_due_days" name="invoice_due_days" class="small-text" min="0" max="<?php echo esc_attr( (string) Remember_Invoice_Due::MAX_DAYS ); ?>" step="1" value="<?php echo esc_attr( $days ); ?>" aria-describedby="invoice_due_days_suffix invoice_due_hint">
+				<span id="invoice_due_days_suffix"><?php esc_html_e( 'days from the invoice date', 'remember' ); ?></span>
+				<button type="button" class="button button-small remember-clear-field" data-remember-clear-field="invoice_due_days" aria-label="<?php echo esc_attr__( 'Clear invoice due after days', 'remember' ); ?>"><?php esc_html_e( 'Clear', 'remember' ); ?></button>
+			</span>
 		</td>
 	</tr>
 	<tr>
 		<th><label for="invoice_due_by"><?php esc_html_e( 'Invoice due no later than', 'remember' ); ?></label></th>
 		<td>
-			<input type="date" id="invoice_due_by" name="invoice_due_by" value="<?php echo esc_attr( $by ); ?>">
-			<p class="description"><?php esc_html_e( 'Both optional. With both set, the invoice is due on whichever date comes first. An invoice created after the latest date is due on the day it is created. These dates override any terms set in the billing system.', 'remember' ); ?></p>
+			<span class="remember-clearable-field">
+				<input type="date" id="invoice_due_by" name="invoice_due_by" class="regular-text" value="<?php echo esc_attr( $by ); ?>" aria-describedby="invoice_due_hint">
+				<button type="button" class="button button-small remember-clear-field" data-remember-clear-field="invoice_due_by" aria-label="<?php echo esc_attr__( 'Clear invoice due no later than date', 'remember' ); ?>"><?php esc_html_e( 'Clear', 'remember' ); ?></button>
+			</span>
+			<p class="description" id="invoice_due_hint"><?php esc_html_e( 'Both optional. With both set, the invoice is due on whichever date comes first. An invoice created after the latest date is due on the day it is created. These dates override any terms set in the billing system.', 'remember' ); ?></p>
 			<p class="description">
 				<?php
 				echo esc_html( '' !== $current ? $current : Remember_Invoice_Due::provider_default_text() );
@@ -521,7 +533,8 @@ function remember_save_event_invites( $event_id ) {
  * @return void
  */
 function remember_render_private_invite_fields( $event = null ) {
-	$is_private = $event && ! empty( $event->is_private );
+	$is_private  = $event && ! empty( $event->is_private );
+	$invitees_id = wp_unique_id( 'remember-event-invitees-' );
 	$selected   = array();
 	if ( $event && ! empty( $event->event_id ) ) {
 		$selected = Remember_Event_Invites::member_ids_for_event( (int) $event->event_id );
@@ -547,13 +560,13 @@ function remember_render_private_invite_fields( $event = null ) {
 		<th><label for="is_private"><?php esc_html_e( 'Private Event', 'remember' ); ?></label></th>
 		<td>
 			<label>
-				<input type="checkbox" id="is_private" name="is_private" value="1" class="remember-event-private-toggle" <?php checked( $is_private ); ?>>
+				<input type="checkbox" id="is_private" name="is_private" value="1" class="remember-event-private-toggle" aria-controls="<?php echo esc_attr( $invitees_id ); ?>" <?php checked( $is_private ); ?>>
 				<?php esc_html_e( 'This is a private event (invite only)', 'remember' ); ?>
 			</label>
 			<p class="description"><?php esc_html_e( 'Only invited members see this event. They still complete the usual application.', 'remember' ); ?></p>
 		</td>
 	</tr>
-	<tr class="remember-event-invitees-row"<?php echo $is_private ? '' : ' hidden'; ?>>
+	<tr id="<?php echo esc_attr( $invitees_id ); ?>" class="remember-event-invitees-row"<?php echo $is_private ? '' : ' hidden'; ?>>
 		<th><?php esc_html_e( 'Invitees', 'remember' ); ?></th>
 		<td>
 			<?php if ( empty( $candidates ) ) : ?>
@@ -821,7 +834,7 @@ if ( isset( $_GET['view'] ) ) {
 				
 				<table class="form-table">
 					<tr>
-						<th><label for="event_name"><?php esc_html_e( 'Event Name', 'remember' ); ?> <span class="description">(required)</span></label></th>
+						<th><label for="event_name"><?php esc_html_e( 'Event Name', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 						<td><input type="text" id="event_name" name="event_name" class="regular-text" value="<?php echo esc_attr( $editing_event->event_name ); ?>" required></td>
 					</tr>
 					<tr>
@@ -874,11 +887,11 @@ if ( isset( $_GET['view'] ) ) {
 						</td>
 					</tr>
 					<tr>
-						<th><label for="start_date"><?php esc_html_e( 'Start Date', 'remember' ); ?> <span class="description">(required)</span></label></th>
+						<th><label for="start_date"><?php esc_html_e( 'Start Date', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 						<td><input type="date" id="start_date" name="start_date" class="regular-text" value="<?php echo esc_attr( $editing_event->start_date ); ?>" required></td>
 					</tr>
 					<tr>
-						<th><label for="end_date"><?php esc_html_e( 'End Date', 'remember' ); ?> <span class="description">(required)</span></label></th>
+						<th><label for="end_date"><?php esc_html_e( 'End Date', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 						<td><input type="date" id="end_date" name="end_date" class="regular-text" value="<?php echo esc_attr( $editing_event->end_date ); ?>" required></td>
 					</tr>
 					<?php remember_render_registration_window_fields( $editing_event ); ?>
@@ -1014,7 +1027,7 @@ if ( isset( $_GET['view'] ) ) {
 				
 				<table class="form-table">
 					<tr>
-						<th><label for="event_name"><?php esc_html_e( 'Event Name', 'remember' ); ?> <span class="description">(required)</span></label></th>
+						<th><label for="event_name"><?php esc_html_e( 'Event Name', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 						<td><input type="text" id="event_name" name="event_name" class="regular-text" required></td>
 					</tr>
 					<tr>
@@ -1067,11 +1080,11 @@ if ( isset( $_GET['view'] ) ) {
 						</td>
 					</tr>
 					<tr>
-						<th><label for="start_date"><?php esc_html_e( 'Start Date', 'remember' ); ?> <span class="description">(required)</span></label></th>
+						<th><label for="start_date"><?php esc_html_e( 'Start Date', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 						<td><input type="date" id="start_date" name="start_date" class="regular-text" required></td>
 					</tr>
 					<tr>
-						<th><label for="end_date"><?php esc_html_e( 'End Date', 'remember' ); ?> <span class="description">(required)</span></label></th>
+						<th><label for="end_date"><?php esc_html_e( 'End Date', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 						<td><input type="date" id="end_date" name="end_date" class="regular-text" required></td>
 					</tr>
 					<?php remember_render_registration_window_fields(); ?>
@@ -1235,7 +1248,7 @@ if ( isset( $_GET['view'] ) ) {
 								| <a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-events&edit=' . $event->event_id ) ); ?>"><?php esc_html_e( 'Edit', 'remember' ); ?></a>
 							<?php endif; ?>
 							<?php if ( current_user_can( 'remember_delete_events' ) ) : ?>
-								| <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-events&delete=' . $event->event_id ), 'remember_event_action', 'remember_event_nonce' ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this event?', 'remember' ) ); ?>');"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
+								| <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=remember-events&delete=' . $event->event_id ), 'remember_event_action', 'remember_event_nonce' ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this event?', 'remember' ) ); ?>');" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: event name */ __( 'Delete %s', 'remember' ), $event->event_name ) ); ?>"><?php esc_html_e( 'Delete', 'remember' ); ?></a>
 							<?php endif; ?>
 						</td>
 					</tr>

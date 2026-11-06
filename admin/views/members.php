@@ -1290,11 +1290,11 @@ if ( $view_member_id > 0 ) {
 			
 			<table class="form-table">
 				<tr>
-					<th><label for="username"><?php esc_html_e( 'Username', 'remember' ); ?> <span class="description">(required)</span></label></th>
+					<th><label for="username"><?php esc_html_e( 'Username', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 					<td><input type="text" id="username" name="username" class="regular-text" required></td>
 				</tr>
 				<tr>
-					<th><label for="email"><?php esc_html_e( 'Email', 'remember' ); ?> <span class="description">(required)</span></label></th>
+					<th><label for="email"><?php esc_html_e( 'Email', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 					<td><input type="email" id="email" name="email" class="regular-text" required></td>
 				</tr>
 				<tr>
@@ -1351,7 +1351,7 @@ if ( $view_member_id > 0 ) {
 				<input type="hidden" name="remember_member_action" value="convert_wp_user">
 				<table class="form-table">
 					<tr>
-						<th><label for="wp_user_id"><?php esc_html_e( 'WordPress User', 'remember' ); ?> <span class="description">(required)</span></label></th>
+						<th><label for="wp_user_id"><?php esc_html_e( 'WordPress User', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 						<td>
 							<select id="wp_user_id" name="wp_user_id" class="regular-text" required>
 								<option value=""><?php esc_html_e( '— Select a user —', 'remember' ); ?></option>

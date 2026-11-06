@@ -210,7 +210,8 @@ if ( ! defined( 'WPINC' ) ) {
 						<input type="hidden" name="remember_vetting_action" value="complete">
 						<input type="hidden" name="vetting_id" value="<?php echo esc_attr( $viewing_vetting_id ); ?>">
 						<div class="remember-vetting-quick-actions__row">
-							<select name="decision" class="remember-vetting-quick-actions__select" data-remember-vetting-decision required>
+							<label for="remember-vetting-decision" class="screen-reader-text"><?php esc_html_e( 'Vetting decision', 'remember' ); ?></label>
+							<select id="remember-vetting-decision" name="decision" class="remember-vetting-quick-actions__select" data-remember-vetting-decision required>
 								<option value=""><?php esc_html_e( '-- Decision --', 'remember' ); ?></option>
 								<option value="accepted"><?php esc_html_e( 'Accepted', 'remember' ); ?></option>
 								<option value="rejected"><?php esc_html_e( 'Rejected', 'remember' ); ?></option>

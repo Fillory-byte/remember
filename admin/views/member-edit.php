@@ -175,13 +175,13 @@ if ( $photo_max_bytes < 1 ) {
 	<h3><?php esc_html_e( 'Profile Information', 'remember' ); ?></h3>
 	<table class="form-table">
 		<tr>
-			<th><label for="legal_first_name"><?php esc_html_e( 'Legal First Name', 'remember' ); ?> <span class="description">(required)</span></label></th>
+			<th><label for="legal_first_name"><?php esc_html_e( 'Legal First Name', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 			<td>
 				<input type="text" id="legal_first_name" name="legal_first_name" class="regular-text" value="<?php echo esc_attr( $legal_first_resolved ); ?>" required>
 			</td>
 		</tr>
 		<tr>
-			<th><label for="legal_last_name"><?php esc_html_e( 'Legal Last Name', 'remember' ); ?> <span class="description">(required)</span></label></th>
+			<th><label for="legal_last_name"><?php esc_html_e( 'Legal Last Name', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 			<td>
 				<input type="text" id="legal_last_name" name="legal_last_name" class="regular-text" value="<?php echo esc_attr( $legal_last_resolved ); ?>" required>
 			</td>
@@ -245,7 +245,7 @@ if ( $photo_max_bytes < 1 ) {
 			</td>
 		</tr>
 		<tr>
-			<th><label for="cell_phone"><?php esc_html_e( 'Cell Phone', 'remember' ); ?> <span class="description">(required)</span></label></th>
+			<th><label for="cell_phone"><?php esc_html_e( 'Cell Phone', 'remember' ); ?> <span class="description"><?php esc_html_e( '(required)', 'remember' ); ?></span></label></th>
 			<td>
 				<input type="text" id="cell_phone" name="cell_phone" class="regular-text" value="<?php echo esc_attr( $view_profile ? $view_profile->cell_phone : '' ); ?>" placeholder="+18055551212" required>
 				<p class="description"><?php esc_html_e( 'Include a leading + and country code. Examples: +18055551212 (USA/Canada), +447700900123 (UK).', 'remember' ); ?></p>

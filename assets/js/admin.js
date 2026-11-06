@@ -533,6 +533,12 @@
 		});
 	});
 
+	// Clear buttons beside optional date and number inputs (mobile date pickers have no clear control).
+	$(document).on('click', '[data-remember-clear-field]', function() {
+		var $field = $(this).closest('.remember-clearable-field').find('input').first();
+		$field.val('').trigger('change').trigger('focus');
+	});
+
 	// Add New panels: the trigger stays visible and reports its state, focus moves into the
 	// panel on open and back to its own trigger on close. Panels sharing data-remember-panel-group
 	// are mutually exclusive.

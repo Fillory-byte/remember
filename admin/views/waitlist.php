@@ -186,7 +186,9 @@ function remember_waitlist_sort_link( $column_name, $current_orderby, $current_o
 				</tr>
 			</thead>
 			<tbody>
-				<?php foreach ( $waitlisted_applications as $application ) : ?>
+				<?php foreach ( $waitlisted_applications as $application ) :
+					$row_member_name = $application->display_name ? $application->display_name : __( 'Unknown Member', 'remember' );
+				?>
 					<tr>
 						<td>
 							<strong><?php echo esc_html( $application->display_name ? $application->display_name : __( 'Unknown Member', 'remember' ) ); ?></strong><br>
@@ -209,13 +211,13 @@ function remember_waitlist_sort_link( $column_name, $current_orderby, $current_o
 								<?php wp_nonce_field( 'remember_waitlist_action', 'remember_waitlist_nonce' ); ?>
 								<input type="hidden" name="remember_waitlist_action" value="promote_to_pending">
 								<input type="hidden" name="application_id" value="<?php echo esc_attr( $application->application_id ); ?>">
-								<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Move to Pending', 'remember' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Move this application from waitlist to pending?', 'remember' ) ); ?>');">
+								<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Move to Pending', 'remember' ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: member name */ __( 'Move waitlisted application from %s to pending', 'remember' ), $row_member_name ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Move this application from waitlist to pending?', 'remember' ) ); ?>');">
 							</form>
 							<form method="post" action="" style="display:inline;">
 								<?php wp_nonce_field( 'remember_waitlist_action', 'remember_waitlist_nonce' ); ?>
 								<input type="hidden" name="remember_waitlist_action" value="decline_waitlisted">
 								<input type="hidden" name="application_id" value="<?php echo esc_attr( $application->application_id ); ?>">
-								<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Decline', 'remember' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Decline this waitlisted application?', 'remember' ) ); ?>');">
+								<input type="submit" class="button button-small" value="<?php esc_attr_e( 'Decline', 'remember' ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: member name */ __( 'Decline waitlisted application from %s', 'remember' ), $row_member_name ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Decline this waitlisted application?', 'remember' ) ); ?>');">
 							</form>
 						</td>
 					</tr>

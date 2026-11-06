@@ -3954,3 +3954,21 @@
 .remember-tone-muted {
 	color: #646970;
 }
+
+/* Optional date/number input with a Clear button beside it (event form). */
+.remember-clearable-field {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 8px;
+}
+
+@media (max-width: 782px) {
+	.remember-clearable-field input[type="date"],
+	.remember-clearable-field input[type="datetime-local"] {
+		flex: 1 1 12em;
+		min-width: 0;
+		max-width: 100%;
+		width: auto;
+	}
+}
