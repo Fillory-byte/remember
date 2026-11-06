@@ -3971,4 +3971,10 @@
 		max-width: 100%;
 		width: auto;
 	}
+
+	/* Let the "days from the invoice date" suffix wrap so Clear stays on the input's row. */
+	.remember-clearable-field > span {
+		flex: 1 1 8em;
+		min-width: 0;
+	}
 }
