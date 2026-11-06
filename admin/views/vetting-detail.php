@@ -130,7 +130,8 @@ if ( ! defined( 'WPINC' ) ) {
 						<input type="hidden" name="remember_vetting_action" value="assign">
 						<input type="hidden" name="vetting_id" value="<?php echo esc_attr( $viewing_vetting_id ); ?>">
 						<div class="remember-vetting-quick-actions__row">
-							<select name="primary_vetter_id" class="remember-vetting-quick-actions__select" required>
+							<label for="remember-vetting-assign-vetter" class="screen-reader-text"><?php esc_html_e( 'Assign vetter', 'remember' ); ?></label>
+							<select id="remember-vetting-assign-vetter" name="primary_vetter_id" class="remember-vetting-quick-actions__select" required>
 								<option value=""><?php esc_html_e( '-- Assign Vetter --', 'remember' ); ?></option>
 								<?php foreach ( $vetters as $v ) : ?>
 									<option value="<?php echo esc_attr( $v->ID ); ?>" <?php selected( $viewing_vetting->primary_vetter_id, $v->ID ); ?>>
