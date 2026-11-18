@@ -603,13 +603,10 @@ class Remember_Backup {
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-access-log.php';
 		$start        = Remember_Logger::start_timer();
 		$member_count = self::member_count();
-		Remember_Logger::info(
-			'Full plugin backup downloaded',
-			array(
-				'user_id' => get_current_user_id(),
-				'members' => $member_count,
-			)
-		);
+
+		// The access row is written before streaming: a download that is cut off (the browser closes
+		// the connection, or PHP stops) ends the script before any code after the stream runs, and
+		// part of the data has already left the site by then.
 		Remember_Access_Log::record( 0, 'backup', __( 'Full backup', 'remember' ), $member_count );
 
 		$filename = 'remember-backup-' . gmdate( 'Y-m-d-H-i-s' ) . '.json';
@@ -621,6 +618,16 @@ class Remember_Backup {
 		$ok  = self::stream_document( $out );
 		if ( is_resource( $out ) ) {
 			fclose( $out );
+		}
+		// "Downloaded" is logged only once the whole file went out; a failed stream has its own Error.
+		if ( $ok ) {
+			Remember_Logger::info(
+				'Full plugin backup downloaded',
+				array(
+					'user_id' => get_current_user_id(),
+					'members' => $member_count,
+				)
+			);
 		}
 		Remember_Logger::debug(
 			'Full plugin backup download finished',

@@ -823,6 +823,13 @@ class Remember_Import_Export {
 						'Member import rejected status',
 						array(
 							'row'    => $row_number,
+							'reason' => 'status not allowed',
+						)
+					);
+					Remember_Logger::debug(
+						'Member import rejected status value',
+						array(
+							'row'    => $row_number,
 							'status' => $status,
 						)
 					);
