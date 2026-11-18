@@ -100,7 +100,7 @@ class Remember_Access_Log {
 	 * @param string $what      health|emergency|both|backup.
 	 * @param string $context   Screen or export name.
 	 * @param int    $row_count Rows in a bulk export, or members in a full backup. 0 when this is one member.
-	 * @return void
+	 * @return bool True when the row was written. False when it was not (unknown type, no signed-in user, or a failed insert).
 	 */
 	public static function record( $member_id, $what, $context, $row_count = 0 ) {
 		$what = sanitize_key( (string) $what );
@@ -112,7 +112,7 @@ class Remember_Access_Log {
 					'member_id' => absint( $member_id ),
 				)
 			);
-			return;
+			return false;
 		}
 		$user_id = get_current_user_id();
 		if ( $user_id < 1 ) {
@@ -123,7 +123,7 @@ class Remember_Access_Log {
 					'member_id' => absint( $member_id ),
 				)
 			);
-			return;
+			return false;
 		}
 
 		global $wpdb;
@@ -151,7 +151,7 @@ class Remember_Access_Log {
 					'error'     => $wpdb->last_error,
 				)
 			);
-			return;
+			return false;
 		}
 		Remember_Logger::debug(
 			'Sensitive access recorded',
@@ -163,6 +163,7 @@ class Remember_Access_Log {
 				'row_count' => absint( $row_count ),
 			)
 		);
+		return true;
 	}
 
 	/**
