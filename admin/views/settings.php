@@ -12,6 +12,7 @@ if ( ! defined( 'WPINC' ) ) {
 }
 
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-logger.php';
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-fields.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-notification-setting.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/integrations/class-remember-quickbooks-oauth.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/integrations/class-remember-quickbooks-api.php';
@@ -458,7 +459,10 @@ if ( isset( $_POST['remember_settings_action'] ) && check_admin_referer( 'rememb
 		}
 
 		// Require social media (or None) at registration (default on).
-		$options['require_social_media'] = ! empty( $_POST['require_social_media'] ) ? 1 : 0;
+		// Only the main settings form has this checkbox; other forms post the same action and must not reset it.
+		if ( isset( $_POST['remember_main_settings'] ) ) {
+			$options['require_social_media'] = ! empty( $_POST['require_social_media'] ) ? 1 : 0;
+		}
 
 		// Email provider invoice to customer when an application is accepted (default on).
 		$options['email_invoice_on_accept'] = ! empty( $_POST['email_invoice_on_accept'] ) ? 1 : 0;
@@ -1040,6 +1044,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 
 	<form id="remember-main-settings" method="post" action="">
 		<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
+		<input type="hidden" name="remember_main_settings" value="1">
 		<input type="hidden" name="remember_settings_action" value="update">
 		
 		<h2 class="nav-tab-wrapper">
