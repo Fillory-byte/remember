@@ -83,6 +83,24 @@ class Remember_Registration_Verification {
 	}
 
 	/**
+	 * Mark a new account as unconfirmed without emailing anything.
+	 *
+	 * Call this straight after the account is created so the login block applies
+	 * before any slower registration work runs.
+	 *
+	 * @param int $user_id User ID.
+	 * @return bool Whether the account is now marked as unconfirmed.
+	 */
+	public static function mark_pending( $user_id ) {
+		$user_id = absint( $user_id );
+		$now     = time();
+		if ( (int) get_user_meta( $user_id, self::META_SINCE, true ) > 0 ) {
+			return true;
+		}
+		return (bool) update_user_meta( $user_id, self::META_SINCE, $now );
+	}
+
+	/**
 	 * Mark a new account as unconfirmed and email the link.
 	 *
 	 * @param int $user_id User ID.
@@ -90,8 +108,7 @@ class Remember_Registration_Verification {
 	 */
 	public static function start( $user_id ) {
 		$user_id = absint( $user_id );
-		$now     = time();
-		if ( (int) get_user_meta( $user_id, self::META_SINCE, true ) !== $now && ! update_user_meta( $user_id, self::META_SINCE, $now ) ) {
+		if ( ! self::mark_pending( $user_id ) ) {
 			Remember_Logger::error(
 				'New registration could not be marked as unconfirmed; the account can log in without confirming its email',
 				array( 'user_id' => $user_id )
