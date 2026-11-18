@@ -156,7 +156,9 @@ if ( isset( $_POST['remember_role_action'] ) && check_admin_referer( 'remember_r
 			}
 			// Moving a role out of the event type lifts the event-role capability limit,
 			// so it needs the same permission as the Event Administration flag.
+			$type_change_denied = false;
 			if ( ( 'event' === $existing_role->role_type || ! empty( $existing_role->is_event_role ) ) && 'event' !== $posted_type && ! Remember_Capabilities::current_user_can_flag_event_admin_roles() ) {
+				$type_change_denied = true;
 				Remember_Logger::warning(
 					'Role type change ignored: user may not move an event role out of the event type',
 					array(
@@ -171,7 +173,10 @@ if ( isset( $_POST['remember_role_action'] ) && check_admin_referer( 'remember_r
 			$data = array(
 				'role_name'        => $role_name,
 				'role_type'        => Remember_Capabilities::is_protected_system_role( $existing_role ) ? 'system' : $posted_type,
-				'is_event_role'    => ( 'event' === $posted_type && ! Remember_Capabilities::is_protected_system_role( $existing_role ) ) ? 1 : 0,
+				// A denied type change keeps the stored event-role flag, so the capability limit stays on.
+				'is_event_role'    => $type_change_denied
+					? (int) ! empty( $existing_role->is_event_role )
+					: ( ( 'event' === $posted_type && ! Remember_Capabilities::is_protected_system_role( $existing_role ) ) ? 1 : 0 ),
 				'show_in_frontend' => isset( $_POST['show_in_frontend'] ) && $_POST['show_in_frontend'] ? 1 : 0,
 				'description'      => isset( $_POST['description'] ) ? sanitize_textarea_field( wp_unslash( $_POST['description'] ) ) : '',
 			);
