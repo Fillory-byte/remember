@@ -325,6 +325,8 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 		
 		global $wpdb;
 		
+		$remember_user_write_failed = false;
+
 		// Update WordPress user display_name and nickname if provided
 		if ( isset( $_POST['display_name'] ) || isset( $_POST['nickname'] ) || isset( $_POST['user_email'] ) ) {
 			$user_update_data = array( 'ID' => $member_id );
@@ -362,6 +364,7 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 					);
 				}
 			} else {
+				$remember_user_write_failed = true;
 				Remember_Logger::error( 'Failed to update WordPress user', array( 'user_id' => $member_id, 'error' => $update_result->get_error_message() ) );
 			}
 		}
@@ -632,10 +635,14 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 				// Sync capabilities to WordPress user
 				Remember_Capabilities::sync_user_capabilities_from_roles( $member_id );
 				
-				Remember_Logger::info( 'Member roles updated', array( 'member_id' => $member_id, 'roles' => $selected_role_ids ) );
+				if ( ! isset( $remember_failed_writes['roles'] ) ) {
+					Remember_Logger::info( 'Member roles updated', array( 'member_id' => $member_id, 'roles' => $selected_role_ids ) );
+				}
 			}
-			
-			Remember_Profile_Questions::save_for_member( $member_id, $pq_answers );
+
+			if ( false === Remember_Profile_Questions::save_for_member( $member_id, $pq_answers ) ) {
+				$remember_failed_writes['profile_questions'] = $wpdb->last_error;
+			}
 			if ( ! empty( $remember_saved_topics ) ) {
 				require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-access-log.php';
 				Remember_Access_Log::record( $member_id, Remember_Access_Log::what_from_topics( $remember_saved_topics ), __( 'Member edit saved', 'remember' ) );
@@ -650,10 +657,15 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 					)
 				);
 			}
-			Remember_Logger::info( 'Member profile updated', array( 'member_id' => $member_id, 'sensitive_topics' => $remember_saved_topics ) );
-			do_action( 'remember_member_profile_saved', $member_id );
-			// Set success flag and clear edit mode (no redirect to avoid headers already sent)
-			$profile_update_success = true;
+			if ( ! empty( $remember_failed_writes ) || $remember_user_write_failed ) {
+				// Something was not saved: no success notice, no "updated" log line, no accounting sync.
+				$profile_update_failed = true;
+			} else {
+				Remember_Logger::info( 'Member profile updated', array( 'member_id' => $member_id, 'sensitive_topics' => $remember_saved_topics ) );
+				do_action( 'remember_member_profile_saved', $member_id );
+				$profile_update_success = true;
+			}
+			// Clear edit mode (no redirect to avoid headers already sent)
 			$view_member_id = $member_id; // Ensure we're viewing this member
 			unset( $_GET['edit'] ); // Clear edit flag to show view mode
 		} else {
@@ -1352,6 +1364,10 @@ if ( $view_member_id > 0 ) {
 	
 	<?php if ( isset( $profile_update_success ) && $profile_update_success ) : ?>
 		<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Member profile updated successfully.', 'remember' ); ?></p></div>
+	<?php endif; ?>
+
+	<?php if ( isset( $profile_update_failed ) && $profile_update_failed ) : ?>
+		<div class="notice notice-error is-dismissible"><p><?php esc_html_e( 'Some of this member\'s changes could not be saved. Please check the profile and try again. Details are in the plugin log.', 'remember' ); ?></p></div>
 	<?php endif; ?>
 
 	<?php if ( $view_member_id > 0 ) : ?>
