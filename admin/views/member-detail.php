@@ -386,16 +386,7 @@ $remember_print_sensitive = ! empty( Remember_Sensitive_Profile::print_topics() 
 					<tr>
 						<th><?php esc_html_e( 'Social Media', 'remember' ); ?></th>
 							<td>
-								<?php if ( ! empty( $view_social_media ) ) : ?>
-									<?php
-									require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-platform-handles.php';
-									foreach ( $view_social_media as $social ) :
-										?>
-										<div class="remember-social-line"><?php echo esc_html( $social->platform_name ); ?>: <?php echo Remember_Platform_Handles::social_html( $social->platform_id, $social->handle ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- social_html() escapes the name and address. ?></div>
-									<?php endforeach; ?>
-								<?php else : ?>
-									<span class="description"><?php esc_html_e( 'None provided', 'remember' ); ?></span>
-								<?php endif; ?>
+								<?php echo Remember_Profile_Fields::admin_social_html( $view_member_id ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the helper. ?>
 							</td>
 						</tr>
 						<tr>

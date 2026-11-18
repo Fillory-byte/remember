@@ -507,6 +507,11 @@ class Remember_Public {
 
 		$profile_inserted = $wpdb->insert( $wpdb->prefix . 'remember_member_profiles', $profile_row );
 
+		// Set separately so a site whose schema update has not run yet (it runs on the next admin load) can still register members.
+		if ( $profile_inserted && 1 === Remember_Profile_Fields::social_media_none_for_storage() ) {
+			$wpdb->update( $wpdb->prefix . 'remember_member_profiles', array( 'social_media_none' => 1 ), array( 'member_id' => $user_id ) );
+		}
+
 		if ( ! $profile_inserted ) {
 			Remember_Logger::error(
 				'Public member registration: profile insert failed',

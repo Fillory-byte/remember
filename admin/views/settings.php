@@ -457,6 +457,9 @@ if ( isset( $_POST['remember_settings_action'] ) && check_admin_referer( 'rememb
 			}
 		}
 
+		// Require social media (or None) at registration (default on).
+		$options['require_social_media'] = ! empty( $_POST['require_social_media'] ) ? 1 : 0;
+
 		// Email provider invoice to customer when an application is accepted (default on).
 		$options['email_invoice_on_accept'] = ! empty( $_POST['email_invoice_on_accept'] ) ? 1 : 0;
 
@@ -1115,6 +1118,20 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						</fieldset>
 						<p class="description">
 							<?php esc_html_e( 'Only one accounting provider is active at a time. Switching does not delete historical invoice IDs on payment rows (QuickBooks and Xero columns can coexist). Finish open billing cycles before switching; new invoices use only the selected provider.', 'remember' ); ?>
+						</p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">
+						<?php esc_html_e( 'Require social media', 'remember' ); ?>
+					</th>
+					<td>
+						<label for="require_social_media">
+							<input type="checkbox" id="require_social_media" name="require_social_media" value="1" <?php checked( Remember_Profile_Fields::social_media_required_enabled() ); ?>>
+							<?php esc_html_e( 'New members must add a social media profile or choose None when they register', 'remember' ); ?>
+						</label>
+						<p class="description">
+							<?php esc_html_e( 'Turn this off if your site does not vet by social media. Existing members are never affected, and admins can always see what a member entered.', 'remember' ); ?>
 						</p>
 					</td>
 				</tr>

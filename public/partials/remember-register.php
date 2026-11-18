@@ -336,8 +336,9 @@ if ( '' === $remember_reg_im_type ) {
 			</div>
 
 			<?php if ( ! empty( $social_platforms ) ) : ?>
-				<h3 class="remember-register-section-title"><?php esc_html_e( 'Social Media', 'remember' ); ?> <span class="required">*</span></h3>
-				<p class="remember-register-section-help"><?php esc_html_e( 'Required. Add at least one profile (up to 3), or choose None if you do not use social media. Staff use this when reviewing applications.', 'remember' ); ?></p>
+				<?php $remember_social_required = Remember_Profile_Fields::social_media_required_enabled(); ?>
+				<h3 class="remember-register-section-title"><?php esc_html_e( 'Social Media', 'remember' ); ?><?php if ( $remember_social_required ) : ?> <span class="required">*</span><?php endif; ?></h3>
+				<p class="remember-register-section-help"><?php echo esc_html( $remember_social_required ? __( 'Required. Add at least one profile (up to 3), or choose None if you do not use social media. Staff use this when reviewing applications.', 'remember' ) : __( 'Optional. Add up to 3 profiles, or choose None if you do not use social media. Staff use this when reviewing applications.', 'remember' ) ); ?></p>
 				<div class="<?php echo esc_attr( Remember_Profile_Fields::group_class( 'social_media', $remember_invalid_fields, 'remember-register-checkboxes remember-register-checkboxes--single' ) ); ?>"<?php echo $remember_ifa( 'social_media' ); ?>>
 					<label class="remember-checkbox-label">
 						<input type="checkbox" name="social_media_none" value="1" <?php checked( Remember_Profile_Fields::request_social_none() ); ?>>

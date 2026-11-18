@@ -1905,6 +1905,7 @@
 }
 
 .remember-social-line {
+	display: block;
 	overflow-wrap: anywhere;
 }
 
