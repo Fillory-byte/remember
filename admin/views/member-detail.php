@@ -384,7 +384,22 @@ $remember_print_sensitive = ! empty( Remember_Sensitive_Profile::print_topics() 
 						</td>
 					</tr>
 					<tr>
-						<th><?php esc_html_e( 'Clothing Sizes', 'remember' ); ?></th>
+						<th><?php esc_html_e( 'Social Media', 'remember' ); ?></th>
+							<td>
+								<?php if ( ! empty( $view_social_media ) ) : ?>
+									<?php
+									require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-platform-handles.php';
+									foreach ( $view_social_media as $social ) :
+										?>
+										<div><?php echo esc_html( $social->platform_name ); ?>: <?php echo Remember_Platform_Handles::social_html( $social->platform_id, $social->handle ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- social_html() escapes the name and address. ?></div>
+									<?php endforeach; ?>
+								<?php else : ?>
+									<span class="description"><?php esc_html_e( 'None provided', 'remember' ); ?></span>
+								<?php endif; ?>
+							</td>
+						</tr>
+						<tr>
+							<th><?php esc_html_e( 'Clothing Sizes', 'remember' ); ?></th>
 						<td>
 							<?php
 							require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-clothing-sizes.php';

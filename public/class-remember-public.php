@@ -280,6 +280,11 @@ class Remember_Public {
 			$invalid_fields[] = 'allergy_reaction';
 			$banner_labels[]  = Remember_Profile_Fields::labels()['allergy_reaction'];
 		}
+		if ( Remember_Profile_Fields::social_media_is_missing() ) {
+			$invalid_fields[]             = 'social_media';
+			$banner_labels[]              = Remember_Profile_Fields::labels()['social_media'];
+			$field_messages['social_media'] = __( 'Add at least one social media profile, or choose None.', 'remember' );
+		}
 		if ( Remember_Profile_Fields::interests_is_over_limit( $profile_data['interests'] ) ) {
 			$invalid_fields[] = 'interests';
 			$field_messages['interests'] = Remember_Profile_Fields::interests_too_long_message();

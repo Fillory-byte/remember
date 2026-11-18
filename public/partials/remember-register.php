@@ -336,8 +336,15 @@ if ( '' === $remember_reg_im_type ) {
 			</div>
 
 			<?php if ( ! empty( $social_platforms ) ) : ?>
-				<h3 class="remember-register-section-title"><?php esc_html_e( 'Social Media', 'remember' ); ?></h3>
-				<p class="remember-register-section-help"><?php esc_html_e( 'Optional. Up to 3 profiles.', 'remember' ); ?></p>
+				<h3 class="remember-register-section-title"><?php esc_html_e( 'Social Media', 'remember' ); ?> <span class="required">*</span></h3>
+				<p class="remember-register-section-help"><?php esc_html_e( 'Required. Add at least one profile (up to 3), or choose None if you do not use social media. Staff use this when reviewing applications.', 'remember' ); ?></p>
+				<div class="<?php echo esc_attr( Remember_Profile_Fields::group_class( 'social_media', $remember_invalid_fields, 'remember-register-checkboxes' ) ); ?>"<?php echo $remember_ifa( 'social_media' ); ?>>
+					<label class="remember-checkbox-label">
+						<input type="checkbox" name="social_media_none" value="1" <?php checked( Remember_Profile_Fields::request_social_none() ); ?>>
+						<span><?php esc_html_e( 'None, I do not use social media', 'remember' ); ?></span>
+					</label>
+				</div>
+				<?php Remember_Profile_Fields::render_field_error( 'social_media', $remember_invalid_fields, $remember_field_messages ); ?>
 				<?php for ( $i = 0; $i < 3; $i++ ) : ?>
 					<div class="remember-register-row">
 						<label for="remember_reg_social_platform_<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_html( sprintf( /* translators: %d: slot number */ __( 'Platform %d', 'remember' ), $i + 1 ) ); ?></label>

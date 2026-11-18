@@ -89,6 +89,7 @@ class Remember_Profile_Fields {
 			'new_password'                   => __( 'New password', 'remember' ),
 			'new_password_confirm'           => __( 'Confirm new password', 'remember' ),
 			'interests'                      => __( 'Interests', 'remember' ),
+			'social_media'                   => __( 'Social Media', 'remember' ),
 			'photo_file'                     => __( 'Profile Photo', 'remember' ),
 		);
 	}
@@ -268,6 +269,41 @@ class Remember_Profile_Fields {
 			}
 		}
 		return $ids;
+	}
+
+	/**
+	 * Whether the member said they have no social media (the "None" choice).
+	 *
+	 * @return bool
+	 */
+	public static function request_social_none() {
+		return ! empty( $_POST['social_media_none'] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- caller verifies.
+	}
+
+	/**
+	 * Whether registration still needs a social media answer.
+	 *
+	 * Satisfied by at least one slot with both a platform and a name, or by the
+	 * None choice. Skipped when no social platform is active (nothing to pick).
+	 *
+	 * @return bool
+	 */
+	public static function social_media_is_missing() {
+		global $wpdb;
+
+		$active = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}remember_social_media_platforms WHERE is_active = 1" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from prefix.
+		if ( $active < 1 ) {
+			return false;
+		}
+		if ( self::request_social_none() ) {
+			return false;
+		}
+		foreach ( self::social_slots_from_request() as $slot ) {
+			if ( (int) $slot->platform_id > 0 && '' !== trim( (string) $slot->handle ) ) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**

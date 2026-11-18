@@ -67,7 +67,30 @@ if ( ! defined( 'WPINC' ) ) {
 							<?php endif; ?>
 						</p>
 					<?php endif; ?>
-					<div class="remember-vetting-detail-meta">
+					<?php
+						global $wpdb;
+						require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-platform-handles.php';
+						$vetting_social = $wpdb->get_results( $wpdb->prepare(
+							"SELECT msm.platform_id, msm.handle, smp.platform_name
+							FROM {$wpdb->prefix}remember_member_social_media msm
+							JOIN {$wpdb->prefix}remember_social_media_platforms smp ON msm.platform_id = smp.platform_id
+							WHERE msm.member_id = %d
+							ORDER BY smp.sort_order ASC, smp.platform_name ASC",
+							$viewing_vetting->member_id
+						) );
+						?>
+						<p class="remember-vetting-detail-social">
+							<strong><?php esc_html_e( 'Social media:', 'remember' ); ?></strong>
+							<?php if ( ! empty( $vetting_social ) ) : ?>
+								<?php foreach ( $vetting_social as $i => $social ) : ?>
+									<?php echo $i > 0 ? ' &middot; ' : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed markup. ?>
+									<?php echo esc_html( $social->platform_name ); ?>: <?php echo Remember_Platform_Handles::social_html( $social->platform_id, $social->handle ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- social_html() escapes the name and address. ?>
+								<?php endforeach; ?>
+							<?php else : ?>
+								<span class="description"><?php esc_html_e( 'None provided', 'remember' ); ?></span>
+							<?php endif; ?>
+						</p>
+						<div class="remember-vetting-detail-meta">
 						<?php if ( $viewing_vetter ) : ?>
 							<span><strong><?php esc_html_e( 'Vetter:', 'remember' ); ?></strong> <?php echo esc_html( $viewing_vetter->display_name ); ?></span>
 						<?php endif; ?>
