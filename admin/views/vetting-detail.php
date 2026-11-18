@@ -82,9 +82,8 @@ if ( ! defined( 'WPINC' ) ) {
 						<p class="remember-vetting-detail-social">
 							<strong><?php esc_html_e( 'Social media:', 'remember' ); ?></strong>
 							<?php if ( ! empty( $vetting_social ) ) : ?>
-								<?php foreach ( $vetting_social as $i => $social ) : ?>
-									<?php echo $i > 0 ? ' &middot; ' : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed markup. ?>
-									<?php echo esc_html( $social->platform_name ); ?>: <?php echo Remember_Platform_Handles::social_html( $social->platform_id, $social->handle ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- social_html() escapes the name and address. ?>
+								<?php foreach ( $vetting_social as $social ) : ?>
+									<span class="remember-vetting-detail-social__item"><?php echo esc_html( $social->platform_name ); ?>: <?php echo Remember_Platform_Handles::social_html( $social->platform_id, $social->handle ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- social_html() escapes the name and address. ?></span>
 								<?php endforeach; ?>
 							<?php else : ?>
 								<span class="description"><?php esc_html_e( 'None provided', 'remember' ); ?></span>

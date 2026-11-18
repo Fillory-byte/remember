@@ -1895,6 +1895,19 @@
 	line-height: 1.6;
 }
 
+.remember-vetting-detail-social {
+	margin: 6px 0 0;
+	overflow-wrap: anywhere;
+}
+
+.remember-vetting-detail-social__item {
+	display: block;
+}
+
+.remember-social-line {
+	overflow-wrap: anywhere;
+}
+
 .remember-vetting-detail-meta {
 	display: flex;
 	flex-wrap: wrap;
