@@ -79,10 +79,15 @@ if ( isset( $_POST['remember_role_action'] ) && check_admin_referer( 'remember_r
 			wp_die( __( 'You do not have sufficient permissions to perform this action.', 'remember' ), __( 'Access Denied', 'remember' ), array( 'response' => 403 ) );
 		}
 		
+		// Allow-list the type; anything else falls back to the restricted 'event' type.
+		$new_role_type = isset( $_POST['role_type'] ) ? sanitize_text_field( wp_unslash( $_POST['role_type'] ) ) : 'event';
+		if ( ! in_array( $new_role_type, array( 'event', 'system' ), true ) ) {
+			$new_role_type = 'event';
+		}
 		$data = array(
 			'role_name'     => sanitize_text_field( wp_unslash( $_POST['role_name'] ) ),
-			'role_type'     => sanitize_text_field( $_POST['role_type'] ),
-			'is_event_role' => ( 'event' === $_POST['role_type'] ) ? 1 : 0,
+			'role_type'     => $new_role_type,
+			'is_event_role' => ( 'event' === $new_role_type ) ? 1 : 0,
 			'description'   => isset( $_POST['description'] ) ? sanitize_textarea_field( wp_unslash( $_POST['description'] ) ) : '',
 		);
 		if ( ! empty( $_POST['is_event_admin'] ) ) {
@@ -143,7 +148,24 @@ if ( isset( $_POST['remember_role_action'] ) && check_admin_referer( 'remember_r
 			// The protected role stays a system role whatever is posted.
 			$posted_type = Remember_Capabilities::is_protected_system_role( $existing_role ) || ! isset( $_POST['role_type'] )
 				? $existing_role->role_type
-				: sanitize_text_field( $_POST['role_type'] );
+				: sanitize_text_field( wp_unslash( $_POST['role_type'] ) );
+
+			// Allow-list the type; an invalid value keeps the stored type.
+			if ( ! in_array( $posted_type, array( 'event', 'system' ), true ) ) {
+				$posted_type = $existing_role->role_type;
+			}
+			// Moving a role out of the event type lifts the event-role capability limit,
+			// so it needs the same permission as the Event Administration flag.
+			if ( ( 'event' === $existing_role->role_type || ! empty( $existing_role->is_event_role ) ) && 'event' !== $posted_type && ! Remember_Capabilities::current_user_can_flag_event_admin_roles() ) {
+				Remember_Logger::warning(
+					'Role type change ignored: user may not move an event role out of the event type',
+					array(
+						'role_id' => $role_id,
+						'user_id' => get_current_user_id(),
+					)
+				);
+				$posted_type = $existing_role->role_type;
+			}
 
 			// Update role details
 			$data = array(
