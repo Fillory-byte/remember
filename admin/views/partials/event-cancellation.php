@@ -15,6 +15,7 @@ if ( ! defined( 'WPINC' ) ) {
 
 require_once plugin_dir_path( __FILE__ ) . '../../../includes/utilities/class-remember-event-cancellation.php';
 require_once plugin_dir_path( __FILE__ ) . '../../../includes/utilities/class-remember-ticket-renderer.php';
+require_once plugin_dir_path( __FILE__ ) . '../../../includes/utilities/class-remember-billing-template.php';
 
 $cancel_event_id   = (int) $viewing_event->event_id;
 $cancel_attendees  = Remember_Event_Cancellation::attendees( $cancel_event_id );
@@ -186,18 +187,36 @@ if ( ! function_exists( 'remember_cancellation_button' ) ) {
 									?>
 								</span>
 								<span class="description"><?php echo esc_html( Remember_Ticket_Renderer::payment_status_label( (string) $row->payment_status ) ); ?></span>
-								<?php $row_invoice = Remember_Event_Cancellation::invoice_number_for( $row ); ?>
+								<?php
+								$row_invoice      = Remember_Event_Cancellation::invoice_number_for( $row );
+								$row_invoice_link = Remember_Billing_Template::get_payment_invoice_link_data( $row, 'staff' );
+								?>
 								<?php if ( '' !== $row_invoice ) : ?>
 									<span class="description">
-										<?php
-										echo esc_html(
-											sprintf(
-												/* translators: %s: invoice number */
-												__( 'Invoice %s', 'remember' ),
-												$row_invoice
-											)
-										);
-										?>
+										<?php if ( '' !== $row_invoice_link['url'] ) : ?>
+											<?php
+											printf(
+												/* translators: %s: invoice number, linked to the invoice in the billing system */
+												esc_html__( 'Invoice %s', 'remember' ),
+												sprintf(
+													'<a href="%1$s" target="_blank" rel="noopener noreferrer" title="%2$s">%3$s</a>',
+													esc_url( $row_invoice_link['url'] ),
+													esc_attr( 'xero' === $row_invoice_link['provider'] ? __( 'Open invoice in Xero', 'remember' ) : __( 'Open invoice in QuickBooks', 'remember' ) ),
+													esc_html( $row_invoice )
+												)
+											);
+											?>
+										<?php else : ?>
+											<?php
+											echo esc_html(
+												sprintf(
+													/* translators: %s: invoice number */
+													__( 'Invoice %s', 'remember' ),
+													$row_invoice
+												)
+											);
+											?>
+										<?php endif; ?>
 									</span>
 								<?php endif; ?>
 							<?php endif; ?>
