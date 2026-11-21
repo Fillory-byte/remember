@@ -145,6 +145,13 @@ $is_multi_day = $viewing_event->start_date !== $viewing_event->end_date;
 		</div>
 	</div>
 
+	<?php
+	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-event-cancellation.php';
+	if ( Remember_Event_Cancellation::is_cancelled( $viewing_event ) && ( current_user_can( 'remember_read_billing' ) || current_user_can( 'remember_update_applications' ) ) ) {
+		include __DIR__ . '/partials/event-cancellation.php';
+	}
+	?>
+
 	<!-- Applications Section -->
 	<div class="remember-event-applications" style="background: #fff; border: 1px solid #ccd0d4; border-radius: 4px; padding: 20px; margin-top: 20px;">
 		<h3 style="margin-top: 0;">

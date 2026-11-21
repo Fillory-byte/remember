@@ -54,6 +54,13 @@ $status_tones = array(
 							<?php endif; ?>
 						</p>
 					<?php endif; ?>
+					<?php if ( $viewing_user ) : ?>
+						<?php require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-fields.php'; ?>
+						<p class="remember-vetting-detail-social" style="margin: 5px 0;">
+							<strong><?php esc_html_e( 'Social media:', 'remember' ); ?></strong>
+							<?php echo Remember_Profile_Fields::admin_social_html( $viewing_application->member_id ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the helper. ?>
+						</p>
+					<?php endif; ?>
 					<?php if ( $viewing_event ) : ?>
 						<p style="margin: 5px 0;">
 							<strong><?php esc_html_e( 'Event:', 'remember' ); ?></strong>

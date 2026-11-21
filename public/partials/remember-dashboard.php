@@ -24,6 +24,7 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-payment.
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-billing-template.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-billing-messaging.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-import-export.php';
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-event-cancellation.php';
 
 $user = wp_get_current_user();
 $member_model = new Remember_Member();
@@ -197,6 +198,15 @@ if ( isset( $_POST['remember_member_application_action'] ) && check_admin_refere
 			echo '<div class="remember-notice remember-success" role="status"><p>' . esc_html__( 'Application updated. Your profile currency confirmation was recorded.', 'remember' ) . '</p></div>';
 			}
 			}
+		} elseif ( 'withdraw_application' === $member_action && 'accepted' === $application->status && Remember_Event_Cancellation::is_cancelled( $event_model->get( $application->event_id ) ) ) {
+			Remember_Logger::debug(
+				'Member withdrawal refused: the event is cancelled',
+				array(
+					'application_id' => $application_id,
+					'member_id'      => (int) $member_id_for_queries,
+				)
+			);
+			echo '<div class="remember-notice remember-error" role="alert"><p>' . esc_html__( 'This event was cancelled, so there is nothing to withdraw from. Your ticket shows the cancellation.', 'remember' ) . '</p></div>';
 		} elseif ( 'withdraw_application' === $member_action && 'accepted' === $application->status ) {
 			require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-billing-unwind.php';
 			$updated = $application_model->update_status( $application_id, 'cancelled', get_current_user_id() );
@@ -406,7 +416,11 @@ foreach ( $selected_application_addons as $selected_addon_row ) {
 		<div class="remember-dashboard-card-compact" style="margin-bottom: 20px;">
 			<h3><?php esc_html_e( 'Application Detail', 'remember' ); ?> #<?php echo esc_html( $selected_application->application_id ); ?></h3>
 			<p><strong><?php esc_html_e( 'Event:', 'remember' ); ?></strong> <?php echo esc_html( $selected_event ? $selected_event->event_name : __( 'Unknown Event', 'remember' ) ); ?></p>
-			<p><strong><?php esc_html_e( 'Status:', 'remember' ); ?></strong> <?php echo esc_html( $app_status_labels[ $selected_application->status ] ?? $selected_application->status ); ?></p>
+			<?php $selected_cancelled = Remember_Event_Cancellation::covers( $selected_application, $selected_event ); ?>
+			<p><strong><?php esc_html_e( 'Status:', 'remember' ); ?></strong> <?php echo esc_html( $selected_cancelled ? __( 'Event cancelled', 'remember' ) : ( $app_status_labels[ $selected_application->status ] ?? $selected_application->status ) ); ?></p>
+			<?php if ( $selected_cancelled ) : ?>
+				<p class="remember-notice remember-warning" role="status"><?php esc_html_e( 'This event was cancelled. Your ticket shows the cancellation and can be printed or downloaded as proof, for example for travel insurance. We will contact you about a refund or a credit.', 'remember' ); ?></p>
+			<?php endif; ?>
 			<p><strong><?php esc_html_e( 'Applied:', 'remember' ); ?></strong> <?php echo esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $selected_application->applied_at ) ) ); ?></p>
 
 			<?php
@@ -488,7 +502,7 @@ foreach ( $selected_application_addons as $selected_addon_row ) {
 						<a class="remember-button remember-button-primary" href="<?php echo esc_url( $ticket_url ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'View / Print Ticket', 'remember' ); ?></a>
 					</p>
 				<?php endif; ?>
-				<?php if ( 'accepted' === $selected_application->status ) : ?>
+				<?php if ( 'accepted' === $selected_application->status && ! Remember_Event_Cancellation::is_cancelled( $selected_event ) ) : ?>
 				<form method="post" action="" style="margin-top: 15px;" class="remember-cancel-application">
 					<?php wp_nonce_field( 'remember_member_application_action', 'remember_member_application_nonce' ); ?>
 					<input type="hidden" name="remember_member_application_action" value="withdraw_application">
@@ -628,9 +642,15 @@ foreach ( $selected_application_addons as $selected_addon_row ) {
 									<?php echo $event ? esc_html( $event->event_name ) : __( 'Unknown Event', 'remember' ); ?>
 								</a>
 							</span>
-							<span class="remember-status-badge remember-status-<?php echo esc_attr( $app->status ); ?>">
-								<?php echo esc_html( $app_status_labels[ $app->status ] ?? $app->status ); ?>
-							</span>
+							<?php if ( Remember_Event_Cancellation::covers( $app, $event ) ) : ?>
+								<span class="remember-status-badge remember-status-cancelled">
+									<?php esc_html_e( 'Event cancelled', 'remember' ); ?>
+								</span>
+							<?php else : ?>
+								<span class="remember-status-badge remember-status-<?php echo esc_attr( $app->status ); ?>">
+									<?php echo esc_html( $app_status_labels[ $app->status ] ?? $app->status ); ?>
+								</span>
+							<?php endif; ?>
 						</li>
 					<?php endforeach; ?>
 				</ul>
@@ -747,6 +767,14 @@ foreach ( $selected_application_addons as $selected_addon_row ) {
 		<h3><?php esc_html_e( 'Billing', 'remember' ); ?></h3>
 		<p class="remember-description remember-billing-note"><?php echo esc_html( $billing_subtotal_note ); ?></p>
 		<?php
+		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-billing-link-review.php';
+		if ( Remember_Billing_Link_Review::get_hold( $member_id_for_queries ) ) :
+			?>
+			<div class="remember-notice remember-error" role="alert">
+				<p><?php echo esc_html( Remember_Billing_Link_Review::member_message() ); ?></p>
+			</div>
+			<?php
+		endif;
 		require_once plugin_dir_path( __FILE__ ) . '../../includes/integrations/class-remember-xero-sync.php';
 		$remember_open_credit = Remember_Xero_Sync::member_open_credit( get_current_user_id() );
 		$remember_open_notes  = ( is_array( $remember_open_credit ) && ! empty( $remember_open_credit['notes'] ) ) ? $remember_open_credit['notes'] : array();

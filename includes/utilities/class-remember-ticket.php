@@ -135,12 +135,15 @@ class Remember_Ticket {
 	}
 
 	/**
-	 * Adverse stamp only: void | payment_required | empty.
+	 * Adverse stamp only: event_cancelled | void | payment_required | empty.
 	 *
 	 * @param array $data Ticket data from get_data().
 	 * @return string
 	 */
 	public static function get_stamp( $data ) {
+		if ( ! empty( $data['event_cancelled'] ) ) {
+			return 'event_cancelled';
+		}
 		if ( ! empty( $data['ticket_voided'] ) ) {
 			return 'void';
 		}
@@ -170,6 +173,7 @@ class Remember_Ticket {
 		require_once plugin_dir_path( __FILE__ ) . '../models/class-payment.php';
 		require_once plugin_dir_path( __FILE__ ) . '../models/class-member.php';
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-checkin.php';
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-event-cancellation.php';
 
 		$application_model = new Remember_Application();
 		$application       = $application_model->get( $application_id );
@@ -331,6 +335,8 @@ class Remember_Ticket {
 			}
 		}
 
+		$event_cancelled = Remember_Event_Cancellation::covers( $application, $event );
+
 		$data = array(
 			'application_id'     => (int) $application->application_id,
 			'ticket_id'          => 'RM-' . (int) $application->application_id,
@@ -352,12 +358,16 @@ class Remember_Ticket {
 			'amount_paid'        => $amount_paid,
 			'amount_due'         => $amount_due,
 			'invoice_number'     => $invoice_number,
-			'checkin_code'       => ( $event && ! empty( $event->checkin_enabled ) ) ? Remember_Checkin::code( $application->application_id, $event->event_id ) : '',
+			'checkin_code'       => ( $event && ! empty( $event->checkin_enabled ) && ! $event_cancelled ) ? Remember_Checkin::code( $application->application_id, $event->event_id ) : '',
 			'vendor_name'        => get_bloginfo( 'name' ),
 			'vendor_url'         => home_url( '/' ),
 			'logo_url'           => self::get_logo_url(),
 			'generated_at'       => current_time( 'mysql' ),
 		);
+
+		$data['event_cancelled']     = $event_cancelled;
+		$data['cancellation_notice'] = $event_cancelled ? Remember_Event_Cancellation::notice_text( $event ) : '';
+		$data['cancellation_reason'] = $event_cancelled && ! empty( $event->cancellation_reason ) ? (string) $event->cancellation_reason : '';
 
 		$data['stamp'] = self::get_stamp( $data );
 

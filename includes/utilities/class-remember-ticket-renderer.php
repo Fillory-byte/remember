@@ -122,7 +122,9 @@ class Remember_Ticket_Renderer {
 
 		$stamp       = isset( $data['stamp'] ) ? $data['stamp'] : Remember_Ticket::get_stamp( $data );
 		$stamp_label = '';
-		if ( 'void' === $stamp ) {
+		if ( 'event_cancelled' === $stamp ) {
+			$stamp_label = __( 'EVENT CANCELLED', 'remember' );
+		} elseif ( 'void' === $stamp ) {
 			$stamp_label = __( 'VOID', 'remember' );
 		} elseif ( 'payment_required' === $stamp ) {
 			$stamp_label = __( 'PAYMENT REQUIRED', 'remember' );
@@ -161,6 +163,16 @@ class Remember_Ticket_Renderer {
 					<strong><?php echo esc_html( $data['ticket_id'] ); ?></strong>
 				</div>
 			</header>
+
+			<?php if ( ! empty( $data['event_cancelled'] ) ) : ?>
+			<section class="remember-ticket-section remember-ticket-cancelled" role="note">
+				<h2><?php esc_html_e( 'Event cancelled', 'remember' ); ?></h2>
+				<p><strong><?php echo esc_html( $data['cancellation_notice'] ); ?></strong></p>
+				<?php if ( '' !== (string) $data['cancellation_reason'] ) : ?>
+					<p><strong><?php esc_html_e( 'Reason:', 'remember' ); ?></strong> <?php echo esc_html( $data['cancellation_reason'] ); ?></p>
+				<?php endif; ?>
+			</section>
+			<?php endif; ?>
 
 			<section class="remember-ticket-section">
 				<h2><?php esc_html_e( 'Attendee', 'remember' ); ?></h2>
@@ -265,7 +277,11 @@ class Remember_Ticket_Renderer {
 			</section>
 
 			<footer class="remember-ticket-footer">
-				<p><?php esc_html_e( 'Present this ticket at check-in. Status and amounts reflect the latest billing sync.', 'remember' ); ?></p>
+				<?php if ( ! empty( $data['event_cancelled'] ) ) : ?>
+					<p><?php esc_html_e( 'This event was cancelled. Amounts reflect the latest billing sync.', 'remember' ); ?></p>
+				<?php else : ?>
+					<p><?php esc_html_e( 'Present this ticket at check-in. Status and amounts reflect the latest billing sync.', 'remember' ); ?></p>
+				<?php endif; ?>
 				<p class="remember-ticket-generated">
 					<?php
 					echo esc_html(
@@ -473,9 +489,20 @@ class Remember_Ticket_Renderer {
 				z-index: 2;
 				background: rgba(255,255,255,0.55);
 			}
-			.remember-ticket-stamp--void {
+			.remember-ticket-stamp--void,
+			.remember-ticket-stamp--event_cancelled {
 				color: var(--rt-alert);
 				border-color: var(--rt-alert);
+			}
+			.remember-ticket-stamp--event_cancelled {
+				font-size: 24px;
+			}
+			.remember-ticket-cancelled {
+				border: 2px solid var(--rt-alert);
+				padding: 12px 14px;
+			}
+			.remember-ticket-cancelled h2 {
+				color: var(--rt-alert);
 			}
 			.remember-ticket-stamp--payment_required {
 				color: var(--rt-warn);

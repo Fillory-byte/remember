@@ -131,6 +131,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'waitlist_spot_opened'          => __( 'Waitlist Spot Opened (Staff)', 'remember' ),
 			'waitlist_promoted'             => __( 'Waitlist Spot Offered', 'remember' ),
 			'event_ticket_paid'             => __( 'Event Ticket Paid', 'remember' ),
+			'event_cancelled'               => __( 'Event Cancelled', 'remember' ),
 			'survey_issued'                 => __( 'Survey Issued', 'remember' ),
 			'payment_recorded'              => __( 'Payment Recorded', 'remember' ),
 			'payment_due_reminder'          => __( 'Payment Due Reminder', 'remember' ),
@@ -140,6 +141,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'duplicate_hit_member'          => __( 'Possible Duplicate Profile', 'remember' ),
 			'duplicate_merged_survivor'     => __( 'Profiles Merged — Keep This Login', 'remember' ),
 			'duplicate_merged_locked'       => __( 'Profile No Longer Valid', 'remember' ),
+			'billing_link_review'           => __( 'Billing Link Needs Review (Admin)', 'remember' ),
 		);
 		return isset( $labels[ $type ] ) ? $labels[ $type ] : $type;
 	}
@@ -169,6 +171,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'waitlist_spot_opened'          => __( 'Sent when an accepted spot opens and the event is set to email staff. Until the roles on this template are changed, it goes to members accepted to that event in an event administration role.', 'remember' ),
 			'waitlist_promoted'             => __( 'Sent to a member when their waitlisted application is moved to pending because a spot opened.', 'remember' ),
 			'event_ticket_paid'             => __( 'Sent to member when their event ticket is paid in full (includes ticket link).', 'remember' ),
+			'event_cancelled'               => __( 'Sent to attendees of a cancelled event when staff press Email attendees on the event. Links to their ticket, which reads EVENT CANCELLED. Also available: {cancelled_on} and {cancellation_reason}.', 'remember' ),
 			'survey_issued'                 => __( 'Sent to accepted participants when a follow-on survey is issued.', 'remember' ),
 			'payment_recorded'              => __( 'Sent when a payment is recorded.', 'remember' ),
 			'payment_due_reminder'          => __( 'Sent as a reminder when payment is due (also used for balance-due blasts).', 'remember' ),
@@ -178,6 +181,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'duplicate_hit_member'          => __( 'Not sent on scan. Kept for templates; members are emailed when a merge completes instead.', 'remember' ),
 			'duplicate_merged_survivor'     => __( 'Sent to the remaining profile after a merge.', 'remember' ),
 			'duplicate_merged_locked'       => __( 'Sent to the locked-out profile after a merge.', 'remember' ),
+			'billing_link_review'           => __( 'Sent to reMember System Administrators when a member\'s email matches an existing Xero contact or QuickBooks customer outside a billing screen. Their billing is on hold until someone approves or rejects the link on the member\'s profile. Also available: {billing_provider} and {matched_contact}.', 'remember' ),
 		);
 		return isset( $descriptions[ $type ] ) ? $descriptions[ $type ] : '';
 	}
@@ -208,12 +212,14 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'waitlist_spot_opened',
 			'waitlist_promoted',
 			'event_ticket_paid',
+			'event_cancelled',
 			'event_invite',
 			'survey_issued',
 		);
 		$billing = array(
 			'payment_recorded',
 			'payment_due_reminder',
+			'billing_link_review',
 		);
 		if ( in_array( $type, $vetting, true ) ) {
 			return 'vetting';
@@ -252,6 +258,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'waitlist_spot_opened'          => __( 'A spot opened for {event_name}', 'remember' ),
 			'waitlist_promoted'             => __( 'A spot opened for {event_name}', 'remember' ),
 			'event_ticket_paid'             => __( 'Your paid ticket for {event_name}', 'remember' ),
+			'event_cancelled'               => __( '{event_name} has been cancelled', 'remember' ),
 			'event_invite'                  => __( 'You are invited to apply for {event_name}', 'remember' ),
 			'survey_issued'                 => __( 'Survey for {event_name}', 'remember' ),
 			'payment_recorded'              => __( 'Payment Recorded - ${amount}', 'remember' ),
@@ -261,6 +268,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'duplicate_hit_member'          => __( 'Your profile was flagged as a possible duplicate', 'remember' ),
 			'duplicate_merged_survivor'     => __( 'Your profiles have been merged — keep using this login', 'remember' ),
 			'duplicate_merged_locked'       => __( 'This profile is no longer valid', 'remember' ),
+			'billing_link_review'           => __( 'Billing link needs review - {member_name}', 'remember' ),
 		);
 		return isset( $templates[ $type ] ) ? $templates[ $type ] : '';
 	}
@@ -322,6 +330,8 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 
 			'event_ticket_paid' => __( "Hello {member_name},\n\nYour payment for {event_name} has been recorded as paid in full.\n\nTicket ID: {ticket_id}\nApplication ID: {application_id}\nEvent: {event_name}\nDates: {event_dates}\nLocation: {event_location}\n\nView or print your paid admission ticket / receipt:\n{ticket_url}\n\nWe look forward to seeing you at the event.\n\nBest regards,\nThe Team", 'remember' ),
 
+			'event_cancelled' => __( "Hello {member_name},\n\nWe are sorry to tell you that {event_name} ({event_dates}) has been cancelled.\n\nCancelled on: {cancelled_on}\nReason: {cancellation_reason}\n\nYour ticket now shows the event as cancelled. You can view, print or download it as proof of the cancellation, for example for a travel insurance claim:\n{ticket_url}\n\nTicket ID: {ticket_id}\nAmount paid: \${amount}\n\nWe will contact you about a refund or a credit toward a future event.\n\nThe Team", 'remember' ),
+
 			'event_invite' => __( "Hello {member_name},\n\nYou are invited to apply for {event_name}.\n\nDates: {event_dates}\nLocation: {event_location}\n\nThis invitation is not an application. If you want to attend, start an application here:\n{apply_url}\n\nThe Team", 'remember' ),
 
 			'survey_issued' => __( "Hello {member_name},\n\nPlease complete {survey_title} for {event_name}.\n\n{survey_url}\n\nThank you,\nThe Team", 'remember' ),
@@ -339,6 +349,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'duplicate_merged_survivor' => __( "Hello {member_name},\n\nTwo profiles that appeared to belong to you have been merged. Going forward, always log in with this account.\n\nDate: {date}\n\nIf anything looks wrong, contact a system administrator.\n\nThank you,\nThe Team", 'remember' ),
 
 			'duplicate_merged_locked' => __( "Hello {member_name},\n\nThis profile is no longer valid because it was merged with another account. You will not be able to log in here.\n\nIf you believe that is an error, contact a system administrator.\n\nDate: {date}\n\nThank you,\nThe Team", 'remember' ),
+			'billing_link_review'     => __( "Hello,\n\nThe email address on {member_name}'s profile matches an existing {billing_provider} contact: {matched_contact}.\n\nreMember has not linked them. No invoice will be created for this member until someone approves or rejects the link.\n\nApprove only if that contact really belongs to this member. Reject to give the member a new contact of their own.\n\nReview it on the member's profile:\n{review_url}\n\nDate: {date}", 'remember' ),
 		);
 		return isset( $templates[ $type ] ) ? $templates[ $type ] : '';
 	}

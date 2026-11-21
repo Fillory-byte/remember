@@ -170,6 +170,9 @@ class Remember {
 		$this->loader->add_filter( 'submenu_file', $plugin_admin, 'highlight_settings_hub_submenu' );
 		$this->loader->add_action( 'wp_dashboard_setup', $plugin_admin, 'register_dashboard_widget' );
 		
+		require_once plugin_dir_path( __FILE__ ) . 'utilities/class-remember-billing-link-review.php';
+		Remember_Billing_Link_Review::register_hooks();
+
 		// QuickBooks sync hooks
 		$this->loader->add_action( 'remember_member_vetted', $this, 'sync_vetted_member_to_qb' );
 		$this->loader->add_action( 'remember_qb_sync', $this, 'sync_qb_payments' );
@@ -555,7 +558,59 @@ class Remember {
 		}
 
 		require_once plugin_dir_path( __FILE__ ) . 'utilities/class-remember-privacy.php';
-		Remember_Privacy::remove_deleted_member( $user_id );
+
+		// Free the event spots (and let the waitlist react) before the member is gone.
+		// Cancelled applications stay as retained records; no email goes to the deleted member.
+		require_once plugin_dir_path( __FILE__ ) . 'models/class-application.php';
+		$application_model = new Remember_Application();
+		$cancel_failed     = array();
+		$cancelled         = array();
+		$applications = (array) $application_model->get_by_member( $user_id );
+		// Close pending and waitlisted first: freeing an accepted spot can promote this
+		// member's own waitlisted application, which must already be cancelled by then.
+		usort(
+			$applications,
+			static function ( $a, $b ) {
+				return (int) ( 'accepted' === $a->status ) - (int) ( 'accepted' === $b->status );
+			}
+		);
+		foreach ( $applications as $application ) {
+			if ( ! in_array( $application->status, array( 'pending', 'accepted', 'waitlisted' ), true ) ) {
+				continue;
+			}
+			if ( false === $application_model->update_status( (int) $application->application_id, 'cancelled' ) ) {
+				$cancel_failed[] = (int) $application->application_id;
+			} else {
+				$cancelled[] = array(
+					'application_id' => (int) $application->application_id,
+					'event_id'       => (int) $application->event_id,
+					'was'            => (string) $application->status,
+				);
+			}
+		}
+		if ( ! empty( $cancelled ) ) {
+			Remember_Logger::info(
+				'Applications cancelled because the member\'s WordPress account was deleted',
+				array(
+					'user_id'      => (int) $user_id,
+					'applications' => $cancelled,
+				)
+			);
+		}
+
+		$removed = Remember_Privacy::remove_deleted_member( $user_id );
+		if ( ! $removed || ! empty( $cancel_failed ) ) {
+			// Keep the member row so the cleanup can be finished later instead of orphaning the remaining data.
+			Remember_Logger::error(
+				'Member record was kept because the deleted account\'s data was not fully removed',
+				array(
+					'user_id'                 => (int) $user_id,
+					'data_removed'            => (bool) $removed,
+					'applications_not_closed' => $cancel_failed,
+				)
+			);
+			return;
+		}
 
 		if ( false === $member_model->delete( $user_id ) ) {
 			global $wpdb;

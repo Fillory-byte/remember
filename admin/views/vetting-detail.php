@@ -67,7 +67,12 @@ if ( ! defined( 'WPINC' ) ) {
 							<?php endif; ?>
 						</p>
 					<?php endif; ?>
-					<div class="remember-vetting-detail-meta">
+					<?php require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-fields.php'; ?>
+					<p class="remember-vetting-detail-social">
+						<strong><?php esc_html_e( 'Social media:', 'remember' ); ?></strong>
+						<?php echo Remember_Profile_Fields::admin_social_html( $viewing_vetting->member_id ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the helper. ?>
+					</p>
+						<div class="remember-vetting-detail-meta">
 						<?php if ( $viewing_vetter ) : ?>
 							<span><strong><?php esc_html_e( 'Vetter:', 'remember' ); ?></strong> <?php echo esc_html( $viewing_vetter->display_name ); ?></span>
 						<?php endif; ?>

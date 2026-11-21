@@ -280,6 +280,11 @@ class Remember_Public {
 			$invalid_fields[] = 'allergy_reaction';
 			$banner_labels[]  = Remember_Profile_Fields::labels()['allergy_reaction'];
 		}
+		if ( Remember_Profile_Fields::social_media_is_missing() ) {
+			$invalid_fields[]             = 'social_media';
+			$banner_labels[]              = Remember_Profile_Fields::labels()['social_media'];
+			$field_messages['social_media'] = __( 'Add at least one social media profile, or choose None.', 'remember' );
+		}
 		if ( Remember_Profile_Fields::interests_is_over_limit( $profile_data['interests'] ) ) {
 			$invalid_fields[] = 'interests';
 			$field_messages['interests'] = Remember_Profile_Fields::interests_too_long_message();
@@ -423,13 +428,40 @@ class Remember_Public {
 		}
 		$photo_url = $upload_result['url'];
 
-		$user_id = wp_create_user( $username, $password, $email );
+		// The unconfirmed marker is written in the same call that creates the account,
+		// so there is no moment when the new account can log in unconfirmed.
+		$user_id = wp_insert_user(
+			array(
+				'user_login' => $username,
+				'user_pass'  => $password,
+				'user_email' => $email,
+				'meta_input' => array( Remember_Registration_Verification::META_SINCE => time() ),
+			)
+		);
 
 		if ( is_wp_error( $user_id ) ) {
-			Remember_Logger::warning(
-				'Public member registration: wp_create_user failed',
+			Remember_Logger::error(
+				'Public member registration: wp_insert_user failed',
 				array( 'error' => $user_id->get_error_message() )
 			);
+			Remember_Image_Uploader::delete_image( $photo_url );
+			$this->fail_member_registration( 'create_failed' );
+			return;
+		}
+
+		// Confirm the unconfirmed marker was stored (meta_input failures are silent).
+		// If it cannot be recorded, remove the account rather than leave it open.
+		if ( ! Remember_Registration_Verification::mark_pending( $user_id ) ) {
+			Remember_Logger::error(
+				'Public member registration: account removed because it could not be marked as awaiting email confirmation',
+				array( 'user_id' => $user_id )
+			);
+			if ( ! wp_delete_user( $user_id ) || get_user_by( 'id', $user_id ) ) {
+				Remember_Logger::error(
+					'Public member registration: could not remove the unmarked account; delete it by hand',
+					array( 'user_id' => $user_id )
+				);
+			}
 			Remember_Image_Uploader::delete_image( $photo_url );
 			$this->fail_member_registration( 'create_failed' );
 			return;
@@ -501,6 +533,20 @@ class Remember_Public {
 		$profile_row['updated_by'] = $user_id;
 
 		$profile_inserted = $wpdb->insert( $wpdb->prefix . 'remember_member_profiles', $profile_row );
+
+		// Set separately so a site whose schema update has not run yet (it runs on the next admin load) can still register members.
+		if ( $profile_inserted && 1 === Remember_Profile_Fields::social_media_none_for_storage() ) {
+			$none_saved = $wpdb->update( $wpdb->prefix . 'remember_member_profiles', array( 'social_media_none' => 1 ), array( 'member_id' => $user_id ) );
+			if ( false === $none_saved ) {
+				Remember_Logger::warning(
+					'Public member registration: the member chose "None" for social media, but it was not saved; admins will see "None provided"',
+					array(
+						'user_id' => $user_id,
+						'error'   => $wpdb->last_error,
+					)
+				);
+			}
+		}
 
 		if ( ! $profile_inserted ) {
 			Remember_Logger::error(

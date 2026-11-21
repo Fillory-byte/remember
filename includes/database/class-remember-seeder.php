@@ -735,6 +735,7 @@ class Remember_Seeder {
 			'waitlist_spot_opened',
 			'waitlist_promoted',
 			'event_ticket_paid',
+			'event_cancelled',
 			'event_invite',
 			'survey_issued',
 			'payment_recorded',
@@ -744,6 +745,7 @@ class Remember_Seeder {
 			'duplicate_hit_member',
 			'duplicate_merged_survivor',
 			'duplicate_merged_locked',
+			'billing_link_review',
 		);
 
 		foreach ( $notification_types as $type ) {

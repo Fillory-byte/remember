@@ -113,6 +113,10 @@
 	max-width: 100%;
 }
 
+.remember-register-form .remember-register-checkboxes.remember-register-checkboxes--single {
+	display: block;
+}
+
 .remember-register-form .remember-register-checkboxes {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));

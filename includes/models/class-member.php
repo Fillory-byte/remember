@@ -57,7 +57,12 @@ class Remember_Member extends Remember_Base_Model {
 	/**
 	 * Get all members, excluding merged (locked) profiles unless requested.
 	 *
-	 * @param array $args Query arguments. Set include_merged to true to include locked profiles.
+	 * Members whose WordPress account no longer exists are left out unless requested. Such a row is
+	 * kept when erasing a deleted account's data failed (see Remember::cleanup_member_on_user_delete()),
+	 * and it has nobody to show in a list.
+	 *
+	 * @param array $args Query arguments. Set include_merged to true to include locked profiles, and
+	 *                    include_orphans to true to include rows with no WordPress user.
 	 * @return array
 	 */
 	public function get_all( $args = array() ) {
@@ -67,12 +72,20 @@ class Remember_Member extends Remember_Base_Model {
 			'orderby'         => $this->primary_key,
 			'order'           => 'ASC',
 			'include_merged'  => false,
+			'include_orphans' => false,
 		);
 		$args = wp_parse_args( $args, $defaults );
 
 		$query = "SELECT * FROM {$this->get_table()}";
+		$where = array();
 		if ( empty( $args['include_merged'] ) ) {
-			$query .= " WHERE (status IS NULL OR status != 'merged')";
+			$where[] = "(status IS NULL OR status != 'merged')";
+		}
+		if ( empty( $args['include_orphans'] ) ) {
+			$where[] = "EXISTS (SELECT 1 FROM {$this->wpdb->users} wp_u WHERE wp_u.ID = {$this->get_table()}.member_id)";
+		}
+		if ( ! empty( $where ) ) {
+			$query .= ' WHERE ' . implode( ' AND ', $where );
 		}
 
 		if ( ! empty( $args['orderby'] ) ) {
