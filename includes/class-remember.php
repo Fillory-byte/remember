@@ -561,6 +561,7 @@ class Remember {
 		require_once plugin_dir_path( __FILE__ ) . 'models/class-application.php';
 		$application_model = new Remember_Application();
 		$cancel_failed     = array();
+		$cancelled         = array();
 		$applications = (array) $application_model->get_by_member( $user_id );
 		// Close pending and waitlisted first: freeing an accepted spot can promote this
 		// member's own waitlisted application, which must already be cancelled by then.
@@ -576,7 +577,22 @@ class Remember {
 			}
 			if ( false === $application_model->update_status( (int) $application->application_id, 'cancelled' ) ) {
 				$cancel_failed[] = (int) $application->application_id;
+			} else {
+				$cancelled[] = array(
+					'application_id' => (int) $application->application_id,
+					'event_id'       => (int) $application->event_id,
+					'was'            => (string) $application->status,
+				);
 			}
+		}
+		if ( ! empty( $cancelled ) ) {
+			Remember_Logger::info(
+				'Applications cancelled because the member\'s WordPress account was deleted',
+				array(
+					'user_id'      => (int) $user_id,
+					'applications' => $cancelled,
+				)
+			);
 		}
 
 		$removed = Remember_Privacy::remove_deleted_member( $user_id );
