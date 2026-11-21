@@ -89,6 +89,7 @@ class Remember_Profile_Fields {
 			'new_password'                   => __( 'New password', 'remember' ),
 			'new_password_confirm'           => __( 'Confirm new password', 'remember' ),
 			'interests'                      => __( 'Interests', 'remember' ),
+			'social_media'                   => __( 'Social Media', 'remember' ),
 			'photo_file'                     => __( 'Profile Photo', 'remember' ),
 		);
 	}
@@ -268,6 +269,118 @@ class Remember_Profile_Fields {
 			}
 		}
 		return $ids;
+	}
+
+	/**
+	 * Whether new members must give social media (or choose None) at registration.
+	 * On by default; a site that does not vet by social media can turn it off in Settings.
+	 *
+	 * @return bool
+	 */
+	public static function social_media_required_enabled() {
+		$options = get_option( 'remember_options', array() );
+		if ( ! is_array( $options ) || ! array_key_exists( 'require_social_media', $options ) ) {
+			return true;
+		}
+		return ! empty( $options['require_social_media'] );
+	}
+
+	/**
+	 * Value for member_profiles.social_media_none: 1 only when the member chose None and gave no profile.
+	 *
+	 * @return int
+	 */
+	public static function social_media_none_for_storage() {
+		if ( ! self::request_social_none() ) {
+			return 0;
+		}
+		foreach ( self::social_slots_from_request() as $slot ) {
+			if ( (int) $slot->platform_id > 0 && '' !== trim( (string) $slot->handle ) ) {
+				return 0;
+			}
+		}
+		return 1;
+	}
+
+	/**
+	 * Social media for admin screens: linked handles, else a note saying whether the member
+	 * said they have none or never answered.
+	 *
+	 * @param int $member_id Member ID.
+	 * @return string Escaped HTML (spans, one block per platform).
+	 */
+	public static function admin_social_html( $member_id ) {
+		global $wpdb;
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-platform-handles.php';
+
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT msm.platform_id, msm.handle, smp.platform_name
+				FROM {$wpdb->prefix}remember_member_social_media msm
+				JOIN {$wpdb->prefix}remember_social_media_platforms smp ON msm.platform_id = smp.platform_id
+				WHERE msm.member_id = %d
+				ORDER BY smp.sort_order ASC, smp.platform_name ASC",
+				(int) $member_id
+			)
+		); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names from prefix.
+
+		if ( ! empty( $rows ) ) {
+			$out = '';
+			foreach ( $rows as $row ) {
+				$out .= '<span class="remember-social-line">' . esc_html( $row->platform_name ) . ': ' . Remember_Platform_Handles::social_html( $row->platform_id, $row->handle ) . '</span>';
+			}
+			return $out;
+		}
+
+		$none = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT social_media_none FROM {$wpdb->prefix}remember_member_profiles WHERE member_id = %d",
+				(int) $member_id
+			)
+		); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from prefix.
+
+		$label = $none
+			? __( 'Member said they do not use social media', 'remember' )
+			: __( 'None provided', 'remember' );
+		return '<span class="description">' . esc_html( $label ) . '</span>';
+	}
+
+	/**
+	 * Whether the member said they have no social media (the "None" choice).
+	 *
+	 * @return bool
+	 */
+	public static function request_social_none() {
+		return ! empty( $_POST['social_media_none'] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- caller verifies.
+	}
+
+	/**
+	 * Whether registration still needs a social media answer.
+	 *
+	 * Satisfied by at least one slot with both a platform and a name, or by the
+	 * None choice. Skipped when no social platform is active (nothing to pick).
+	 *
+	 * @return bool
+	 */
+	public static function social_media_is_missing() {
+		global $wpdb;
+
+		if ( ! self::social_media_required_enabled() ) {
+			return false;
+		}
+		$active = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}remember_social_media_platforms WHERE is_active = 1" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from prefix.
+		if ( $active < 1 ) {
+			return false;
+		}
+		if ( self::request_social_none() ) {
+			return false;
+		}
+		foreach ( self::social_slots_from_request() as $slot ) {
+			if ( (int) $slot->platform_id > 0 && '' !== trim( (string) $slot->handle ) ) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**

@@ -384,7 +384,13 @@ $remember_print_sensitive = ! empty( Remember_Sensitive_Profile::print_topics() 
 						</td>
 					</tr>
 					<tr>
-						<th><?php esc_html_e( 'Clothing Sizes', 'remember' ); ?></th>
+						<th><?php esc_html_e( 'Social Media', 'remember' ); ?></th>
+							<td>
+								<?php echo Remember_Profile_Fields::admin_social_html( $view_member_id ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the helper. ?>
+							</td>
+						</tr>
+						<tr>
+							<th><?php esc_html_e( 'Clothing Sizes', 'remember' ); ?></th>
 						<td>
 							<?php
 							require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-clothing-sizes.php';

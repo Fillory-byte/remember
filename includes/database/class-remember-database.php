@@ -249,6 +249,7 @@ class Remember_Database {
 			share_im_with_events TINYINT(1) DEFAULT 0,
 			share_interests_with_events TINYINT(1) DEFAULT 0,
 			share_photo_with_events TINYINT(1) DEFAULT 0,
+			social_media_none TINYINT(1) NOT NULL DEFAULT 0,
 			member_number VARCHAR(50) DEFAULT NULL,
 			created_at DATETIME NOT NULL,
 			updated_at DATETIME NOT NULL,

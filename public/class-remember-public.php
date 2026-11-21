@@ -280,6 +280,11 @@ class Remember_Public {
 			$invalid_fields[] = 'allergy_reaction';
 			$banner_labels[]  = Remember_Profile_Fields::labels()['allergy_reaction'];
 		}
+		if ( Remember_Profile_Fields::social_media_is_missing() ) {
+			$invalid_fields[]             = 'social_media';
+			$banner_labels[]              = Remember_Profile_Fields::labels()['social_media'];
+			$field_messages['social_media'] = __( 'Add at least one social media profile, or choose None.', 'remember' );
+		}
 		if ( Remember_Profile_Fields::interests_is_over_limit( $profile_data['interests'] ) ) {
 			$invalid_fields[] = 'interests';
 			$field_messages['interests'] = Remember_Profile_Fields::interests_too_long_message();
@@ -528,6 +533,20 @@ class Remember_Public {
 		$profile_row['updated_by'] = $user_id;
 
 		$profile_inserted = $wpdb->insert( $wpdb->prefix . 'remember_member_profiles', $profile_row );
+
+		// Set separately so a site whose schema update has not run yet (it runs on the next admin load) can still register members.
+		if ( $profile_inserted && 1 === Remember_Profile_Fields::social_media_none_for_storage() ) {
+			$none_saved = $wpdb->update( $wpdb->prefix . 'remember_member_profiles', array( 'social_media_none' => 1 ), array( 'member_id' => $user_id ) );
+			if ( false === $none_saved ) {
+				Remember_Logger::warning(
+					'Public member registration: the member chose "None" for social media, but it was not saved; admins will see "None provided"',
+					array(
+						'user_id' => $user_id,
+						'error'   => $wpdb->last_error,
+					)
+				);
+			}
+		}
 
 		if ( ! $profile_inserted ) {
 			Remember_Logger::error(

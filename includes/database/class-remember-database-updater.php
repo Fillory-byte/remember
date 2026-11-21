@@ -1981,6 +1981,25 @@ class Remember_Database_Updater {
 			}
 		}
 
+		// Update to 2.4.8 (flag for members who said they do not use social media).
+		if ( version_compare( get_option( 'remember_db_version', '0.0.0' ), '2.4.8', '<' ) ) {
+			Remember_Logger::info( 'Updating database schema', array( 'from' => get_option( 'remember_db_version', '0.0.0' ), 'to' => '2.4.8' ) );
+			$profiles_table = $wpdb->prefix . 'remember_member_profiles';
+			$schema_ok      = true;
+			$found          = $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$profiles_table} LIKE %s", 'social_media_none' ) );
+			if ( 'social_media_none' !== $found ) {
+				$added = $wpdb->query( "ALTER TABLE {$profiles_table} ADD COLUMN social_media_none TINYINT(1) NOT NULL DEFAULT 0 AFTER share_photo_with_events" );
+				if ( false === $added ) {
+					$schema_ok = false;
+					Remember_Logger::error( 'Failed to add column', array( 'table' => $profiles_table, 'column' => 'social_media_none', 'error' => $wpdb->last_error ) );
+				}
+			}
+			if ( $schema_ok ) {
+				update_option( 'remember_db_version', '2.4.8' );
+				Remember_Logger::info( 'Database schema updated successfully', array( 'version' => '2.4.8' ) );
+			}
+		}
+
 		// Update to 2.4.9 (event cancellation date and reason; per-attendee refund or credit checklist).
 		if ( version_compare( get_option( 'remember_db_version', '0.0.0' ), '2.4.9', '<' ) ) {
 			Remember_Logger::info( 'Updating database schema', array( 'from' => get_option( 'remember_db_version', '0.0.0' ), 'to' => '2.4.9' ) );

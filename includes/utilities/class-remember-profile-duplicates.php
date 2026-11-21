@@ -1574,6 +1574,13 @@ class Remember_Profile_Duplicates {
 			}
 		}
 
+		// Keep "said they do not use social media" when the surviving profile ends up with no handles.
+		$from_said_none = (int) $wpdb->get_var( $wpdb->prepare( "SELECT social_media_none FROM {$wpdb->prefix}remember_member_profiles WHERE member_id = %d", $from_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from prefix.
+		$to_has_social  = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->prefix}remember_member_social_media WHERE member_id = %d", $to_id ) );
+		if ( $from_said_none && 0 === $to_has_social ) {
+			self::check( $wpdb->update( $wpdb->prefix . 'remember_member_profiles', array( 'social_media_none' => 1 ), array( 'member_id' => $to_id ) ), 'carry social media none flag' );
+		}
+
 		$pq_from = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}remember_profile_question_responses WHERE member_id = %d", $from_id ) );
 		if ( is_array( $pq_from ) ) {
 			foreach ( $pq_from as $row ) {

@@ -12,6 +12,7 @@ if ( ! defined( 'WPINC' ) ) {
 }
 
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-logger.php';
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-profile-fields.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-notification-setting.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/integrations/class-remember-quickbooks-oauth.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/integrations/class-remember-quickbooks-api.php';
@@ -455,6 +456,12 @@ if ( isset( $_POST['remember_settings_action'] ) && check_admin_referer( 'rememb
 			if ( in_array( $provider, array( 'none', 'quickbooks', 'xero' ), true ) ) {
 				$options['billing_provider'] = $provider;
 			}
+		}
+
+		// Require social media (or None) at registration (default on).
+		// Only the main settings form has this checkbox; other forms post the same action and must not reset it.
+		if ( isset( $_POST['remember_main_settings'] ) ) {
+			$options['require_social_media'] = ! empty( $_POST['require_social_media'] ) ? 1 : 0;
 		}
 
 		// Email provider invoice to customer when an application is accepted (default on).
@@ -1037,6 +1044,7 @@ $im_platforms = Remember_Im_Platforms::get_all();
 
 	<form id="remember-main-settings" method="post" action="">
 		<?php wp_nonce_field( 'remember_settings_action', 'remember_settings_nonce' ); ?>
+		<input type="hidden" name="remember_main_settings" value="1">
 		<input type="hidden" name="remember_settings_action" value="update">
 		
 		<h2 class="nav-tab-wrapper">
@@ -1115,6 +1123,20 @@ $im_platforms = Remember_Im_Platforms::get_all();
 						</fieldset>
 						<p class="description">
 							<?php esc_html_e( 'Only one accounting provider is active at a time. Switching does not delete historical invoice IDs on payment rows (QuickBooks and Xero columns can coexist). Finish open billing cycles before switching; new invoices use only the selected provider.', 'remember' ); ?>
+						</p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">
+						<?php esc_html_e( 'Require social media', 'remember' ); ?>
+					</th>
+					<td>
+						<label for="require_social_media">
+							<input type="checkbox" id="require_social_media" name="require_social_media" value="1" <?php checked( Remember_Profile_Fields::social_media_required_enabled() ); ?>>
+							<?php esc_html_e( 'New members must add a social media profile or choose None when they register', 'remember' ); ?>
+						</label>
+						<p class="description">
+							<?php esc_html_e( 'Turn this off if your site does not vet by social media. Existing members are never affected, and admins can always see what a member entered.', 'remember' ); ?>
 						</p>
 					</td>
 				</tr>
