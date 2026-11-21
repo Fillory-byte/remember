@@ -435,7 +435,7 @@ class Remember_Public {
 		);
 
 		if ( is_wp_error( $user_id ) ) {
-			Remember_Logger::warning(
+			Remember_Logger::error(
 				'Public member registration: wp_insert_user failed',
 				array( 'error' => $user_id->get_error_message() )
 			);
