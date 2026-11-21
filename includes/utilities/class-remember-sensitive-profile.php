@@ -164,14 +164,27 @@ class Remember_Sensitive_Profile {
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-profile-fields.php';
 		Remember_Profile_Fields::ensure_allergy_reaction_column();
 
+		// Write the audit row first: if it fails, the section is never built or sent.
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-access-log.php';
+		if ( ! Remember_Access_Log::record( $member_id, $topic, 'edit' === $mode ? __( 'Member edit', 'remember' ) : __( 'Member detail', 'remember' ) ) ) {
+			Remember_Logger::error(
+				'Sensitive profile section refused: the access log row could not be written',
+				array(
+					'member_id' => $member_id,
+					'topic'     => $topic,
+					'mode'      => $mode,
+					'user_id'   => get_current_user_id(),
+				)
+			);
+			wp_send_json_error( array( 'message' => __( 'This could not be recorded in the access log, so it was not shown. Try again, and tell a system administrator if it keeps happening.', 'remember' ) ), 500 );
+		}
+
 		if ( 'edit' === $mode ) {
 			$html = 'health' === $topic ? self::render_health_edit( $member_id ) : self::render_emergency_edit( $member_id );
 		} else {
 			$html = 'health' === $topic ? self::render_health_view( $member_id ) : self::render_emergency_view( $member_id );
 		}
 
-		require_once plugin_dir_path( __FILE__ ) . 'class-remember-access-log.php';
-		Remember_Access_Log::record( $member_id, $topic, 'edit' === $mode ? __( 'Member edit', 'remember' ) : __( 'Member detail', 'remember' ) );
 		Remember_Logger::info(
 			'Sensitive profile section opened',
 			array(
@@ -216,13 +229,25 @@ class Remember_Sensitive_Profile {
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-profile-fields.php';
 		Remember_Profile_Fields::ensure_allergy_reaction_column();
 
+		// Write the audit row first: if it fails, the sections are never built or sent.
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-access-log.php';
+		if ( ! Remember_Access_Log::record( $member_id, Remember_Access_Log::what_from_topics( $topics ), __( 'Confidential print', 'remember' ) ) ) {
+			Remember_Logger::error(
+				'Confidential print refused: the access log row could not be written',
+				array(
+					'member_id' => $member_id,
+					'topics'    => $topics,
+					'user_id'   => get_current_user_id(),
+				)
+			);
+			wp_send_json_error( array( 'message' => __( 'This could not be recorded in the access log, so it was not shown. Try again, and tell a system administrator if it keeps happening.', 'remember' ) ), 500 );
+		}
+
 		$sections = array();
 		foreach ( $topics as $topic ) {
 			$sections[ $topic ] = 'health' === $topic ? self::render_health_view( $member_id ) : self::render_emergency_view( $member_id );
 		}
 
-		require_once plugin_dir_path( __FILE__ ) . 'class-remember-access-log.php';
-		Remember_Access_Log::record( $member_id, Remember_Access_Log::what_from_topics( $topics ), __( 'Confidential print', 'remember' ) );
 		Remember_Logger::info(
 			'Confidential profile printed',
 			array(
