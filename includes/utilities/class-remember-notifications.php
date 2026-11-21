@@ -386,6 +386,7 @@ class Remember_Notifications {
 			'vetting_completed',
 			'vetting_collaborator_invited',
 			'waitlist_spot_opened',
+			'billing_link_review',
 		);
 	}
 
@@ -1798,6 +1799,8 @@ class Remember_Notifications {
 			'apply_url'      => '',
 			'cancelled_on'   => '',
 			'cancellation_reason' => '',
+			'billing_provider'    => '',
+			'matched_contact'     => '',
 		);
 		return wp_parse_args( $context, $defaults );
 	}

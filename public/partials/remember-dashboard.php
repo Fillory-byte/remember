@@ -767,6 +767,14 @@ foreach ( $selected_application_addons as $selected_addon_row ) {
 		<h3><?php esc_html_e( 'Billing', 'remember' ); ?></h3>
 		<p class="remember-description remember-billing-note"><?php echo esc_html( $billing_subtotal_note ); ?></p>
 		<?php
+		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-billing-link-review.php';
+		if ( Remember_Billing_Link_Review::get_hold( $member_id_for_queries ) ) :
+			?>
+			<div class="remember-notice remember-error" role="alert">
+				<p><?php echo esc_html( Remember_Billing_Link_Review::member_message() ); ?></p>
+			</div>
+			<?php
+		endif;
 		require_once plugin_dir_path( __FILE__ ) . '../../includes/integrations/class-remember-xero-sync.php';
 		$remember_open_credit = Remember_Xero_Sync::member_open_credit( get_current_user_id() );
 		$remember_open_notes  = ( is_array( $remember_open_credit ) && ! empty( $remember_open_credit['notes'] ) ) ? $remember_open_credit['notes'] : array();

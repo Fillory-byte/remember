@@ -141,6 +141,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'duplicate_hit_member'          => __( 'Possible Duplicate Profile', 'remember' ),
 			'duplicate_merged_survivor'     => __( 'Profiles Merged — Keep This Login', 'remember' ),
 			'duplicate_merged_locked'       => __( 'Profile No Longer Valid', 'remember' ),
+			'billing_link_review'           => __( 'Billing Link Needs Review (Admin)', 'remember' ),
 		);
 		return isset( $labels[ $type ] ) ? $labels[ $type ] : $type;
 	}
@@ -180,6 +181,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'duplicate_hit_member'          => __( 'Not sent on scan. Kept for templates; members are emailed when a merge completes instead.', 'remember' ),
 			'duplicate_merged_survivor'     => __( 'Sent to the remaining profile after a merge.', 'remember' ),
 			'duplicate_merged_locked'       => __( 'Sent to the locked-out profile after a merge.', 'remember' ),
+			'billing_link_review'           => __( 'Sent to reMember System Administrators when a member\'s email matches an existing Xero contact or QuickBooks customer outside a billing screen. Their billing is on hold until someone approves or rejects the link on the member\'s profile. Also available: {billing_provider} and {matched_contact}.', 'remember' ),
 		);
 		return isset( $descriptions[ $type ] ) ? $descriptions[ $type ] : '';
 	}
@@ -217,6 +219,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 		$billing = array(
 			'payment_recorded',
 			'payment_due_reminder',
+			'billing_link_review',
 		);
 		if ( in_array( $type, $vetting, true ) ) {
 			return 'vetting';
@@ -265,6 +268,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'duplicate_hit_member'          => __( 'Your profile was flagged as a possible duplicate', 'remember' ),
 			'duplicate_merged_survivor'     => __( 'Your profiles have been merged — keep using this login', 'remember' ),
 			'duplicate_merged_locked'       => __( 'This profile is no longer valid', 'remember' ),
+			'billing_link_review'           => __( 'Billing link needs review - {member_name}', 'remember' ),
 		);
 		return isset( $templates[ $type ] ) ? $templates[ $type ] : '';
 	}
@@ -345,6 +349,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'duplicate_merged_survivor' => __( "Hello {member_name},\n\nTwo profiles that appeared to belong to you have been merged. Going forward, always log in with this account.\n\nDate: {date}\n\nIf anything looks wrong, contact a system administrator.\n\nThank you,\nThe Team", 'remember' ),
 
 			'duplicate_merged_locked' => __( "Hello {member_name},\n\nThis profile is no longer valid because it was merged with another account. You will not be able to log in here.\n\nIf you believe that is an error, contact a system administrator.\n\nDate: {date}\n\nThank you,\nThe Team", 'remember' ),
+			'billing_link_review'     => __( "Hello,\n\nThe email address on {member_name}'s profile matches an existing {billing_provider} contact: {matched_contact}.\n\nreMember has not linked them. No invoice will be created for this member until someone approves or rejects the link.\n\nApprove only if that contact really belongs to this member. Reject to give the member a new contact of their own.\n\nReview it on the member's profile:\n{review_url}\n\nDate: {date}", 'remember' ),
 		);
 		return isset( $templates[ $type ] ) ? $templates[ $type ] : '';
 	}

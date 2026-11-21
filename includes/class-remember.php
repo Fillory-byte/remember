@@ -170,6 +170,9 @@ class Remember {
 		$this->loader->add_filter( 'submenu_file', $plugin_admin, 'highlight_settings_hub_submenu' );
 		$this->loader->add_action( 'wp_dashboard_setup', $plugin_admin, 'register_dashboard_widget' );
 		
+		require_once plugin_dir_path( __FILE__ ) . 'utilities/class-remember-billing-link-review.php';
+		Remember_Billing_Link_Review::register_hooks();
+
 		// QuickBooks sync hooks
 		$this->loader->add_action( 'remember_member_vetted', $this, 'sync_vetted_member_to_qb' );
 		$this->loader->add_action( 'remember_qb_sync', $this, 'sync_qb_payments' );

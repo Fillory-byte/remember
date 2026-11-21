@@ -19,6 +19,7 @@ require_once plugin_dir_path( __FILE__ ) . '../models/class-event.php';
 require_once plugin_dir_path( __FILE__ ) . '../models/class-product.php';
 require_once plugin_dir_path( __FILE__ ) . '../models/class-remember-qb-item-mapping.php';
 require_once plugin_dir_path( __FILE__ ) . '../utilities/class-remember-logger.php';
+require_once plugin_dir_path( __FILE__ ) . '../utilities/class-remember-billing-link-review.php';
 
 /**
  * QuickBooks sync utility class.
@@ -49,6 +50,11 @@ class Remember_QuickBooks_Sync {
 		$user = get_user_by( 'ID', $member_id );
 		if ( ! $user ) {
 			return new WP_Error( 'user_not_found', __( 'WordPress user not found.', 'remember' ) );
+		}
+
+		$held = Remember_Billing_Link_Review::blocked_error( $member_id, 'quickbooks' );
+		if ( $held ) {
+			return $held;
 		}
 
 		global $wpdb;
@@ -145,11 +151,10 @@ class Remember_QuickBooks_Sync {
 			}
 		}
 		if ( '' === $qb_customer_id ) {
-			$linked = self::link_customer_by_email( $member_id, $user->user_email );
-			if ( is_wp_error( $linked ) ) {
-				return $linked;
+			$found = self::hold_customer_email_match( $member_id, $user->user_email );
+			if ( is_wp_error( $found ) ) {
+				return $found;
 			}
-			$qb_customer_id = is_array( $linked ) ? (string) $linked['Id'] : '';
 		}
 		if ( '' !== $qb_customer_id ) {
 			$customer_data['qb_customer_id'] = $qb_customer_id;
@@ -197,15 +202,17 @@ class Remember_QuickBooks_Sync {
 	}
 
 	/**
-	 * Link a member to an existing QuickBooks customer with the same primary email.
+	 * Look for an existing QuickBooks customer with the member's primary email.
 	 *
-	 * A failed search returns the error so the caller does not create a duplicate customer.
+	 * A match is never linked here: it is held for a person to approve, and the hold is
+	 * returned as an error. A failed search returns the error so the caller does not create
+	 * a duplicate customer.
 	 *
 	 * @param int    $member_id Member ID.
 	 * @param string $email     Member email.
-	 * @return array|WP_Error|null Matched customer, the search error, or null when none matches.
+	 * @return WP_Error|null The hold or search error, or null when a new customer should be created.
 	 */
-	private static function link_customer_by_email( $member_id, $email ) {
+	private static function hold_customer_email_match( $member_id, $email ) {
 		$match = Remember_QuickBooks_API::find_customer_by_primary_email( $email, true );
 		if ( is_wp_error( $match ) ) {
 			Remember_Logger::warning(
@@ -221,16 +228,15 @@ class Remember_QuickBooks_Sync {
 			Remember_Logger::debug( 'No QuickBooks customer has this member\'s email; a new customer will be created', array( 'member_id' => $member_id ) );
 			return null;
 		}
-		update_user_meta( $member_id, 'remember_qb_customer_id', (string) $match['Id'] );
-		update_user_meta( $member_id, 'remember_qb_sync_token', isset( $match['SyncToken'] ) ? $match['SyncToken'] : '' );
-		Remember_Logger::info(
-			'Linked member to existing QuickBooks customer by email',
+		return Remember_Billing_Link_Review::hold_match(
+			$member_id,
+			'quickbooks',
 			array(
-				'member_id'      => $member_id,
-				'qb_customer_id' => (string) $match['Id'],
+				'id'    => (string) $match['Id'],
+				'name'  => isset( $match['DisplayName'] ) ? (string) $match['DisplayName'] : '',
+				'email' => isset( $match['PrimaryEmailAddr']['Address'] ) ? (string) $match['PrimaryEmailAddr']['Address'] : '',
 			)
 		);
-		return $match;
 	}
 
 	/**

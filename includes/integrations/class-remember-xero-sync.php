@@ -19,6 +19,7 @@ require_once plugin_dir_path( __FILE__ ) . '../models/class-event.php';
 require_once plugin_dir_path( __FILE__ ) . '../models/class-product.php';
 require_once plugin_dir_path( __FILE__ ) . '../models/class-remember-xero-item-mapping.php';
 require_once plugin_dir_path( __FILE__ ) . '../utilities/class-remember-logger.php';
+require_once plugin_dir_path( __FILE__ ) . '../utilities/class-remember-billing-link-review.php';
 
 /**
  * Xero sync — mirrors Remember_QuickBooks_Sync for the active Xero provider.
@@ -62,6 +63,11 @@ class Remember_Xero_Sync {
 		$user = get_user_by( 'ID', $member_id );
 		if ( ! $user ) {
 			return new WP_Error( 'user_not_found', __( 'WordPress user not found.', 'remember' ) );
+		}
+
+		$held = Remember_Billing_Link_Review::blocked_error( $member_id, 'xero' );
+		if ( $held ) {
+			return $held;
 		}
 
 		global $wpdb;
@@ -180,9 +186,10 @@ class Remember_Xero_Sync {
 				return $by_email;
 			}
 			if ( is_array( $by_email ) && ! empty( $by_email['ContactID'] ) && self::contact_email_matches( $by_email, $user->user_email ) ) {
-				$xero_contact_id = $by_email['ContactID'];
-				update_user_meta( $member_id, 'remember_xero_contact_id', $xero_contact_id );
-				$current_name = isset( $by_email['Name'] ) ? (string) $by_email['Name'] : '';
+				$held = Remember_Billing_Link_Review::hold_match( $member_id, 'xero', self::review_contact( $by_email ) );
+				if ( $held ) {
+					return $held;
+				}
 			}
 		}
 
@@ -225,22 +232,13 @@ class Remember_Xero_Sync {
 			}
 			delete_user_meta( $member_id, 'remember_xero_contact_id' );
 			if ( is_array( $by_email ) && ! empty( $by_email['ContactID'] ) && self::contact_email_matches( $by_email, $user->user_email ) ) {
-				$contact_data['contact_id'] = $by_email['ContactID'];
-				update_user_meta( $member_id, 'remember_xero_contact_id', $by_email['ContactID'] );
-				$contact_data['name'] = Remember_Billing_Contact_Name::preferred( $full_name, $member_id, isset( $by_email['Name'] ) ? (string) $by_email['Name'] : '' );
-				if ( $contact_data['name'] !== $full_name ) {
-					Remember_Logger::debug(
-						'Keeping the member number on the Xero contact name',
-						array(
-							'member_id'       => $member_id,
-							'xero_contact_id' => $by_email['ContactID'],
-						)
-					);
+				$held = Remember_Billing_Link_Review::hold_match( $member_id, 'xero', self::review_contact( $by_email ) );
+				if ( $held ) {
+					return $held;
 				}
-			} else {
-				$contact_data['name'] = $full_name;
 			}
-			$result = self::save_contact( $contact_data, $full_name, $member_id );
+			$contact_data['name'] = $full_name;
+			$result               = self::save_contact( $contact_data, $full_name, $member_id );
 		}
 
 		if ( is_wp_error( $result ) ) {
@@ -299,6 +297,20 @@ class Remember_Xero_Sync {
 		);
 
 		return $result;
+	}
+
+	/**
+	 * A Xero contact in the shape the billing link review stores.
+	 *
+	 * @param array $contact Xero contact.
+	 * @return array{id:string,name:string,email:string}
+	 */
+	private static function review_contact( $contact ) {
+		return array(
+			'id'    => isset( $contact['ContactID'] ) ? (string) $contact['ContactID'] : '',
+			'name'  => isset( $contact['Name'] ) ? (string) $contact['Name'] : '',
+			'email' => isset( $contact['EmailAddress'] ) ? (string) $contact['EmailAddress'] : '',
+		);
 	}
 
 	/**

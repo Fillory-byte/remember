@@ -690,7 +690,10 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 		} else {
 			require_once plugin_dir_path( __FILE__ ) . '../../includes/integrations/class-remember-quickbooks-sync.php';
 			$result = Remember_QuickBooks_Sync::sync_member_to_customer( $member_id );
-			if ( is_wp_error( $result ) ) {
+			if ( Remember_Billing_Link_Review::is_hold_error( $result ) ) {
+				Remember_Logger::debug( 'Manual QuickBooks customer sync stopped: billing link waiting for review', array( 'member_id' => $member_id ) );
+				echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html( $result->get_error_message() ) . '</p></div>';
+			} elseif ( is_wp_error( $result ) ) {
 				Remember_Logger::error(
 					'Manual QuickBooks customer sync failed',
 					array(
@@ -715,7 +718,10 @@ if ( isset( $_POST['remember_member_action'] ) && check_admin_referer( 'remember
 		} else {
 			require_once plugin_dir_path( __FILE__ ) . '../../includes/integrations/class-remember-xero-sync.php';
 			$result = Remember_Xero_Sync::sync_member_to_contact( $member_id );
-			if ( is_wp_error( $result ) ) {
+			if ( Remember_Billing_Link_Review::is_hold_error( $result ) ) {
+				Remember_Logger::debug( 'Manual Xero contact sync stopped: billing link waiting for review', array( 'member_id' => $member_id ) );
+				echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html( $result->get_error_message() ) . '</p></div>';
+			} elseif ( is_wp_error( $result ) ) {
 				Remember_Logger::error(
 					'Manual Xero contact sync failed',
 					array(

@@ -262,6 +262,11 @@ $remember_print_sensitive = ! empty( Remember_Sensitive_Profile::print_topics() 
 		</div>
 	</div>
 
+	<?php
+	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-billing-link-review.php';
+	Remember_Billing_Link_Review::render_profile_panel( (int) $view_member_id );
+	?>
+
 	<?php Remember_Profile_Questions::render_event_sheet_continuation_rows( (int) $view_member_id ); ?>
 
 	<?php

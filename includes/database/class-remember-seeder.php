@@ -745,6 +745,7 @@ class Remember_Seeder {
 			'duplicate_hit_member',
 			'duplicate_merged_survivor',
 			'duplicate_merged_locked',
+			'billing_link_review',
 		);
 
 		foreach ( $notification_types as $type ) {
