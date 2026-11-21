@@ -56,6 +56,20 @@ class Remember_Logger {
 	private static $slow_request_hooked = false;
 
 	/**
+	 * Whether the log folder could not be created or written to in this request.
+	 *
+	 * @var bool
+	 */
+	private static $log_dir_failed = false;
+
+	/**
+	 * Whether the one-off error_log() fallback notice was already sent in this request.
+	 *
+	 * @var bool
+	 */
+	private static $log_dir_notice_sent = false;
+
+	/**
 	 * Mark the start of plugin activation (call once at the beginning of Remember_Activator::activate).
 	 *
 	 * @return void
@@ -429,11 +443,49 @@ class Remember_Logger {
 	 * @return string
 	 */
 	public static function get_log_file_path() {
-		if ( null === self::$log_file_path || ! is_dir( dirname( self::$log_file_path ) ) ) {
+		if ( null === self::$log_file_path || ( ! self::$log_dir_failed && ! is_dir( dirname( self::$log_file_path ) ) ) ) {
 			self::ensure_protected_log_dir();
 			self::$log_file_path = trailingslashit( self::protected_log_dir() ) . 'remember.log';
+			if ( ! is_dir( dirname( self::$log_file_path ) ) ) {
+				// Do not retry mkdir on every log call for the rest of this request.
+				self::$log_dir_failed = true;
+			}
 		}
 		return self::$log_file_path;
+	}
+
+	/**
+	 * Whether reMember's log folder exists and can be written to.
+	 *
+	 * Writes nothing to the log, so it is safe to call from the Settings page.
+	 *
+	 * @return bool
+	 */
+	public static function is_log_dir_writable() {
+		$file = self::get_log_file_path();
+		$dir  = dirname( $file );
+		if ( self::$log_dir_failed || ! is_dir( $dir ) || ! is_writable( $dir ) ) {
+			return false;
+		}
+		// The folder can be fine while an existing log file cannot be appended to.
+		if ( file_exists( $file ) && ! is_writable( $file ) ) {
+			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Remember that the log folder is unusable and tell PHP's error log once per request.
+	 *
+	 * @return void
+	 */
+	private static function note_log_dir_failure() {
+		self::$log_dir_failed = true;
+		if ( ! self::$log_dir_notice_sent ) {
+			self::$log_dir_notice_sent = true;
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- last-resort fallback when our own log cannot be written.
+			error_log( 'reMember: the plugin log folder is not writable, so log entries are not being saved.' );
+		}
 	}
 
 	/**
@@ -533,19 +585,62 @@ class Remember_Logger {
 	private static function write( $line ) {
 		$log_file = self::get_log_file_path();
 
+		if ( self::$log_dir_failed ) {
+			self::note_log_dir_failure();
+			return;
+		}
+
 		clearstatcache( true, $log_file );
 		if ( is_file( $log_file ) && filesize( $log_file ) >= self::MAX_LOG_BYTES ) {
-			$previous = $log_file . '.1';
-			if ( is_file( $previous ) ) {
-				@unlink( $previous );
-			}
-			@rename( $log_file, $previous );
+			self::rotate( $log_file );
 		}
 
 		// Append to the log file explicitly. A bare error_log( $msg ) follows PHP's error_log
 		// ini setting, which on many hosts (e.g. Laravel Valet) is not this file.
 		if ( false === @error_log( $line, 3, $log_file ) ) {
-			@file_put_contents( $log_file, $line, FILE_APPEND | LOCK_EX );
+			if ( false === @file_put_contents( $log_file, $line, FILE_APPEND | LOCK_EX ) ) {
+				self::note_log_dir_failure();
+			}
+		}
+	}
+
+	/**
+	 * Rotate remember.log to remember.log.1 under an exclusive lock.
+	 *
+	 * The size is re-checked once the lock is held so a request that lost the race does not
+	 * rotate again and delete the file the winner just rotated. If another request holds the
+	 * lock, rotation is skipped this time and logging carries on. If locking is unavailable,
+	 * it rotates without the lock, as before.
+	 *
+	 * @param string $log_file Absolute path of remember.log.
+	 * @return void
+	 */
+	private static function rotate( $log_file ) {
+		$lock        = @fopen( $log_file . '.lock', 'c' );
+		$locked      = false;
+		$would_block = 0;
+		if ( false !== $lock ) {
+			$locked = @flock( $lock, LOCK_EX | LOCK_NB, $would_block );
+		}
+
+		// Another request holds the lock and is rotating: skip. If locking is not available here
+		// (no lock file, or flock unsupported), rotate without it so the log still cannot grow forever.
+		if ( $locked || ! $would_block ) {
+			clearstatcache( true, $log_file );
+			if ( is_file( $log_file ) && filesize( $log_file ) >= self::MAX_LOG_BYTES ) {
+				$previous = $log_file . '.1';
+				if ( is_file( $previous ) ) {
+					@unlink( $previous );
+				}
+				@rename( $log_file, $previous );
+			}
+		}
+
+		if ( false !== $lock ) {
+			if ( $locked ) {
+				@flock( $lock, LOCK_UN );
+			}
+			fclose( $lock ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 		}
 	}
 }

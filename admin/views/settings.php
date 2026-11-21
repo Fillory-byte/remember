@@ -2837,6 +2837,11 @@ $im_platforms = Remember_Im_Platforms::get_all();
 								<span class="remember-tone-warning"><?php esc_html_e( 'File does not exist yet', 'remember' ); ?></span>
 							<?php endif; ?>
 						</p>
+						<?php if ( ! Remember_Logger::is_log_dir_writable() ) : ?>
+							<div class="notice notice-warning inline remember-settings-inline-notice">
+								<p><?php esc_html_e( 'The log folder is not writable, so reMember cannot save log entries. Check the permissions of the uploads folder.', 'remember' ); ?></p>
+							</div>
+						<?php endif; ?>
 						<p class="description">
 							<?php esc_html_e( 'When the file reaches 5 MB it is renamed to remember.log.1, replacing the older copy, and a new file is started.', 'remember' ); ?>
 						</p>
