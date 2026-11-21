@@ -699,13 +699,13 @@ class Remember_Profile_Fields {
 	 * Replace social / dietary / medical / allergy junctions for a member from POST.
 	 *
 	 * @param int $member_id Member user ID.
-	 * @return void
+	 * @return bool False when any list could not be written.
 	 */
 	public static function save_junctions_from_request( $member_id ) {
 		global $wpdb;
 		$member_id = absint( $member_id );
 		if ( $member_id < 1 ) {
-			return;
+			return false;
 		}
 
 		$failed = array();
@@ -820,6 +820,8 @@ class Remember_Profile_Fields {
 				)
 			);
 		}
+
+		return empty( $failed );
 	}
 
 	/**

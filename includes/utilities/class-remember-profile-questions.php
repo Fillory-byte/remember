@@ -603,13 +603,13 @@ class Remember_Profile_Questions {
 	 *
 	 * @param int                $member_id Member ID.
 	 * @param array<int, string> $answers   question_id => value.
-	 * @return void
+	 * @return bool False when any answer could not be written.
 	 */
 	public static function save_for_member( $member_id, $answers ) {
 		global $wpdb;
 		$member_id = absint( $member_id );
 		if ( $member_id <= 0 ) {
-			return;
+			return false;
 		}
 		$answers = self::sanitize_answers( $answers );
 		$table   = self::responses_table();
@@ -667,6 +667,8 @@ class Remember_Profile_Questions {
 				)
 			);
 		}
+
+		return empty( $failed );
 	}
 
 	/**

@@ -221,7 +221,9 @@ if ( isset( $_POST['remember_profile_action'] ) && check_admin_referer( 'remembe
 		$profile_data['created_at'] = current_time( 'mysql' );
 		$remember_profile_written = $wpdb->insert( $wpdb->prefix . 'remember_member_profiles', $profile_data );
 	}
+	$remember_save_failed = false;
 	if ( false === $remember_profile_written ) {
+		$remember_save_failed = true;
 		Remember_Logger::error(
 			'Member profile details not saved from the profile page',
 			array(
@@ -266,6 +268,7 @@ if ( isset( $_POST['remember_profile_action'] ) && check_admin_referer( 'remembe
 	}
 	$remember_user_result = wp_update_user( $remember_user_update );
 	if ( is_wp_error( $remember_user_result ) ) {
+		$remember_save_failed = true;
 		Remember_Logger::error(
 			'Member display name, nickname or email not saved from the profile page',
 			array(
@@ -299,12 +302,19 @@ if ( isset( $_POST['remember_profile_action'] ) && check_admin_referer( 'remembe
 		}
 	}
 	
-	Remember_Profile_Fields::save_junctions_from_request( $user->ID );
-	Remember_Profile_Questions::save_for_member( $user->ID, $pq_answers );
+	if ( false === Remember_Profile_Fields::save_junctions_from_request( $user->ID ) ) {
+		$remember_save_failed = true;
+	}
+	if ( false === Remember_Profile_Questions::save_for_member( $user->ID, $pq_answers ) ) {
+		$remember_save_failed = true;
+	}
 
-	do_action( 'remember_member_profile_saved', $user->ID );
+	// Only announce a save (and let accounting sync from it) when every write worked.
+	if ( ! $remember_save_failed ) {
+		do_action( 'remember_member_profile_saved', $user->ID );
 
-	Remember_Logger::info( 'Member profile saved', array( 'member_id' => (int) $user->ID ) );
+		Remember_Logger::info( 'Member profile saved', array( 'member_id' => (int) $user->ID ) );
+	}
 
 	if ( $change_password ) {
 		wp_set_password( $new_password, $user->ID );
@@ -316,11 +326,14 @@ if ( isset( $_POST['remember_profile_action'] ) && check_admin_referer( 'remembe
 	}
 
 	// Redirect: stay on edit if the photo or staff email choices failed so the member can retry.
-	if ( ! empty( $photo_error ) || ! $remember_prefs_saved ) {
+	if ( $remember_save_failed || ! empty( $photo_error ) || ! $remember_prefs_saved ) {
+		if ( $remember_save_failed ) {
+			set_transient( 'remember_profile_save_error_' . $user->ID, 1, MINUTE_IN_SECONDS );
+		}
 		if ( ! empty( $photo_error ) ) {
 			set_transient( 'remember_profile_photo_error_' . $user->ID, $photo_error, MINUTE_IN_SECONDS );
 		}
-		if ( ! $remember_prefs_saved ) {
+		if ( ! $remember_prefs_saved && ! $remember_save_failed ) {
 			set_transient( 'remember_profile_prefs_error_' . $user->ID, 1, MINUTE_IN_SECONDS );
 		}
 		wp_safe_redirect( Remember_Profile_Audit::with_return_args( add_query_arg( 'edit', '1' ) ) );
@@ -493,6 +506,10 @@ if ( $remember_sticky ) {
 		if ( $photo_error_notice ) {
 			delete_transient( 'remember_profile_photo_error_' . $user->ID );
 		}
+		$save_error_notice = get_transient( 'remember_profile_save_error_' . $user->ID );
+		if ( $save_error_notice ) {
+			delete_transient( 'remember_profile_save_error_' . $user->ID );
+		}
 		$prefs_error_notice = get_transient( 'remember_profile_prefs_error_' . $user->ID );
 		if ( $prefs_error_notice ) {
 			delete_transient( 'remember_profile_prefs_error_' . $user->ID );
@@ -583,6 +600,11 @@ if ( $remember_sticky ) {
 					}
 					?>
 				</p>
+			</div>
+		<?php endif; ?>
+		<?php if ( $save_error_notice ) : ?>
+			<div class="remember-notice remember-error" role="alert">
+				<p><?php esc_html_e( 'Some of your profile changes could not be saved. Please check your details below and save again. If this keeps happening, contact the organization.', 'remember' ); ?></p>
 			</div>
 		<?php endif; ?>
 		<?php if ( $photo_error_notice ) : ?>
