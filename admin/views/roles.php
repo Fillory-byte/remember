@@ -82,6 +82,13 @@ if ( isset( $_POST['remember_role_action'] ) && check_admin_referer( 'remember_r
 		// Allow-list the type; anything else falls back to the restricted 'event' type.
 		$new_role_type = isset( $_POST['role_type'] ) ? sanitize_text_field( wp_unslash( $_POST['role_type'] ) ) : 'event';
 		if ( ! in_array( $new_role_type, array( 'event', 'system' ), true ) ) {
+			Remember_Logger::warning(
+				'Role created as an event role: the posted role type is not allowed',
+				array(
+					'posted_type' => substr( $new_role_type, 0, 50 ),
+					'user_id'     => get_current_user_id(),
+				)
+			);
 			$new_role_type = 'event';
 		}
 		$data = array(
@@ -152,6 +159,14 @@ if ( isset( $_POST['remember_role_action'] ) && check_admin_referer( 'remember_r
 
 			// Allow-list the type; an invalid value keeps the stored type.
 			if ( ! in_array( $posted_type, array( 'event', 'system' ), true ) ) {
+				Remember_Logger::warning(
+					'Role type change ignored: the posted role type is not allowed',
+					array(
+						'role_id'     => $role_id,
+						'posted_type' => substr( $posted_type, 0, 50 ),
+						'user_id'     => get_current_user_id(),
+					)
+				);
 				$posted_type = $existing_role->role_type;
 			}
 			// Moving a role out of the event type lifts the event-role capability limit,
