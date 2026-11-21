@@ -410,6 +410,9 @@ class Remember_Checkin {
 		if ( empty( $row->checkin_enabled ) ) {
 			return 'disabled';
 		}
+		if ( isset( $row->event_status ) && 'cancelled' === (string) $row->event_status ) {
+			return 'event_cancelled';
+		}
 		if ( 'accepted' !== (string) $row->status || ! empty( $row->superseded_at ) ) {
 			return 'not_accepted';
 		}
@@ -432,7 +435,7 @@ class Remember_Checkin {
 		global $wpdb;
 		return $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT a.application_id, a.event_id, a.member_id, a.status, a.ticket_voided, a.superseded_at, a.checked_in_at, a.checked_in_by, e.checkin_enabled, r.role_name
+				"SELECT a.application_id, a.event_id, a.member_id, a.status, a.ticket_voided, a.superseded_at, a.checked_in_at, a.checked_in_by, e.checkin_enabled, e.status AS event_status, r.role_name
 				FROM {$wpdb->prefix}remember_event_applications a
 				INNER JOIN {$wpdb->prefix}remember_events e ON a.event_id = e.event_id
 				LEFT JOIN {$wpdb->prefix}remember_event_roles er ON a.event_role_id = er.event_role_id

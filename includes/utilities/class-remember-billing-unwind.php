@@ -352,24 +352,19 @@ class Remember_Billing_Unwind {
 	}
 
 	/**
-	 * Leave a paid invoice alone and return the refund steps for billing staff.
+	 * Steps billing staff follow to refund money already received on an invoice.
 	 *
-	 * Money goes back through whatever the member paid with (Stripe, bank, cheque),
-	 * which reMember is not connected to, so the refund cannot be issued from here.
-	 *
-	 * @param object $payment        Payment row.
 	 * @param string $provider       xero|quickbooks.
 	 * @param string $invoice_number Provider invoice number (may be empty).
 	 * @param float  $received       Amount paid or credited against the invoice.
 	 * @param float  $balance        Amount still owing.
-	 * @param string $reason         Reason, for the log.
-	 * @return WP_Error Code refund_manual, with the steps in data['steps'].
+	 * @return string[]
 	 */
-	private static function manual_refund( $payment, $provider, $invoice_number, $received, $balance, $reason ) {
+	public static function refund_steps( $provider, $invoice_number, $received, $balance ) {
 		$money   = static function ( $amount ) {
 			return '$' . number_format( (float) $amount, 2 );
 		};
-		$invoice = '' !== $invoice_number ? $invoice_number : __( '(no number)', 'remember' );
+		$invoice = '' !== (string) $invoice_number ? (string) $invoice_number : __( '(no number)', 'remember' );
 		$steps   = array();
 
 		if ( 'xero' === $provider ) {
@@ -396,7 +391,6 @@ class Remember_Billing_Unwind {
 				__( 'Record a cash refund of %s on the credit note, from the account the money left.', 'remember' ),
 				$money( $received )
 			);
-			$label = __( 'Xero', 'remember' );
 		} else {
 			$steps[] = sprintf(
 				/* translators: 1: amount, 2: QuickBooks invoice number */
@@ -412,9 +406,86 @@ class Remember_Billing_Unwind {
 					$invoice
 				);
 			}
-			$label = __( 'QuickBooks', 'remember' );
 		}
 		$steps[] = __( 'Run a billing sync in reMember, or wait for the scheduled one, to update the ledger.', 'remember' );
+		return $steps;
+	}
+
+	/**
+	 * Steps billing staff follow to keep money already received as credit toward a future invoice.
+	 *
+	 * @param string $provider       xero|quickbooks.
+	 * @param string $invoice_number Provider invoice number (may be empty).
+	 * @param float  $received       Amount paid or credited against the invoice.
+	 * @param float  $balance        Amount still owing.
+	 * @return string[]
+	 */
+	public static function credit_steps( $provider, $invoice_number, $received, $balance ) {
+		$money   = static function ( $amount ) {
+			return '$' . number_format( (float) $amount, 2 );
+		};
+		$invoice = '' !== (string) $invoice_number ? (string) $invoice_number : __( '(no number)', 'remember' );
+		$steps   = array();
+
+		if ( 'xero' === $provider ) {
+			$steps[] = sprintf(
+				/* translators: 1: Xero invoice number, 2: amount */
+				__( 'In Xero, create a credit note for invoice %1$s for %2$s.', 'remember' ),
+				$invoice,
+				$money( $received + $balance )
+			);
+			if ( $balance > 0.001 ) {
+				$steps[] = sprintf(
+					/* translators: %s: amount */
+					__( 'Allocate %s of the credit note to the invoice to clear the unpaid balance.', 'remember' ),
+					$money( $balance )
+				);
+			}
+			$steps[] = sprintf(
+				/* translators: %s: amount */
+				__( 'Leave the remaining %s of the credit note unallocated. It stays on the member\'s Xero contact as credit for their next invoice. If reMember Settings is set to apply the contact\'s unallocated credit notes to each new invoice, it is applied when that invoice is created; otherwise allocate it by hand then.', 'remember' ),
+				$money( $received )
+			);
+		} else {
+			$steps[] = sprintf(
+				/* translators: %s: amount */
+				__( 'In QuickBooks, create a Credit Memo for this customer for %s and leave it unapplied. It stays on the customer as credit for their next invoice.', 'remember' ),
+				$money( $received )
+			);
+			if ( $balance > 0.001 ) {
+				$steps[] = sprintf(
+					/* translators: 1: amount, 2: QuickBooks invoice number */
+					__( 'Create a Credit Memo for the unpaid %1$s and apply it to invoice %2$s.', 'remember' ),
+					$money( $balance ),
+					$invoice
+				);
+			}
+		}
+		$steps[] = __( 'Run a billing sync in reMember, or wait for the scheduled one, to update the ledger.', 'remember' );
+		return $steps;
+	}
+
+	/**
+	 * Leave a paid invoice alone and return the refund steps for billing staff.
+	 *
+	 * Money goes back through whatever the member paid with (Stripe, bank, cheque),
+	 * which reMember is not connected to, so the refund cannot be issued from here.
+	 *
+	 * @param object $payment        Payment row.
+	 * @param string $provider       xero|quickbooks.
+	 * @param string $invoice_number Provider invoice number (may be empty).
+	 * @param float  $received       Amount paid or credited against the invoice.
+	 * @param float  $balance        Amount still owing.
+	 * @param string $reason         Reason, for the log.
+	 * @return WP_Error Code refund_manual, with the steps in data['steps'].
+	 */
+	private static function manual_refund( $payment, $provider, $invoice_number, $received, $balance, $reason ) {
+		$money   = static function ( $amount ) {
+			return '$' . number_format( (float) $amount, 2 );
+		};
+		$invoice = '' !== $invoice_number ? $invoice_number : __( '(no number)', 'remember' );
+		$steps   = self::refund_steps( $provider, $invoice_number, $received, $balance );
+		$label   = 'xero' === $provider ? __( 'Xero', 'remember' ) : __( 'QuickBooks', 'remember' );
 
 		Remember_Logger::info(
 			'Refund left for billing staff; money already received on invoice',

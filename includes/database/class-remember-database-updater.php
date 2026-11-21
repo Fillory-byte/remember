@@ -2000,6 +2000,37 @@ class Remember_Database_Updater {
 			}
 		}
 
+		// Update to 2.4.9 (event cancellation date and reason; per-attendee refund or credit checklist).
+		if ( version_compare( get_option( 'remember_db_version', '0.0.0' ), '2.4.9', '<' ) ) {
+			Remember_Logger::info( 'Updating database schema', array( 'from' => get_option( 'remember_db_version', '0.0.0' ), 'to' => '2.4.9' ) );
+			$schema_ok = true;
+			$columns   = array(
+				array( $wpdb->prefix . 'remember_events', 'cancelled_at', 'DATE NULL DEFAULT NULL AFTER status' ),
+				array( $wpdb->prefix . 'remember_events', 'cancellation_reason', 'TEXT NULL DEFAULT NULL AFTER cancelled_at' ),
+				array( $wpdb->prefix . 'remember_event_applications', 'cancelled_with_event_at', 'DATETIME NULL DEFAULT NULL' ),
+				array( $wpdb->prefix . 'remember_event_applications', 'cancellation_choice', 'VARCHAR(10) NULL DEFAULT NULL' ),
+				array( $wpdb->prefix . 'remember_event_applications', 'cancellation_done_at', 'DATETIME NULL DEFAULT NULL' ),
+				array( $wpdb->prefix . 'remember_event_applications', 'cancellation_done_by', 'BIGINT(20) UNSIGNED NULL DEFAULT NULL' ),
+				array( $wpdb->prefix . 'remember_event_applications', 'cancellation_emailed_at', 'DATETIME NULL DEFAULT NULL' ),
+			);
+			foreach ( $columns as $column ) {
+				list( $table, $column_name, $definition ) = $column;
+				$found = $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$table} LIKE %s", $column_name ) );
+				if ( $column_name === $found ) {
+					continue;
+				}
+				$added = $wpdb->query( "ALTER TABLE {$table} ADD COLUMN {$column_name} {$definition}" );
+				if ( false === $added ) {
+					$schema_ok = false;
+					Remember_Logger::error( 'Failed to add column', array( 'table' => $table, 'column' => $column_name, 'error' => $wpdb->last_error ) );
+				}
+			}
+			if ( $schema_ok ) {
+				update_option( 'remember_db_version', '2.4.9' );
+				Remember_Logger::info( 'Database schema updated successfully', array( 'version' => '2.4.9' ) );
+			}
+		}
+
 		// Always re-ensure health catalogs (idempotent). Catches sites that stalled mid-migration
 		// or activated before catalog seed rows were added.
 		require_once plugin_dir_path( __FILE__ ) . 'class-remember-seeder.php';

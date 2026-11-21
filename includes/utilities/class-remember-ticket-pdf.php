@@ -193,7 +193,9 @@ class Remember_Ticket_Pdf {
 	private function build( $data ) {
 		$this->ticket_id = isset( $data['ticket_id'] ) ? (string) $data['ticket_id'] : '';
 		$this->stamp     = isset( $data['stamp'] ) ? (string) $data['stamp'] : '';
-		if ( 'void' === $this->stamp ) {
+		if ( 'event_cancelled' === $this->stamp ) {
+			$this->stamp_label = __( 'EVENT CANCELLED', 'remember' );
+		} elseif ( 'void' === $this->stamp ) {
 			$this->stamp_label = __( 'VOID', 'remember' );
 		} elseif ( 'payment_required' === $this->stamp ) {
 			$this->stamp_label = __( 'PAYMENT REQUIRED', 'remember' );
@@ -202,6 +204,9 @@ class Remember_Ticket_Pdf {
 		$this->has_logo = $this->prepare_logo();
 		$this->start_page( false );
 		$this->draw_header( $data );
+		if ( ! empty( $data['event_cancelled'] ) ) {
+			$this->draw_cancellation( $data );
+		}
 		$this->draw_attendee( $data );
 		$this->draw_event( $data );
 		if ( ! empty( $data['checkin_code'] ) ) {
@@ -261,6 +266,24 @@ class Remember_Ticket_Pdf {
 		$this->y      = $block_bottom + 10;
 		$this->hline( $this->margin, $this->page_width - $this->margin, $this->y, $this->ink, 1.25 );
 		$this->y += 8;
+	}
+
+	/**
+	 * Notice that the organiser cancelled the event, with the date and reason.
+	 *
+	 * @param array $data Ticket data.
+	 * @return void
+	 */
+	private function draw_cancellation( $data ) {
+		$alert = array( 0.690, 0.000, 0.125 );
+		$this->y += 10;
+		$this->need( 16 );
+		$this->draw_text( $this->margin, $this->y + 9, $this->upper( __( 'Event cancelled', 'remember' ) ), 9, 2, $alert, 0.7 );
+		$this->y += 16;
+		$this->text_line( isset( $data['cancellation_notice'] ) ? (string) $data['cancellation_notice'] : '', 12, 2, $alert );
+		if ( ! empty( $data['cancellation_reason'] ) ) {
+			$this->labeled( __( 'Reason:', 'remember' ), (string) $data['cancellation_reason'] );
+		}
 	}
 
 	/**
@@ -480,7 +503,14 @@ class Remember_Ticket_Pdf {
 		$this->need( 36 );
 		$this->hline( $this->margin, $this->page_width - $this->margin, $this->y, array( 0.8, 0.8, 0.8 ), 0.6 );
 		$this->y += 8;
-		$this->text_line( __( 'Present this ticket at check-in. Status and amounts reflect the latest billing sync.', 'remember' ), 8, 1, $this->muted );
+		$this->text_line(
+			! empty( $data['event_cancelled'] )
+				? __( 'This event was cancelled. Amounts reflect the latest billing sync.', 'remember' )
+				: __( 'Present this ticket at check-in. Status and amounts reflect the latest billing sync.', 'remember' ),
+			8,
+			1,
+			$this->muted
+		);
 		$generated = '';
 		if ( ! empty( $data['generated_at'] ) ) {
 			$generated = date_i18n(
@@ -627,7 +657,7 @@ class Remember_Ticket_Pdf {
 	}
 
 	/**
-	 * Diagonal void or payment stamp, drawn over the page.
+	 * Diagonal cancelled, void or payment stamp, drawn over the page.
 	 *
 	 * @return string
 	 */
@@ -639,7 +669,7 @@ class Remember_Ticket_Pdf {
 		$width = $this->width( $this->stamp_label, $size, 2 );
 		$cos   = cos( deg2rad( -18 ) );
 		$sin   = sin( deg2rad( -18 ) );
-		$color = 'void' === $this->stamp ? '0.690 0.000 0.125' : '0.541 0.353 0.000';
+		$color = in_array( $this->stamp, array( 'void', 'event_cancelled' ), true ) ? '0.690 0.000 0.125' : '0.541 0.353 0.000';
 		$pad_x = 10;
 		$pad_y = 7;
 		return sprintf(

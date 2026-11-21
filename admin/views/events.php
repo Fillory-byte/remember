@@ -21,6 +21,7 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-product.
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-addon-role-limits.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-agreements.php';
 require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-event-invites.php';
+require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-event-cancellation.php';
 
 Remember_Logger::debug( 'Events page loaded' );
 
@@ -460,6 +461,89 @@ function remember_render_invoice_due_fields( $event = null ) {
 }
 
 /**
+ * "Cancelled on" and reason rows, shown while Status is Cancelled.
+ *
+ * @param object $event Event row.
+ * @return void
+ */
+function remember_render_cancellation_fields( $event ) {
+	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-event-cancellation.php';
+	$is_cancelled = Remember_Event_Cancellation::is_cancelled( $event );
+	$date         = Remember_Event_Cancellation::cancelled_on( $event );
+	$reason       = isset( $event->cancellation_reason ) ? (string) $event->cancellation_reason : '';
+	?>
+	<tr class="remember-event-cancellation-row"<?php echo $is_cancelled ? '' : ' hidden'; ?>>
+		<th><label for="cancelled_at"><?php esc_html_e( 'Cancelled on', 'remember' ); ?></label></th>
+		<td>
+			<input type="date" id="cancelled_at" name="cancelled_at" class="regular-text" value="<?php echo esc_attr( $date ); ?>" aria-describedby="cancelled_at_hint">
+			<p class="description" id="cancelled_at_hint"><?php esc_html_e( 'The date the event was cancelled, printed on attendees\' tickets. Left blank, it is set to today when you save.', 'remember' ); ?></p>
+		</td>
+	</tr>
+	<tr class="remember-event-cancellation-row"<?php echo $is_cancelled ? '' : ' hidden'; ?>>
+		<th><label for="cancellation_reason"><?php esc_html_e( 'Reason (printed on tickets)', 'remember' ); ?></label></th>
+		<td>
+			<textarea id="cancellation_reason" name="cancellation_reason" class="large-text" rows="2" aria-describedby="cancellation_reason_hint"><?php echo esc_textarea( $reason ); ?></textarea>
+			<p class="description" id="cancellation_reason_hint"><?php esc_html_e( 'Optional. Attendees see it on their ticket and in the cancellation email, so keep it to what you would tell an insurer, for example "Venue closed by the local authority".', 'remember' ); ?></p>
+			<p class="description"><?php esc_html_e( 'Saving the event as Cancelled changes every accepted attendee\'s ticket to EVENT CANCELLED and puts them on the event\'s refund or credit checklist. It does not email anyone, and it does not refund, credit or void anything in the billing system.', 'remember' ); ?></p>
+		</td>
+	</tr>
+	<?php
+}
+
+/**
+ * After an edit: put a cancelled event's accepted attendees on its list, and say what happened.
+ *
+ * @param int    $event_id      Event ID.
+ * @param string $status_before Status before the save.
+ * @param string $status_after  Status saved.
+ * @return void
+ */
+function remember_event_cancellation_after_save( $event_id, $status_before, $status_after ) {
+	if ( 'cancelled' !== $status_after ) {
+		if ( 'cancelled' === $status_before ) {
+			Remember_Logger::info(
+				'Event no longer cancelled; its tickets no longer show the cancellation',
+				array(
+					'event_id' => absint( $event_id ),
+					'status'   => $status_after,
+					'user_id'  => get_current_user_id(),
+				)
+			);
+		}
+		return;
+	}
+
+	$added = Remember_Event_Cancellation::sync_list_after_save( $event_id, $status_before );
+	if ( false === $added ) {
+		echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'The event was saved as Cancelled, but its attendees could not be put on the refund or credit checklist, so their tickets do not show the cancellation yet. Save the event again, or ask an administrator to check the reMember log.', 'remember' ) . '</p></div>';
+		return;
+	}
+
+	$view_url = admin_url( 'admin.php?page=remember-events&view=' . absint( $event_id ) . '#remember-event-cancellation' );
+	if ( 'cancelled' !== $status_before ) {
+		$message = sprintf(
+			/* translators: %d: number of attendees */
+			_n(
+				'Event cancelled. %d attendee\'s ticket now reads EVENT CANCELLED. Nobody has been emailed and no invoice was changed.',
+				'Event cancelled. %d attendees\' tickets now read EVENT CANCELLED. Nobody has been emailed and no invoice was changed.',
+				$added,
+				'remember'
+			),
+			$added
+		);
+	} elseif ( $added > 0 ) {
+		$message = sprintf(
+			/* translators: %d: number of attendees */
+			_n( '%d more attendee was added to the cancellation checklist.', '%d more attendees were added to the cancellation checklist.', $added, 'remember' ),
+			$added
+		);
+	} else {
+		return;
+	}
+	echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html( $message ) . ' <a href="' . esc_url( $view_url ) . '">' . esc_html__( 'Open the refund or credit checklist', 'remember' ) . '</a></p></div>';
+}
+
+/**
  * Queue re-dating of unpaid invoices when an edit changed the event's due-date setting.
  *
  * @param object|null $before Event before the save.
@@ -656,6 +740,10 @@ if ( isset( $_POST['remember_event_action'] ) && check_admin_referer( 'remember_
 			$invoice_due_fields  = remember_event_invoice_due_fields();
 			$registration_fields = is_wp_error( $invoice_due_fields ) ? $invoice_due_fields : array_merge( $registration_fields, $invoice_due_fields );
 		}
+		if ( ! is_wp_error( $registration_fields ) ) {
+			$cancellation_fields = Remember_Event_Cancellation::fields_from_request( sanitize_text_field( wp_unslash( $_POST['status'] ) ) );
+			$registration_fields = is_wp_error( $cancellation_fields ) ? $cancellation_fields : array_merge( $registration_fields, $cancellation_fields );
+		}
 		$data = array(
 			'event_name'        => sanitize_text_field( wp_unslash( $_POST['event_name'] ) ),
 			'event_description' => isset( $_POST['event_description'] ) ? wp_kses_post( wp_unslash( $_POST['event_description'] ) ) : '',
@@ -715,6 +803,10 @@ if ( isset( $_POST['remember_event_action'] ) && check_admin_referer( 'remember_
 			$invoice_due_fields  = remember_event_invoice_due_fields();
 			$registration_fields = is_wp_error( $invoice_due_fields ) ? $invoice_due_fields : array_merge( $registration_fields, $invoice_due_fields );
 		}
+		if ( ! is_wp_error( $registration_fields ) ) {
+			$cancellation_fields = Remember_Event_Cancellation::fields_from_request( sanitize_text_field( wp_unslash( $_POST['status'] ) ) );
+			$registration_fields = is_wp_error( $cancellation_fields ) ? $cancellation_fields : array_merge( $registration_fields, $cancellation_fields );
+		}
 		$event_before = $event_model->get( $event_id );
 		$data = array(
 			'event_name'        => sanitize_text_field( wp_unslash( $_POST['event_name'] ) ),
@@ -760,6 +852,7 @@ if ( isset( $_POST['remember_event_action'] ) && check_admin_referer( 'remember_
 				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Some of this event\'s roles, add-ons, agreements or invitees could not be saved. Check its roles, prices, add-ons, agreements and invitees below and save again.', 'remember' ) . '</p></div>';
 			}
 			remember_event_invoice_due_after_save( $event_before, $event_model->get( $event_id ) );
+			remember_event_cancellation_after_save( $event_id, $event_before ? (string) $event_before->status : '', (string) $data['status'] );
 			// Reload the event data to reflect changes
 			$editing_event = $event_model->get( $event_id );
 			if ( $editing_event ) {
@@ -797,6 +890,124 @@ if ( isset( $_POST['remember_event_action'] ) && check_admin_referer( 'remember_
 		} else {
 			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Failed to delete event.', 'remember' ) . '</p></div>';
 		}
+	}
+}
+
+// Refund or credit checklist on a cancelled event. Every billing change here is one attendee, one click.
+$cancellation_notices = array();
+if ( isset( $_POST['remember_cancellation_action'] ) && check_admin_referer( 'remember_event_cancellation', 'remember_event_cancellation_nonce' ) ) {
+	$cancel_action   = sanitize_key( wp_unslash( $_POST['remember_cancellation_action'] ) );
+	$cancel_event_id = isset( $_POST['event_id'] ) ? absint( $_POST['event_id'] ) : 0;
+	$cancel_app_id   = isset( $_POST['application_id'] ) ? absint( $_POST['application_id'] ) : 0;
+	$needs_cap       = in_array( $cancel_action, array( 'email_all', 'email_one' ), true ) ? 'remember_update_applications' : 'remember_update_billing';
+
+	if ( ! current_user_can( $needs_cap ) ) {
+		Remember_Logger::warning(
+			'Cancellation checklist action refused: missing permission',
+			array(
+				'action'         => $cancel_action,
+				'event_id'       => $cancel_event_id,
+				'application_id' => $cancel_app_id,
+				'user_id'        => get_current_user_id(),
+			)
+		);
+		wp_die( esc_html__( 'You do not have sufficient permissions to perform this action.', 'remember' ), esc_html__( 'Access Denied', 'remember' ), array( 'response' => 403 ) );
+	}
+
+	$result      = null;
+	$cancel_name = __( 'the attendee', 'remember' );
+	if ( $cancel_app_id ) {
+		require_once plugin_dir_path( __FILE__ ) . '../../includes/models/class-application.php';
+		$cancel_app  = ( new Remember_Application() )->get( $cancel_app_id );
+		$cancel_user = $cancel_app ? get_userdata( (int) $cancel_app->member_id ) : false;
+		if ( $cancel_user ) {
+			$cancel_name = $cancel_user->display_name;
+		}
+	}
+	if ( 'refund' === $cancel_action || 'credit' === $cancel_action ) {
+		$result = Remember_Event_Cancellation::set_choice( $cancel_app_id, $cancel_event_id, $cancel_action );
+		$ok     = 'refund' === $cancel_action
+			/* translators: %s: member name */
+			? sprintf( __( 'Refund pending for %s. Issue it in the billing system using the steps on their row, then press "Mark refund issued".', 'remember' ), $cancel_name )
+			/* translators: %s: member name */
+			: sprintf( __( 'Credit pending for %s. Issue it in the billing system using the steps on their row, then press "Mark credit issued".', 'remember' ), $cancel_name );
+	} elseif ( 'clear_choice' === $cancel_action ) {
+		$result = Remember_Event_Cancellation::set_choice( $cancel_app_id, $cancel_event_id, '' );
+		/* translators: %s: member name */
+		$ok = sprintf( __( 'Refund or credit choice cleared for %s.', 'remember' ), $cancel_name );
+	} elseif ( 'done' === $cancel_action || 'undone' === $cancel_action ) {
+		$result        = Remember_Event_Cancellation::set_done( $cancel_app_id, $cancel_event_id, 'done' === $cancel_action );
+		$cancel_choice = $cancel_app ? (string) $cancel_app->cancellation_choice : '';
+		if ( 'done' === $cancel_action ) {
+			if ( 'refund' === $cancel_choice ) {
+				/* translators: %s: member name */
+				$ok = sprintf( __( 'Refund marked issued for %s.', 'remember' ), $cancel_name );
+			} elseif ( 'credit' === $cancel_choice ) {
+				/* translators: %s: member name */
+				$ok = sprintf( __( 'Credit marked issued for %s.', 'remember' ), $cancel_name );
+			} else {
+				/* translators: %s: member name */
+				$ok = sprintf( __( '%s marked done.', 'remember' ), $cancel_name );
+			}
+		} elseif ( 'refund' === $cancel_choice ) {
+			/* translators: %s: member name */
+			$ok = sprintf( __( 'Refund for %s is pending again.', 'remember' ), $cancel_name );
+		} elseif ( 'credit' === $cancel_choice ) {
+			/* translators: %s: member name */
+			$ok = sprintf( __( 'Credit for %s is pending again.', 'remember' ), $cancel_name );
+		} else {
+			/* translators: %s: member name */
+			$ok = sprintf( __( '%s is no longer marked done.', 'remember' ), $cancel_name );
+		}
+	} elseif ( 'void_invoice' === $cancel_action ) {
+		$result = Remember_Event_Cancellation::void_unpaid_invoice( $cancel_app_id, $cancel_event_id );
+		/* translators: %s: member name */
+		$ok = sprintf( __( 'Invoice voided for %s. Nothing is owed, so mark them done.', 'remember' ), $cancel_name );
+	} elseif ( 'add_late_leaver' === $cancel_action ) {
+		$result = Remember_Event_Cancellation::add_late_leaver( $cancel_app_id, $cancel_event_id );
+		$ok     = __( 'Added to the checklist. Their ticket now reads EVENT CANCELLED.', 'remember' );
+	} elseif ( 'email_one' === $cancel_action ) {
+		$result = Remember_Event_Cancellation::email_attendee( $cancel_app_id, $cancel_event_id );
+		if ( false === $result ) {
+			$result = new WP_Error( 'remember_template_off', __( 'The Event Cancelled email is turned off under Settings → Notifications. Nothing was sent.', 'remember' ) );
+		}
+		$ok = __( 'Cancellation email sent.', 'remember' );
+	} elseif ( 'email_all' === $cancel_action ) {
+		$stats = Remember_Event_Cancellation::email_not_yet_emailed( $cancel_event_id );
+		if ( $stats['disabled'] ) {
+			$result = new WP_Error( 'remember_template_off', __( 'The Event Cancelled email is turned off under Settings → Notifications. Nothing was sent.', 'remember' ) );
+		} elseif ( $stats['errors'] > 0 ) {
+			$result = new WP_Error(
+				'remember_cancellation_email_errors',
+				sprintf(
+					/* translators: 1: emails sent, 2: emails that failed */
+					__( '%1$d cancellation emails sent; %2$d could not be sent. The attendees still marked "Not emailed" can be sent again.', 'remember' ),
+					$stats['sent'],
+					$stats['errors']
+				)
+			);
+		} else {
+			$result = true;
+		}
+		$ok = sprintf(
+			/* translators: %d: emails sent */
+			_n( '%d cancellation email sent.', '%d cancellation emails sent.', $stats['sent'], 'remember' ),
+			$stats['sent']
+		);
+	} else {
+		Remember_Logger::debug( 'Cancellation checklist action ignored: unknown action', array( 'action' => $cancel_action ) );
+	}
+
+	if ( is_wp_error( $result ) ) {
+		$cancellation_notices[] = array( 'error', $result->get_error_message() );
+		$steps                  = $result->get_error_data();
+		if ( is_array( $steps ) && ! empty( $steps['steps'] ) ) {
+			foreach ( (array) $steps['steps'] as $step ) {
+				$cancellation_notices[] = array( 'error', $step );
+			}
+		}
+	} elseif ( true === $result ) {
+		$cancellation_notices[] = array( 'success', $ok );
 	}
 }
 
@@ -947,6 +1158,7 @@ if ( isset( $_GET['view'] ) ) {
 							</select>
 						</td>
 					</tr>
+					<?php remember_render_cancellation_fields( $editing_event ); ?>
 					<tr>
 						<th><label><?php esc_html_e( 'Event Roles', 'remember' ); ?></label></th>
 						<td>
@@ -1208,6 +1420,31 @@ if ( isset( $_GET['view'] ) ) {
 			</form>
 		</div>
 
+		<?php
+		$cancellation_outstanding = array();
+		foreach ( Remember_Event_Cancellation::outstanding_events() as $outstanding ) {
+			$cancellation_outstanding[ (int) $outstanding->event_id ] = $outstanding;
+		}
+		?>
+		<?php foreach ( $cancellation_outstanding as $outstanding ) : ?>
+			<div class="notice notice-warning">
+				<p>
+					<?php
+					echo esc_html(
+						sprintf(
+							/* translators: 1: event name, 2: attendees not done, 3: attendees on the list */
+							__( '%1$s is cancelled: %2$d of %3$d attendees are not finished yet (refund or credit not chosen, still pending, or an unpaid invoice still open).', 'remember' ),
+							$outstanding->event_name,
+							(int) $outstanding->open,
+							(int) $outstanding->total
+						)
+					);
+					?>
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-events&view=' . (int) $outstanding->event_id . '#remember-event-cancellation' ) ); ?>"><?php esc_html_e( 'Open the checklist', 'remember' ); ?></a>
+				</p>
+			</div>
+		<?php endforeach; ?>
+
 		<!-- Events List -->
 		<?php if ( ! empty( $events ) ) : ?>
 		<div class="remember-table-scroll">
@@ -1257,6 +1494,21 @@ if ( isset( $_GET['view'] ) ) {
 							<span class="remember-tone-<?php echo esc_attr( $status_tones[ $event->status ] ); ?>">
 								<?php echo esc_html( $status_labels[ $event->status ] ); ?>
 							</span>
+							<?php if ( isset( $cancellation_outstanding[ (int) $event->event_id ] ) ) : ?>
+								<?php $outstanding = $cancellation_outstanding[ (int) $event->event_id ]; ?>
+								<br class="remember-list-break"><a class="description" href="<?php echo esc_url( admin_url( 'admin.php?page=remember-events&view=' . (int) $event->event_id . '#remember-event-cancellation' ) ); ?>">
+									<?php
+									echo esc_html(
+										sprintf(
+											/* translators: 1: attendees finished, 2: attendees on the list */
+											__( '%1$d of %2$d refunds and credits finished', 'remember' ),
+											(int) $outstanding->total - (int) $outstanding->open,
+											(int) $outstanding->total
+										)
+									);
+									?>
+								</a>
+							<?php endif; ?>
 						</td>
 						<td class="column-type" data-label="<?php echo esc_attr__( 'Type', 'remember' ); ?>">
 							<?php if ( $event->is_private ) : ?>

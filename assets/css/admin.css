@@ -738,6 +738,168 @@
 	padding-bottom: 10px;
 }
 
+.remember-event-cancellation {
+	background: #fff;
+	border: 1px solid #ccd0d4;
+	border-left: 4px solid #8a2424;
+	border-radius: 4px;
+	padding: 20px;
+	margin-top: 20px;
+}
+
+.remember-event-cancellation h3 {
+	margin-top: 0;
+}
+
+.remember-event-cancellation-progress {
+	font-size: 14px;
+	font-weight: normal;
+	color: #50575e;
+	margin-left: 6px;
+}
+
+.remember-event-cancellation-email {
+	margin: 12px 0 16px;
+}
+
+.remember-event-cancellation-intro {
+	max-width: 75ch;
+}
+
+.remember-cancellation-action {
+	display: inline-block;
+	margin: 0;
+}
+
+.remember-cancellation-list {
+	list-style: none;
+	margin: 12px 0 0;
+	padding: 0;
+	display: grid;
+	gap: 10px;
+}
+
+.remember-cancellation-card {
+	display: grid;
+	grid-template-columns: minmax(11rem, 15rem) minmax(8rem, 10rem) minmax(0, 1fr) minmax(8rem, 11rem);
+	gap: 8px 20px;
+	margin: 0;
+	padding: 12px 14px;
+	border: 1px solid #dcdcde;
+	border-left: 4px solid #dba617;
+	border-radius: 4px;
+	background: #fff;
+}
+
+.remember-cancellation-list--no-money .remember-cancellation-card {
+	grid-template-columns: minmax(11rem, 15rem) minmax(0, 1fr) minmax(8rem, 11rem);
+}
+
+.remember-cancellation-card.is-success {
+	border-left-color: #00a32a;
+	background: #f6fbf6;
+}
+
+.remember-cancellation-card.is-muted {
+	border-left-color: #c3c4c7;
+}
+
+.remember-cancellation-card > div {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 2px;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.remember-cancellation-label {
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: #646970;
+}
+
+.remember-cancellation-card p {
+	margin: 0;
+}
+
+.remember-cancellation-state .description {
+	max-width: 70ch;
+}
+
+.remember-event-cancellation-steps {
+	max-width: 70ch;
+	margin: 2px 0 0 18px;
+	font-size: 13px;
+}
+
+.remember-event-cancellation-steps li {
+	margin-bottom: 4px;
+}
+
+.remember-cancellation-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 10px;
+	margin-top: 6px;
+}
+
+.remember-cancellation-emailed .button-link {
+	text-align: left;
+}
+
+.remember-event-cancellation-leavers {
+	max-width: 75ch;
+}
+
+.remember-event-cancellation-leavers li {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 10px;
+	margin-bottom: 8px;
+}
+
+@media screen and (max-width: 1200px) {
+	.remember-cancellation-card,
+	.remember-cancellation-list--no-money .remember-cancellation-card {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	}
+
+	.remember-cancellation-state {
+		grid-column: 1 / -1;
+		order: 3;
+	}
+
+	.remember-cancellation-emailed {
+		grid-column: 1 / -1;
+		order: 4;
+		flex-direction: row !important;
+		flex-wrap: wrap;
+		align-items: baseline !important;
+		gap: 4px 10px !important;
+	}
+}
+
+@media screen and (max-width: 600px) {
+	.remember-event-cancellation {
+		padding: 14px 12px;
+	}
+
+	.remember-cancellation-card,
+	.remember-cancellation-list--no-money .remember-cancellation-card {
+		grid-template-columns: minmax(0, 1fr);
+		padding: 10px 12px;
+	}
+
+	.remember-cancellation-buttons .button {
+		min-height: 40px;
+	}
+}
+
 .remember-event-surveys {
 	background: #fff;
 	border: 1px solid #ccd0d4;
