@@ -509,7 +509,16 @@ class Remember_Public {
 
 		// Set separately so a site whose schema update has not run yet (it runs on the next admin load) can still register members.
 		if ( $profile_inserted && 1 === Remember_Profile_Fields::social_media_none_for_storage() ) {
-			$wpdb->update( $wpdb->prefix . 'remember_member_profiles', array( 'social_media_none' => 1 ), array( 'member_id' => $user_id ) );
+			$none_saved = $wpdb->update( $wpdb->prefix . 'remember_member_profiles', array( 'social_media_none' => 1 ), array( 'member_id' => $user_id ) );
+			if ( false === $none_saved ) {
+				Remember_Logger::warning(
+					'Public member registration: the member chose "None" for social media, but it was not saved; admins will see "None provided"',
+					array(
+						'user_id' => $user_id,
+						'error'   => $wpdb->last_error,
+					)
+				);
+			}
 		}
 
 		if ( ! $profile_inserted ) {
