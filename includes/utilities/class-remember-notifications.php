@@ -1498,6 +1498,31 @@ class Remember_Notifications {
 	}
 
 	/**
+	 * Email an attendee that their event was cancelled, with the ticket that shows it.
+	 *
+	 * @param int $application_id Application ID.
+	 * @return bool|WP_Error
+	 */
+	public static function send_event_cancelled( $application_id ) {
+		$context = self::context_for_application( $application_id );
+		if ( is_wp_error( $context ) ) {
+			return $context;
+		}
+
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-event-cancellation.php';
+		require_once plugin_dir_path( __FILE__ ) . '../models/class-application.php';
+		require_once plugin_dir_path( __FILE__ ) . '../models/class-event.php';
+		$application = ( new Remember_Application() )->get( absint( $application_id ) );
+		$event       = $application ? ( new Remember_Event() )->get( $application->event_id ) : null;
+
+		$placeholders                        = $context['placeholders'];
+		$placeholders['cancelled_on']        = Remember_Event_Cancellation::cancelled_on_display( $event );
+		$placeholders['cancellation_reason'] = $event && ! empty( $event->cancellation_reason ) ? (string) $event->cancellation_reason : '';
+
+		return self::send( 'event_cancelled', $placeholders, $context['email'] );
+	}
+
+	/**
 	 * Balance-due / payment reminder for one application.
 	 *
 	 * @param int $application_id Application ID.
@@ -1534,8 +1559,10 @@ class Remember_Notifications {
 
 		$sql = "SELECT a.application_id
 			FROM {$wpdb->prefix}remember_event_applications a
+			INNER JOIN {$wpdb->prefix}remember_events e ON e.event_id = a.event_id
 			LEFT JOIN {$wpdb->prefix}remember_payments p ON p.event_application_id = a.application_id
 			WHERE a.status = 'accepted'
+			AND e.status <> 'cancelled'
 			AND (a.ticket_voided IS NULL OR a.ticket_voided = 0)
 			AND (
 				p.payment_id IS NULL
@@ -1611,6 +1638,17 @@ class Remember_Notifications {
 			return;
 		}
 		if ( empty( $payment->event_application_id ) ) {
+			return;
+		}
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-event-cancellation.php';
+		require_once plugin_dir_path( __FILE__ ) . '../models/class-application.php';
+		require_once plugin_dir_path( __FILE__ ) . '../models/class-event.php';
+		$application = ( new Remember_Application() )->get( (int) $payment->event_application_id );
+		if ( $application && Remember_Event_Cancellation::is_cancelled( ( new Remember_Event() )->get( $application->event_id ) ) ) {
+			Remember_Logger::debug(
+				'Paid-ticket email not sent: the event is cancelled',
+				array( 'application_id' => (int) $payment->event_application_id )
+			);
 			return;
 		}
 		$result = self::send_ticket_paid( (int) $payment->event_application_id );
@@ -1758,6 +1796,8 @@ class Remember_Notifications {
 			'role_name'      => '',
 			'waitlist_count' => '',
 			'apply_url'      => '',
+			'cancelled_on'   => '',
+			'cancellation_reason' => '',
 		);
 		return wp_parse_args( $context, $defaults );
 	}

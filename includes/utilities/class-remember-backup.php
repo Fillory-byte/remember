@@ -326,6 +326,7 @@ class Remember_Backup {
 			'updated_by',
 			'created_by',
 			'processed_by',
+			'cancellation_done_by',
 			'primary_vetter_id',
 			'invited_by',
 			'author_id',

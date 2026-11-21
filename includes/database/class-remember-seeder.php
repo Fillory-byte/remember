@@ -735,6 +735,7 @@ class Remember_Seeder {
 			'waitlist_spot_opened',
 			'waitlist_promoted',
 			'event_ticket_paid',
+			'event_cancelled',
 			'event_invite',
 			'survey_issued',
 			'payment_recorded',

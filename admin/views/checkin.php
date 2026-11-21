@@ -62,6 +62,7 @@ function remember_checkin_result_title( $code ) {
 		'undone'      => __( 'Check-in removed', 'remember' ),
 		'already'     => __( 'Already checked in', 'remember' ),
 		'void'        => __( 'Void ticket', 'remember' ),
+		'event_cancelled' => __( 'Event cancelled', 'remember' ),
 		'not_accepted'=> __( 'Not accepted', 'remember' ),
 		'wrong_event' => __( 'Wrong event', 'remember' ),
 		'disabled'    => __( 'Check-in is off', 'remember' ),
@@ -151,6 +152,8 @@ function remember_checkin_result_title( $code ) {
 					</p>
 				<?php elseif ( 'void' === $result['result'] ) : ?>
 					<p><?php esc_html_e( 'This ticket was voided. Do not admit on this ticket.', 'remember' ); ?></p>
+				<?php elseif ( 'event_cancelled' === $result['result'] ) : ?>
+					<p><?php esc_html_e( 'This event is cancelled. Do not admit on this ticket.', 'remember' ); ?></p>
 				<?php elseif ( 'not_accepted' === $result['result'] ) : ?>
 					<p><?php esc_html_e( 'This application is not an accepted ticket.', 'remember' ); ?></p>
 				<?php elseif ( 'wrong_event' === $result['result'] ) : ?>

@@ -461,6 +461,21 @@
 
 		$('.remember-events form').each(function() {
 			var $form = $(this);
+			var $status = $form.find('select[name="status"]');
+			var $cancelRows = $form.find('.remember-event-cancellation-row');
+			if ($status.length && $cancelRows.length) {
+				$status.on('change', function() {
+					if ($status.val() === 'cancelled') {
+						$cancelRows.removeAttr('hidden');
+					} else {
+						$cancelRows.attr('hidden', 'hidden');
+					}
+				});
+			}
+		});
+
+		$('.remember-events form').each(function() {
+			var $form = $(this);
 			var $toggle = $form.find('.remember-event-private-toggle');
 			var $row = $form.find('.remember-event-invitees-row');
 			if (!$toggle.length || !$row.length) {

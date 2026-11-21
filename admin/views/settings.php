@@ -2767,6 +2767,11 @@ $im_platforms = Remember_Im_Platforms::get_all();
 														<?php esc_html_e( 'This email also accepts {vetter_name} (the primary vetter) and {vetting_url} (a link to the case).', 'remember' ); ?>
 													</p>
 												<?php endif; ?>
+												<?php if ( 'event_cancelled' === $notification->notification_type ) : ?>
+													<p class="description remember-notification-help">
+														<?php esc_html_e( 'This email also accepts {cancelled_on} (the date on the event\'s "Cancelled on" field), {cancellation_reason} (the reason printed on tickets), {event_dates} and {ticket_id}. It is sent only when staff press "Email attendees" on the cancelled event.', 'remember' ); ?>
+													</p>
+												<?php endif; ?>
 											</td>
 										</tr>
 									</table>

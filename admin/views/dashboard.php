@@ -47,6 +47,31 @@ $remember_dash_row = function ( $item ) {
 	<?php if ( ! empty( $dashboard['failed'] ) ) : ?>
 		<div class="notice notice-error"><p><?php esc_html_e( 'Some dashboard figures could not be loaded, so counts and lists below may be incomplete. Reload the page, or ask an administrator to check the reMember log.', 'remember' ); ?></p></div>
 	<?php endif; ?>
+	<?php
+	if ( current_user_can( 'remember_read_billing' ) || current_user_can( 'remember_update_applications' ) ) :
+		require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-event-cancellation.php';
+		foreach ( Remember_Event_Cancellation::outstanding_events() as $outstanding ) :
+			?>
+			<div class="notice notice-warning">
+				<p>
+					<?php
+					echo esc_html(
+						sprintf(
+							/* translators: 1: event name, 2: attendees not done, 3: attendees on the list */
+							__( '%1$s is cancelled: %2$d of %3$d attendees are not finished yet (refund or credit not chosen, still pending, or an unpaid invoice still open).', 'remember' ),
+							$outstanding->event_name,
+							(int) $outstanding->open,
+							(int) $outstanding->total
+						)
+					);
+					?>
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=remember-events&view=' . (int) $outstanding->event_id . '#remember-event-cancellation' ) ); ?>"><?php esc_html_e( 'Open the checklist', 'remember' ); ?></a>
+				</p>
+			</div>
+			<?php
+		endforeach;
+	endif;
+	?>
 	<?php if ( ! empty( $dashboard['summary'] ) ) : ?>
 		<p class="remember-dash-summary"><?php echo esc_html( $dashboard['summary'] ); ?></p>
 	<?php endif; ?>

@@ -131,6 +131,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'waitlist_spot_opened'          => __( 'Waitlist Spot Opened (Staff)', 'remember' ),
 			'waitlist_promoted'             => __( 'Waitlist Spot Offered', 'remember' ),
 			'event_ticket_paid'             => __( 'Event Ticket Paid', 'remember' ),
+			'event_cancelled'               => __( 'Event Cancelled', 'remember' ),
 			'survey_issued'                 => __( 'Survey Issued', 'remember' ),
 			'payment_recorded'              => __( 'Payment Recorded', 'remember' ),
 			'payment_due_reminder'          => __( 'Payment Due Reminder', 'remember' ),
@@ -169,6 +170,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'waitlist_spot_opened'          => __( 'Sent when an accepted spot opens and the event is set to email staff. Until the roles on this template are changed, it goes to members accepted to that event in an event administration role.', 'remember' ),
 			'waitlist_promoted'             => __( 'Sent to a member when their waitlisted application is moved to pending because a spot opened.', 'remember' ),
 			'event_ticket_paid'             => __( 'Sent to member when their event ticket is paid in full (includes ticket link).', 'remember' ),
+			'event_cancelled'               => __( 'Sent to attendees of a cancelled event when staff press Email attendees on the event. Links to their ticket, which reads EVENT CANCELLED. Also available: {cancelled_on} and {cancellation_reason}.', 'remember' ),
 			'survey_issued'                 => __( 'Sent to accepted participants when a follow-on survey is issued.', 'remember' ),
 			'payment_recorded'              => __( 'Sent when a payment is recorded.', 'remember' ),
 			'payment_due_reminder'          => __( 'Sent as a reminder when payment is due (also used for balance-due blasts).', 'remember' ),
@@ -208,6 +210,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'waitlist_spot_opened',
 			'waitlist_promoted',
 			'event_ticket_paid',
+			'event_cancelled',
 			'event_invite',
 			'survey_issued',
 		);
@@ -252,6 +255,7 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'waitlist_spot_opened'          => __( 'A spot opened for {event_name}', 'remember' ),
 			'waitlist_promoted'             => __( 'A spot opened for {event_name}', 'remember' ),
 			'event_ticket_paid'             => __( 'Your paid ticket for {event_name}', 'remember' ),
+			'event_cancelled'               => __( '{event_name} has been cancelled', 'remember' ),
 			'event_invite'                  => __( 'You are invited to apply for {event_name}', 'remember' ),
 			'survey_issued'                 => __( 'Survey for {event_name}', 'remember' ),
 			'payment_recorded'              => __( 'Payment Recorded - ${amount}', 'remember' ),
@@ -321,6 +325,8 @@ class Remember_Notification_Setting extends Remember_Base_Model {
 			'waitlist_promoted' => __( "Hello {member_name},\n\nA spot opened for {event_name} ({role_name}). Your application is pending review.\n\nApplication ID: {application_id}\nDate: {date}\n\nThe Team", 'remember' ),
 
 			'event_ticket_paid' => __( "Hello {member_name},\n\nYour payment for {event_name} has been recorded as paid in full.\n\nTicket ID: {ticket_id}\nApplication ID: {application_id}\nEvent: {event_name}\nDates: {event_dates}\nLocation: {event_location}\n\nView or print your paid admission ticket / receipt:\n{ticket_url}\n\nWe look forward to seeing you at the event.\n\nBest regards,\nThe Team", 'remember' ),
+
+			'event_cancelled' => __( "Hello {member_name},\n\nWe are sorry to tell you that {event_name} ({event_dates}) has been cancelled.\n\nCancelled on: {cancelled_on}\nReason: {cancellation_reason}\n\nYour ticket now shows the event as cancelled. You can view, print or download it as proof of the cancellation, for example for a travel insurance claim:\n{ticket_url}\n\nTicket ID: {ticket_id}\nAmount paid: \${amount}\n\nWe will contact you about a refund or a credit toward a future event.\n\nThe Team", 'remember' ),
 
 			'event_invite' => __( "Hello {member_name},\n\nYou are invited to apply for {event_name}.\n\nDates: {event_dates}\nLocation: {event_location}\n\nThis invitation is not an application. If you want to attend, start an application here:\n{apply_url}\n\nThe Team", 'remember' ),
 
