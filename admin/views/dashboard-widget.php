@@ -16,11 +16,51 @@ require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remem
 $dashboard = Remember_Admin_Dashboard::collect();
 $attention = array_slice( $dashboard['attention'], 0, 3 );
 $more      = count( $dashboard['attention'] ) - count( $attention );
+
+$cancellations = array();
+if ( current_user_can( 'remember_read_billing' ) || current_user_can( 'remember_update_applications' ) ) {
+	require_once plugin_dir_path( __FILE__ ) . '../../includes/utilities/class-remember-event-cancellation.php';
+	$cancellations = Remember_Event_Cancellation::outstanding_events();
+}
 ?>
 
 <div class="remember-dashboard-widget">
 	<?php if ( ! empty( $dashboard['failed'] ) ) : ?>
 		<p class="remember-widget-error"><?php esc_html_e( 'Some figures could not be loaded and may be incomplete. Reload the page, or ask an administrator to check the reMember log.', 'remember' ); ?></p>
+	<?php endif; ?>
+	<?php if ( ! empty( $cancellations ) ) : ?>
+		<div class="remember-widget-rows">
+			<?php foreach ( $cancellations as $outstanding ) : ?>
+				<a class="remember-widget-row remember-widget-row--soon" href="<?php echo esc_url( admin_url( 'admin.php?page=remember-events&view=' . (int) $outstanding->event_id . '#remember-event-cancellation' ) ); ?>">
+					<span class="remember-widget-row__main">
+						<span class="remember-widget-row__title">
+							<?php
+							echo esc_html(
+								sprintf(
+									/* translators: %s: event name */
+									__( '%s is cancelled', 'remember' ),
+									$outstanding->event_name
+								)
+							);
+							?>
+						</span>
+						<span class="remember-widget-row__detail"><?php esc_html_e( 'Refund and credit checklist not finished. Open the checklist.', 'remember' ); ?></span>
+					</span>
+					<span class="remember-widget-row__meta">
+						<?php
+						echo esc_html(
+							sprintf(
+								/* translators: 1: attendees not done, 2: attendees on the list */
+								__( '%1$d of %2$d left', 'remember' ),
+								(int) $outstanding->open,
+								(int) $outstanding->total
+							)
+						);
+						?>
+					</span>
+				</a>
+			<?php endforeach; ?>
+		</div>
 	<?php endif; ?>
 	<?php if ( ! empty( $dashboard['stats'] ) ) : ?>
 		<div class="remember-widget-stats">
@@ -33,9 +73,9 @@ $more      = count( $dashboard['attention'] ) - count( $attention );
 		</div>
 	<?php endif; ?>
 
-	<?php if ( empty( $dashboard['attention'] ) ) : ?>
+	<?php if ( empty( $dashboard['attention'] ) && empty( $cancellations ) ) : ?>
 		<p class="remember-widget-clear"><?php esc_html_e( 'All clear. Nothing is waiting on you.', 'remember' ); ?></p>
-	<?php else : ?>
+	<?php elseif ( ! empty( $attention ) ) : ?>
 		<div class="remember-widget-rows">
 			<?php foreach ( $attention as $item ) : ?>
 				<?php $tone = isset( $item['tone'] ) ? $item['tone'] : 'normal'; ?>
