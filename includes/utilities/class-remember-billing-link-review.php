@@ -123,7 +123,20 @@ class Remember_Billing_Link_Review {
 		if ( ! is_admin() || wp_doing_ajax() || wp_doing_cron() ) {
 			return false;
 		}
-		return current_user_can( 'remember_update_billing' );
+		return self::current_user_can_decide();
+	}
+
+	/**
+	 * Whether the current user may approve or reject a held billing link.
+	 *
+	 * Only a reMember System Administrator or a WordPress Administrator. Linking a member to a
+	 * billing contact decides where their invoices go, so billing access alone is not enough.
+	 *
+	 * @return bool
+	 */
+	public static function current_user_can_decide() {
+		require_once plugin_dir_path( __FILE__ ) . 'class-remember-capabilities.php';
+		return Remember_Capabilities::current_user_can_decide_billing_link();
 	}
 
 	/**
@@ -495,9 +508,9 @@ class Remember_Billing_Link_Review {
 	public static function handle_decision() {
 		$member_id = isset( $_POST['member_id'] ) ? absint( wp_unslash( $_POST['member_id'] ) ) : 0;
 		check_admin_referer( self::ACTION . '_' . $member_id );
-		if ( ! current_user_can( 'remember_update_billing' ) ) {
+		if ( ! self::current_user_can_decide() ) {
 			Remember_Logger::warning(
-				'Billing link review refused: the user cannot update billing',
+				'Billing link review refused: the user is not a System Administrator or WordPress Administrator',
 				array(
 					'member_id' => $member_id,
 					'user_id'   => get_current_user_id(),
@@ -706,7 +719,7 @@ class Remember_Billing_Link_Review {
 			);
 			?>
 		</p>
-		<?php if ( current_user_can( 'remember_update_billing' ) ) : ?>
+		<?php if ( self::current_user_can_decide() ) : ?>
 			<div class="remember-billing-link-actions">
 				<?php foreach ( array( 'approve', 'reject' ) as $decision ) : ?>
 					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
@@ -725,7 +738,7 @@ class Remember_Billing_Link_Review {
 				<?php endforeach; ?>
 			</div>
 		<?php else : ?>
-			<p class="remember-billing-link-muted"><?php esc_html_e( 'Someone with billing access must approve or reject it.', 'remember' ); ?></p>
+			<p class="remember-billing-link-muted"><?php esc_html_e( 'A System Administrator or WordPress Administrator must approve or reject it.', 'remember' ); ?></p>
 		<?php endif; ?>
 		<?php
 	}
@@ -776,7 +789,7 @@ class Remember_Billing_Link_Review {
 			return;
 		}
 		delete_transient( $key );
-		if ( ! current_user_can( 'remember_update_billing' ) ) {
+		if ( ! self::current_user_can_decide() ) {
 			return;
 		}
 

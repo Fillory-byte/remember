@@ -409,6 +409,22 @@ class Remember_Capabilities {
 	}
 
 	/**
+	 * Whether the current user may approve or reject a held billing link.
+	 *
+	 * A reMember System Administrator or a WordPress Administrator, and no one else.
+	 *
+	 * @return bool
+	 */
+	public static function current_user_can_decide_billing_link() {
+		$user = wp_get_current_user();
+		if ( ! $user || ! $user->exists() ) {
+			return false;
+		}
+		return in_array( 'administrator', (array) $user->roles, true )
+			|| self::user_holds_system_administrator_role( $user->ID );
+	}
+
+	/**
 	 * Whether the current user may give members an event administration role.
 	 *
 	 * WordPress administrators, System Administrators, and holders of an event administration role.
