@@ -155,6 +155,19 @@ class Remember_Billing_Link_Review {
 			return null;
 		}
 
+		if ( self::member_email_changed( $member_id, $hold ) && self::claim_hold( $member_id, $hold ) ) {
+			// The match was found for an email the member no longer has. Let the sync look again.
+			Remember_Logger::info(
+				'Billing link review cleared because the member\'s email changed since the match was found',
+				array(
+					'member_id'  => $member_id,
+					'provider'   => $provider,
+					'contact_id' => $hold['contact_id'],
+				)
+			);
+			return null;
+		}
+
 		Remember_Logger::warning(
 			'Billing sync skipped: the member\'s billing link is waiting for review',
 			array(
@@ -210,11 +223,13 @@ class Remember_Billing_Link_Review {
 			$trigger = 'staff';
 		}
 
-		$hold = array(
+		$member = get_userdata( $member_id );
+		$hold   = array(
 			'provider'      => $provider,
 			'contact_id'    => $contact_id,
 			'contact_name'  => isset( $contact['name'] ) ? (string) $contact['name'] : '',
 			'contact_email' => isset( $contact['email'] ) ? (string) $contact['email'] : '',
+			'member_email'  => $member ? (string) $member->user_email : '',
 			'raised_at'     => current_time( 'mysql' ),
 			'raised_by'     => $user_id,
 			'trigger'       => $trigger,
@@ -386,6 +401,7 @@ class Remember_Billing_Link_Review {
 		$member_id = absint( $member_id );
 		$hold      = self::get_hold( $member_id );
 		if ( ! $hold ) {
+			Remember_Logger::debug( 'Billing link decision ignored: the member has no hold', array( 'member_id' => $member_id ) );
 			return new WP_Error( 'remember_billing_link_no_hold', __( 'This member has no billing link waiting for review.', 'remember' ) );
 		}
 		if ( Remember_Billing_Provider::get() !== $hold['provider'] ) {
@@ -401,13 +417,20 @@ class Remember_Billing_Link_Review {
 			return new WP_Error( 'remember_billing_link_provider_changed', __( 'The billing provider changed since this match was found, so it was cleared. Sync the member again.', 'remember' ) );
 		}
 
+		$verified = self::verify_match( $member_id, $hold );
+		if ( is_wp_error( $verified ) ) {
+			return $verified;
+		}
+		if ( ! self::claim_hold( $member_id, $hold ) ) {
+			return self::lost_claim_error( $member_id, $hold, 'approve' );
+		}
+
 		if ( 'xero' === $hold['provider'] ) {
 			update_user_meta( $member_id, 'remember_xero_contact_id', $hold['contact_id'] );
 		} else {
 			update_user_meta( $member_id, 'remember_qb_customer_id', $hold['contact_id'] );
 			delete_user_meta( $member_id, 'remember_qb_sync_token' );
 		}
-		delete_user_meta( $member_id, self::HOLD_META );
 
 		Remember_Logger::info(
 			'Billing link approved: member linked to the contact their email matched',
@@ -432,7 +455,12 @@ class Remember_Billing_Link_Review {
 		$member_id = absint( $member_id );
 		$hold      = self::get_hold( $member_id );
 		if ( ! $hold ) {
+			Remember_Logger::debug( 'Billing link decision ignored: the member has no hold', array( 'member_id' => $member_id ) );
 			return new WP_Error( 'remember_billing_link_no_hold', __( 'This member has no billing link waiting for review.', 'remember' ) );
+		}
+
+		if ( ! self::claim_hold( $member_id, $hold ) ) {
+			return self::lost_claim_error( $member_id, $hold, 'reject' );
 		}
 
 		$rejected = get_user_meta( $member_id, self::REJECTED_META, true );
@@ -444,7 +472,6 @@ class Remember_Billing_Link_Review {
 			$rejected[ $hold['provider'] ][] = $hold['contact_id'];
 		}
 		update_user_meta( $member_id, self::REJECTED_META, $rejected );
-		delete_user_meta( $member_id, self::HOLD_META );
 
 		Remember_Logger::info(
 			'Billing link rejected: the member will get a new contact on the next sync',
@@ -456,6 +483,214 @@ class Remember_Billing_Link_Review {
 			)
 		);
 		return true;
+	}
+
+	/**
+	 * Whether the member's email is no longer the one the match was found for.
+	 *
+	 * Holds raised before the email was stored have no email to compare, and are left alone.
+	 *
+	 * @param int   $member_id Member ID.
+	 * @param array $hold      Held match.
+	 * @return bool
+	 */
+	private static function member_email_changed( $member_id, $hold ) {
+		$held = isset( $hold['member_email'] ) ? trim( (string) $hold['member_email'] ) : '';
+		if ( '' === $held ) {
+			return false;
+		}
+		$user = get_userdata( absint( $member_id ) );
+		if ( ! $user ) {
+			return true;
+		}
+		return 0 !== strcasecmp( $held, trim( (string) $user->user_email ) );
+	}
+
+	/**
+	 * Take the hold so only one decision can act on it.
+	 *
+	 * Deletes the hold only while it is still exactly the one that was read, so of two
+	 * decisions made at once (approve and reject, or two approvals) only one gets true.
+	 *
+	 * @param int   $member_id Member ID.
+	 * @param array $hold      Hold as read by get_hold().
+	 * @return bool True when this call removed the hold.
+	 */
+	private static function claim_hold( $member_id, $hold ) {
+		// delete_user_meta() unslashes the value it compares, so slash it to match what was stored.
+		return (bool) delete_user_meta( absint( $member_id ), self::HOLD_META, wp_slash( $hold ) );
+	}
+
+	/**
+	 * Error for a decision whose claim failed: say whether the hold was decided or only changed.
+	 *
+	 * The hold is also rewritten when staff are emailed about it, so a failed claim does not
+	 * always mean someone else decided.
+	 *
+	 * @param int    $member_id Member ID.
+	 * @param array  $hold      Hold as read before the claim.
+	 * @param string $decision  approve or reject.
+	 * @return WP_Error
+	 */
+	private static function lost_claim_error( $member_id, $hold, $decision ) {
+		$now = self::get_hold( $member_id );
+		if ( ! $now ) {
+			return self::already_decided_error( $member_id, $decision );
+		}
+		Remember_Logger::info(
+			'Billing link decision not applied: the hold was updated while it was being reviewed',
+			array(
+				'member_id'  => absint( $member_id ),
+				'decision'   => $decision,
+				'contact_id' => $hold['contact_id'],
+			)
+		);
+		return new WP_Error( 'remember_billing_link_hold_updated', __( 'This billing link was updated while you were reviewing it. Reload the page and try again.', 'remember' ) );
+	}
+
+	/**
+	 * Error for a decision that lost the race to another one.
+	 *
+	 * @param int    $member_id Member ID.
+	 * @param string $decision  approve or reject.
+	 * @return WP_Error
+	 */
+	private static function already_decided_error( $member_id, $decision ) {
+		Remember_Logger::warning(
+			'Billing link decision not applied: the hold was already decided',
+			array(
+				'member_id' => absint( $member_id ),
+				'decision'  => $decision,
+				'user_id'   => get_current_user_id(),
+			)
+		);
+		return new WP_Error( 'remember_billing_link_already_decided', __( 'Someone else already reviewed this billing link. Nothing was changed.', 'remember' ) );
+	}
+
+	/**
+	 * Check that the held match is still true before it is linked.
+	 *
+	 * The member must still have the email the match was found for, the contact must still
+	 * exist, and it must still carry that email. A match that is no longer true is cleared, so
+	 * the next sync looks again. A check that could not be made leaves the hold in place.
+	 *
+	 * @param int   $member_id Member ID.
+	 * @param array $hold      Held match.
+	 * @return true|WP_Error
+	 */
+	private static function verify_match( $member_id, $hold ) {
+		$user = get_userdata( $member_id );
+		if ( ! $user ) {
+			return new WP_Error( 'remember_billing_link_no_member', __( 'This member could not be found.', 'remember' ) );
+		}
+		$email = trim( (string) $user->user_email );
+
+		if ( self::member_email_changed( $member_id, $hold ) ) {
+			if ( ! self::claim_hold( $member_id, $hold ) ) {
+				return self::lost_claim_error( $member_id, $hold, 'approve' );
+			}
+			Remember_Logger::warning(
+				'Billing link not approved: the member\'s email changed since the match was found',
+				array(
+					'member_id'  => $member_id,
+					'provider'   => $hold['provider'],
+					'contact_id' => $hold['contact_id'],
+					'user_id'    => get_current_user_id(),
+				)
+			);
+			return new WP_Error( 'remember_billing_link_email_changed', __( 'The member\'s email changed after this match was found, so it was cleared. Sync the member again to look for a match.', 'remember' ) );
+		}
+
+		$start = Remember_Logger::start_timer();
+		if ( 'xero' === $hold['provider'] ) {
+			require_once plugin_dir_path( __FILE__ ) . '../integrations/class-remember-xero-oauth.php';
+			if ( ! Remember_Xero_OAuth::is_connected() ) {
+				return self::unverified_error( $member_id, $hold, __( 'Xero is not connected, so the contact cannot be checked.', 'remember' ), 'not_connected' );
+			}
+			require_once plugin_dir_path( __FILE__ ) . '../integrations/class-remember-xero-api.php';
+			require_once plugin_dir_path( __FILE__ ) . '../integrations/class-remember-xero-sync.php';
+			$contact = Remember_Xero_API::get_contact( $hold['contact_id'] );
+			$gone    = Remember_Xero_API::is_contact_not_found_error( $contact );
+			$matches = is_array( $contact ) && Remember_Xero_Sync::contact_email_matches( $contact, $email );
+		} else {
+			require_once plugin_dir_path( __FILE__ ) . '../integrations/class-remember-quickbooks-oauth.php';
+			$settings = Remember_QuickBooks_OAuth::get_settings();
+			if ( empty( $settings['access_token'] ) || empty( $settings['realm_id'] ) ) {
+				return self::unverified_error( $member_id, $hold, __( 'QuickBooks is not connected, so the customer cannot be checked.', 'remember' ), 'not_connected' );
+			}
+			require_once plugin_dir_path( __FILE__ ) . '../integrations/class-remember-quickbooks-api.php';
+			require_once plugin_dir_path( __FILE__ ) . '../integrations/class-remember-quickbooks-sync.php';
+			$contact = Remember_QuickBooks_API::get_customer( $hold['contact_id'] );
+			$gone    = Remember_QuickBooks_Sync::is_qb_object_missing_error( $contact );
+			$found   = ( is_array( $contact ) && isset( $contact['PrimaryEmailAddr']['Address'] ) ) ? trim( (string) $contact['PrimaryEmailAddr']['Address'] ) : '';
+			$matches = '' !== $found && 0 === strcasecmp( $found, $email );
+		}
+		Remember_Logger::debug(
+			'Held billing match re-checked before approval',
+			array(
+				'member_id'   => $member_id,
+				'provider'    => $hold['provider'],
+				'still_there' => ! $gone && ! is_wp_error( $contact ),
+				'matches'     => $matches,
+				'elapsed_ms'  => Remember_Logger::elapsed_ms( $start ),
+			)
+		);
+
+		if ( is_wp_error( $contact ) && ! $gone ) {
+			return self::unverified_error( $member_id, $hold, $contact->get_error_message(), (string) $contact->get_error_code() );
+		}
+		if ( ! $gone && ( ! is_array( $contact ) || ( 'quickbooks' === $hold['provider'] && empty( $contact['Id'] ) ) ) ) {
+			return self::unverified_error( $member_id, $hold, __( 'The billing system sent a reply that could not be read.', 'remember' ), 'unreadable_reply' );
+		}
+		if ( $gone || ! $matches ) {
+			if ( ! self::claim_hold( $member_id, $hold ) ) {
+				return self::lost_claim_error( $member_id, $hold, 'approve' );
+			}
+			Remember_Logger::warning(
+				'Billing link not approved: the matched contact is gone or no longer has the member\'s email',
+				array(
+					'member_id'  => $member_id,
+					'provider'   => $hold['provider'],
+					'contact_id' => $hold['contact_id'],
+					'gone'       => (bool) $gone,
+					'user_id'    => get_current_user_id(),
+				)
+			);
+			return new WP_Error( 'remember_billing_link_match_gone', __( 'The matched billing contact was changed or removed, so this match was cleared. Sync the member again to look for a match.', 'remember' ) );
+		}
+		return true;
+	}
+
+	/**
+	 * Error for an approval that could not check the contact. The hold stays.
+	 *
+	 * @param int    $member_id Member ID.
+	 * @param array  $hold      Held match.
+	 * @param string $reason    Why the check could not be made, for staff.
+	 * @param string $code      Short code for the log.
+	 * @return WP_Error
+	 */
+	private static function unverified_error( $member_id, $hold, $reason, $code ) {
+		Remember_Logger::warning(
+			'Billing link not approved: the matched contact could not be checked',
+			array(
+				'member_id'  => $member_id,
+				'provider'   => $hold['provider'],
+				'contact_id' => $hold['contact_id'],
+				'reason'     => $code,
+				'user_id'    => get_current_user_id(),
+			)
+		);
+		// The provider's message can include an email address, so it stays at debug.
+		Remember_Logger::debug( 'Reason the matched contact could not be checked', array( 'message' => $reason ) );
+		return new WP_Error(
+			'remember_billing_link_unverified',
+			sprintf(
+				/* translators: %s: reason the contact could not be checked */
+				__( 'The matched contact could not be checked, so nothing was linked. The match is still waiting for review. (%s)', 'remember' ),
+				rtrim( $reason, '. ' )
+			)
+		);
 	}
 
 	/**
@@ -527,7 +762,10 @@ class Remember_Billing_Link_Review {
 			self::set_flash( 'warning', __( 'That billing link was already reviewed or has changed. Nothing was done.', 'remember' ) );
 		} elseif ( 'approve' === $decision ) {
 			$result = self::approve( $member_id );
-			if ( is_wp_error( $result ) ) {
+			if ( is_wp_error( $result ) && 0 === strpos( (string) $result->get_error_code(), 'remember_billing_link_' ) ) {
+				// Nothing was linked: the match was cleared, could not be checked, or was already decided.
+				self::set_flash( 'warning', $result->get_error_message() );
+			} elseif ( is_wp_error( $result ) ) {
 				Remember_Logger::error(
 					'Approved billing link but the sync failed',
 					array(
@@ -556,16 +794,20 @@ class Remember_Billing_Link_Review {
 				);
 			}
 		} elseif ( 'reject' === $decision ) {
-			self::reject( $member_id );
-			self::set_flash(
-				'success',
-				sprintf(
-					/* translators: 1: member name, 2: Xero or QuickBooks */
-					__( 'Match rejected. %1$s will get a new %2$s contact the next time they are synced. If an invoice was waiting, use Reprocess billing on the application.', 'remember' ),
-					$name,
-					self::provider_label( $hold['provider'] )
-				)
-			);
+			$rejected = self::reject( $member_id );
+			if ( is_wp_error( $rejected ) ) {
+				self::set_flash( 'warning', $rejected->get_error_message() );
+			} else {
+				self::set_flash(
+					'success',
+					sprintf(
+						/* translators: 1: member name, 2: Xero or QuickBooks */
+						__( 'Match rejected. %1$s will get a new %2$s contact the next time they are synced. If an invoice was waiting, use Reprocess billing on the application.', 'remember' ),
+						$name,
+						self::provider_label( $hold['provider'] )
+					)
+				);
+			}
 		} else {
 			Remember_Logger::warning(
 				'Billing link review ignored: unknown decision',

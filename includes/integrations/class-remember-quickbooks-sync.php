@@ -907,7 +907,7 @@ class Remember_QuickBooks_Sync {
 	 * @param WP_Error $error Error from a QuickBooks API lookup.
 	 * @return bool
 	 */
-	private static function is_qb_object_missing_error( $error ) {
+	public static function is_qb_object_missing_error( $error ) {
 		if ( ! is_wp_error( $error ) ) {
 			return false;
 		}

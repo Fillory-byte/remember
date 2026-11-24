@@ -320,7 +320,7 @@ class Remember_Xero_Sync {
 	 * @param string $email   Member email.
 	 * @return bool
 	 */
-	private static function contact_email_matches( $contact, $email ) {
+	public static function contact_email_matches( $contact, $email ) {
 		$email = strtolower( trim( (string) $email ) );
 		if ( '' === $email || ! is_array( $contact ) ) {
 			return false;
