@@ -291,8 +291,11 @@ if ( ! function_exists( 'remember_cancellation_button' ) ) {
 											$row_id,
 											'refund',
 											'credit' === $row_choice ? __( 'Switch to refund', 'remember' ) : __( 'Refund', 'remember' ),
-											/* translators: %s: member name */
-											sprintf( __( 'Choose a refund for %s (pending until marked issued)', 'remember' ), $row_name )
+											'credit' === $row_choice
+												/* translators: %s: member name */
+												? sprintf( __( 'Switch to refund for %s (pending until marked issued)', 'remember' ), $row_name )
+												/* translators: %s: member name */
+												: sprintf( __( 'Refund for %s (pending until marked issued)', 'remember' ), $row_name )
 										);
 										?>
 									<?php endif; ?>
@@ -303,8 +306,11 @@ if ( ! function_exists( 'remember_cancellation_button' ) ) {
 											$row_id,
 											'credit',
 											'refund' === $row_choice ? __( 'Switch to credit', 'remember' ) : __( 'Credit', 'remember' ),
-											/* translators: %s: member name */
-											sprintf( __( 'Choose a credit for %s (pending until marked issued)', 'remember' ), $row_name )
+											'refund' === $row_choice
+												/* translators: %s: member name */
+												? sprintf( __( 'Switch to credit for %s (pending until marked issued)', 'remember' ), $row_name )
+												/* translators: %s: member name */
+												: sprintf( __( 'Credit for %s (pending until marked issued)', 'remember' ), $row_name )
 										);
 										?>
 									<?php endif; ?>
@@ -316,7 +322,7 @@ if ( ! function_exists( 'remember_cancellation_button' ) ) {
 											'void_invoice',
 											__( 'Void invoice', 'remember' ),
 											/* translators: %s: member name */
-											sprintf( __( 'Void the unpaid invoice for %s', 'remember' ), $row_name ),
+											sprintf( __( 'Void invoice for %s (unpaid)', 'remember' ), $row_name ),
 											/* translators: %s: member name */
 											sprintf( __( 'Void %s\'s unpaid invoice in the billing system now?', 'remember' ), $row_name )
 										);
@@ -344,7 +350,7 @@ if ( ! function_exists( 'remember_cancellation_button' ) ) {
 											'clear_choice',
 											__( 'Clear choice', 'remember' ),
 											/* translators: %s: member name */
-											sprintf( __( 'Clear the refund or credit choice for %s', 'remember' ), $row_name ),
+											sprintf( __( 'Clear choice for %s (refund or credit)', 'remember' ), $row_name ),
 											'',
 											'button-link'
 										);
@@ -392,8 +398,11 @@ if ( ! function_exists( 'remember_cancellation_button' ) ) {
 								$row_id,
 								'email_one',
 								! empty( $row->cancellation_emailed_at ) ? __( 'Resend', 'remember' ) : __( 'Send', 'remember' ),
-								/* translators: %s: member name */
-								sprintf( __( 'Email the cancellation to %s', 'remember' ), $row_name ),
+								! empty( $row->cancellation_emailed_at )
+									/* translators: %s: member name */
+									? sprintf( __( 'Resend the cancellation email to %s', 'remember' ), $row_name )
+									/* translators: %s: member name */
+									: sprintf( __( 'Send the cancellation email to %s', 'remember' ), $row_name ),
 								'',
 								'button-link'
 							);
@@ -433,7 +442,7 @@ if ( ! function_exists( 'remember_cancellation_button' ) ) {
 							'add_late_leaver',
 							__( 'Add to checklist', 'remember' ),
 							/* translators: %s: member name */
-							sprintf( __( 'Add %s to the cancellation checklist', 'remember' ), $leaver_name )
+							sprintf( __( 'Add to checklist: %s', 'remember' ), $leaver_name )
 						);
 						?>
 					<?php endif; ?>
